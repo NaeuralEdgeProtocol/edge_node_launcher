@@ -523,7 +523,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin):
       self.__current_node_epoch = data.pop('epoch', -1)
       self.__current_node_epoch_avail = data.pop('epoch_avail', -1)
       self.__current_node_uptime = data.pop('uptime', -1)
-      self.__current_node_ver = data.pop('version', '')
+      self.__current_node_ver = data.pop('version', '')      
               
       start_time = data['timestamps'][0] 
       end_time = data['timestamps'][-1]
@@ -533,7 +533,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin):
         data_size = len(data['timestamps'])
         if data_size > 0 and data_size > MAX_HISTORY_QUEUE:
           for key in data:
-            data[key] = data[key][-MAX_HISTORY_QUEUE:]
+            if isinstance(data[key], list):
+              data[key] = data[key][-MAX_HISTORY_QUEUE:]
         start_time = data['timestamps'][0] 
         end_time = data['timestamps'][-1]
         self.add_log('Data loaded & cleaned: {} timestamps from {} to {}'.format(
@@ -647,22 +648,27 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin):
     address_path = os.path.join(self.volume_path, LOCAL_ADDRESS_FILE)
     try:
       with open(address_path, 'r') as file:
-        address_info = [x for x in file.read().split(' ') if len(x) > 0]
-        if len(address_info) == 0:
-          raise FileNotFoundError
-        if address_info[0] != self.node_addr:
-          self.node_addr = address_info[0]
-          self.node_name = address_info[1] if len(address_info) > 1 else ''
-          str_display = address_info[0][:8] + '...' + address_info[0][-8:]
+        data = json.load(file)
+        node_addr = data['address']
+        node_alias= data.get('alias', '')
+        node_eth_addr = data.get('eth_address', '')
+        node_signature = data.get('signature', '')
+        self.node_eth_addr = node_eth_addr     
+        self.node_signature = node_signature
+        if node_addr != self.node_addr:
+          self.node_addr = node_addr
+          self.node_name = node_alias          
+          str_display = node_addr[:8] + '...' + node_addr[-8:]
           self.addressDisplay.setText('Addr: ' + str_display)
-          self.nameDisplay.setText('Name: ' + address_info[1] if len(address_info) > 1 else '')
-          self.add_log(f'Local address updated: {self.node_addr} : {self.node_name}')
-          
+          self.nameDisplay.setText('Name: ' + node_alias)
+          self.add_log(f'Local address updated: {self.node_addr} : {self.node_name}, ETH: {self.node_eth_addr}')          
         # endif new address
       # endwith open                    
     except FileNotFoundError:
       self.addressDisplay.setText('Address file not found.')
       self.nameDisplay.setText('')
+    except Exception as e:
+      self.add_log(f'Error loading address: {e}', debug=True)
     return
   
   def maybe_refresh_uptime(self):
