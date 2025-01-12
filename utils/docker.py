@@ -3,6 +3,7 @@ import sys
 import platform
 import subprocess
 import platform
+import base64
 
 from pathlib import Path
 from collections import OrderedDict
@@ -154,9 +155,9 @@ class _DockerUtilsMixin:
     self.docker_container_name = DOCKER_CONTAINER_NAME
     self.docker_tag = DOCKER_TAG
     self.node_id = self.get_node_id()
-    self.mqtt_host = DEFAULT_MQTT_HOST
-    self.mqtt_user = DEFAULT_MQTT_USER
-    self.mqtt_password = DEFAULT_MQTT_PASSWORD
+    self.mqtt_host = base64.b64decode(DEFAULT_MQTT_HOST).decode("utf-8")
+    self.mqtt_user = base64.b64decode(DEFAULT_MQTT_USER).decode("utf-8")
+    self.mqtt_password = base64.b64decode(DEFAULT_MQTT_PASSWORD).decode("utf-8")
     self._dev_mode = False    
     
     self.run_with_sudo = False    
@@ -226,6 +227,9 @@ class _DockerUtilsMixin:
     self.__CMD += [
         '--rm', # remove the container when it exits
         '--env-file', '.env', #f'"{str(self.env_file)}"',  # pass the .env file to the container
+        '-e', f'EE_MQTT_HOST={self.mqtt_host}', # pass the MQTT host to the container
+        '-e', f'EE_MQTT_USER={self.mqtt_user}', # pass the MQTT user to the container
+        '-e', f'EE_MQTT={self.mqtt_password}', # pass the MQTT password to the container
         '-v', f'{DOCKER_VOLUME}:/edge_node/_local_cache', # mount the volume
         '--name', self.docker_container_name, '-d',  
     ]
@@ -242,9 +246,12 @@ class _DockerUtilsMixin:
       self.__CMD_CLEAN.insert(0, 'sudo')
       self.__CMD_STOP.insert(0, 'sudo')
       self.__CMD_INSPECT.insert(0, 'sudo')
-    
+
+    run_cmd = " ".join(self.get_cmd())
+    obfuscated_cmd = run_cmd.replace(self.mqtt_password, '*' * len(self.mqtt_password))
+
     self.add_log('Docker run command setup complete:')
-    self.add_log(' - Run:     {}'.format(" ".join(self.get_cmd())))
+    self.add_log(' - Run:     {}'.format(obfuscated_cmd))
     self.add_log(' - Clean:   {}'.format(" ".join(self.__CMD_CLEAN)))
     self.add_log(' - Stop:    {}'.format(" ".join(self.__CMD_STOP)))
     self.add_log(' - Inspect: {}'.format(" ".join(self.__CMD_INSPECT)))
@@ -256,9 +263,7 @@ class _DockerUtilsMixin:
       result = self.__CMD + ['-p', '80:80', self.docker_image]
     else:
       result = self.__CMD + [self.docker_image]
-    self.add_log("Docker command: '{}'".format(" ".join(result)), debug=True)
     return result
-  
   
   def get_clean_cmd(self):
     return self.__CMD_CLEAN
@@ -308,23 +313,6 @@ class _DockerUtilsMixin:
     except FileNotFoundError:
       QMessageBox.warning(self, 'Error', '.env file not found.')
       return False
-
-    # Check if the EE_MQTT key is present and set
-    if 'EE_MQTT' not in env_vars or not env_vars['EE_MQTT']:
-      # Prompt the user for the MQTT password
-      password, ok = QInputDialog.getText(self, 'MQTT Broker password Required', 'Enter MQTT broker password:')
-      if ok and password:
-        # Update the env_vars dictionary with the new password
-        env_vars['EE_MQTT'] = password
-        # Resave the .env file with the updated key
-        with open(self.env_file, 'w') as file:
-          for key, value in env_vars.items():
-            file.write(f'{key}={value}\n')
-        QMessageBox.information(self, 'Success', 'MQTT password set successfully.')
-        return True
-      else:
-        QMessageBox.warning(self, 'Error', 'MQTT password is required to continue.')
-        return False
     return True
     
     
@@ -403,6 +391,7 @@ class _DockerUtilsMixin:
   def launch_container(self):
     is_env_ok = self.__check_env_keys()
     if not is_env_ok:
+      self.add_log('Environment is not ok. Could not start the container.')
       return
     self.add_log('Updating image...')
     self.__maybe_docker_pull()

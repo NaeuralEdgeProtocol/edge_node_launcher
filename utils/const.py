@@ -17,7 +17,7 @@ WINDOWS_VOLUME_PATH2 = f'\\\\wsl.localhost\\docker-desktop\\mnt\\docker-desktop-
 LINUX_VOLUME_PATH = '/var/lib/docker/volumes/naeural_vol/_data'
 LOCAL_HISTORY_FILE = '_data/local_history.json'
 E2_PEM_FILE = '_data/e2.pem'
-LOCAL_ADDRESS_FILE = '_data/local_address.txt'
+LOCAL_ADDRESS_FILE = '_data/local_address.json'
 CONFIG_STARTUP_FILE = 'config_startup.json'
 CONFIG_APP_FILE = '_data/box_configuration/config_app.txt'
 ADDRS_FILE = 'authorized_addrs'
@@ -46,9 +46,9 @@ MAX_HISTORY_QUEUE = 5 * 60 // 10 # 5 minutes @ 10 seconds each hb
 
 AUTO_UPDATE_CHECK_INTERVAL = 60
 
-DEFAULT_MQTT_HOST = 'r9092118.ala.eu-central-1.emqxsl.com'
-DEFAULT_MQTT_USER = 'corenaeural'
-DEFAULT_MQTT_PASSWORD = ''
+DEFAULT_MQTT_HOST = 'cjkwOTIxMTguYWxhLmV1LWNlbnRyYWwtMS5lbXF4c2wuY29t'
+DEFAULT_MQTT_USER = 'Y29yZW5hZXVyYWw='
+DEFAULT_MQTT_PASSWORD = '****************'
 
 
 ENV_TEMPLATE = '''
@@ -69,10 +69,7 @@ EE_MINIO_UPLOAD_BUCKET=bucket
 
 
 # MQTT
-EE_MQTT_HOST={}
 EE_MQTT_PORT=8883
-EE_MQTT_USER={}
-EE_MQTT={}
 EE_MQTT_SUBTOPIC=address
 EE_MQTT_CERT=
 
