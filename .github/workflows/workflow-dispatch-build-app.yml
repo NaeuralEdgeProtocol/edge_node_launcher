@@ -1,8 +1,12 @@
-name: Multi-step multi-platform build on PR to main branch and saves the artifacts
+name: Multi-platform build on manually selected branch
 
 on:
-  pull_request:
-    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to run the workflow on"
+        required: true
+        default: "main"
 
 jobs:
   check-version:
@@ -11,15 +15,20 @@ jobs:
       should-run: ${{ steps.check-version.outputs.should-run }}
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout the repository
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Fetches all history for all branches and tags
+          ref: ${{ github.event.inputs.branch }}  # Uses manually selected branch
 
       - name: Get latest release version
         id: latest-version
         run: |
-          LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1`)
+          LATEST_TAG=$(git describe --tags $(git rev-list --tags --max-count=1) 2>/dev/null || echo "none")
+          if [ "$LATEST_TAG" = "none" ]; then
+          echo "No tags found."
+          else
           echo "Latest tag is $LATEST_TAG"
+          fi
           echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
 
       - name: Check version in ver.py
@@ -69,6 +78,14 @@ jobs:
               ./build_scripts/unix_build.sh
             name: EdgeNodeLauncher-LINUX_Ubuntu-20.04
             platformDependencies: sudo apt-get update && sudo apt-get install -y '^libxcb.*-dev' libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev --fix-missing
+
+          - os: macos-latest
+            build: |
+              chmod +x build_scripts/unix_build.sh
+              ./build_scripts/unix_build.sh
+            zip: zip -r EdgeNodeLauncher-OSX-arm64.zip dist/*
+            name: EdgeNodeLauncher-OSX-arm64
+
 
     name: Build installers ${{ matrix.os }}
     runs-on: ${{ matrix.os }}

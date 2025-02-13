@@ -1,6 +1,25 @@
 # Edge Node Launcher
 
-Edge Node Launcher is a desktop application designed to manage the containerized edge node of Naeural Edge Protocol. It allows you to edit environment files, check Docker availability, launch and stop Docker containers, plot data from JSON files, and perform other management tasks. T
+Edge Node Launcher is a desktop application designed to manage the containerized edge node of Naeural Edge Protocol. It allows you to edit environment files, check Docker availability, launch and stop Docker containers, plot data from JSON files, and perform other management tasks.
+
+## Table of Contents
+- [Features](#features)
+- [Binary Installation](#binary-installation)
+- [Platform-Specific Instructions](#platform-specific-instructions)
+  - [macOS (Apple Silicon)](#macos-apple-silicon)
+  - [Windows](#windows)
+  - [Ubuntu](#ubuntu)
+- [Source Code Install](#source-code-install)
+- [Building the Application](#building-the-application)
+- [Usage](#usage)
+  - [Editing Environment Files](#editing-environment-files)
+  - [Checking Docker Availability](#checking-docker-availability)
+  - [Launching and Stopping Docker Containers](#launching-and-stopping-docker-containers)
+  - [Viewing Plots](#viewing-plots)
+  - [Updating the Application](#updating-the-application)
+- [Development](#development)
+- [Citation](#citation)
+- [License](#license)
 
 ## Features
 
@@ -12,6 +31,50 @@ Edge Node Launcher is a desktop application designed to manage the containerized
 - Copy local node address
 - Delete specific files and restart containers
 - Toggle between dark and light themes
+
+## Platform-Specific Instructions
+
+### macOS (Apple Silicon)
+1. Download the latest `EdgeNodeLauncher-OSX-arm64-[version].zip` from the [Releases page](https://github.com/NaeuralEdgeProtocol/edge_node_launcher/releases)
+2. Extract the zip file
+3. If you encounter security restrictions when trying to open the app:
+   - Open Terminal
+   - Run the following command (replace with your actual path):
+     ```sh
+     xattr -cr /path/to/EdgeNodeLauncher
+     ```
+   - Try running the app again
+4. Install Docker Desktop for Apple Silicon if not already installed
+5. Ensure Docker Desktop is running before launching the Edge Node Launcher
+
+### Windows
+1. Download the latest `EdgeNodeLauncher-WIN32-[version].zip` from the Releases page
+2. Extract the zip file
+3. Run the EdgeNodeLauncher executable
+4. Install Docker Desktop for Windows if prompted
+5. Ensure Docker Desktop is running before using the launcher
+
+### Ubuntu
+1. Download the appropriate Ubuntu version zip file from the Releases page:
+   - For Ubuntu 24.04: `EdgeNodeLauncher-LINUX_Ubuntu-24.04-[version].zip`
+   - For Ubuntu 22.04: `EdgeNodeLauncher-LINUX_Ubuntu-22.04-[version].zip`
+   - For Ubuntu 20.04: `EdgeNodeLauncher-LINUX_Ubuntu-20.04-[version].zip`
+2. Extract the zip file
+3. Make the launcher executable:
+   ```sh
+   chmod +x EdgeNodeLauncher
+   ```
+4. Run the launcher:
+   ```sh
+   ./EdgeNodeLauncher
+   ```
+5. Install Docker if prompted or manually install using:
+   ```sh
+   sudo apt-get update
+   sudo apt-get install docker.io
+   sudo systemctl start docker
+   sudo systemctl enable docker
+   ```
 
 ## Binary installation
 
