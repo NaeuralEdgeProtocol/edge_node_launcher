@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import (QApplication, QDialog, QInputDialog, QLabel,
                              QMessageBox, QProgressBar, QTextEdit, QVBoxLayout)
 
 from .const import *
+from .docker_commands import DockerCommandHandler
 
 def get_user_folder():
   """
@@ -145,12 +146,10 @@ class _DockerUtilsMixin:
     
     self.init_directories()
     
-    self.volume_path = None
-    self.config_startup_file = None
-    self.config_app_file = None
-    self.addrs_file = None
+    self.docker_commands = DockerCommandHandler(DOCKER_CONTAINER_NAME)
 
     self.node_addr = None
+    self.node_eth_address = None
     self.container_last_run_status = None
     self.docker_container_name = DOCKER_CONTAINER_NAME
     self.docker_tag = DOCKER_TAG
@@ -172,10 +171,6 @@ class _DockerUtilsMixin:
   
   def post_launch_setup(self):
     self.add_log('Executing post-launch setup...')
-    self.volume_path = self.__get_volume_path()
-    self.config_startup_file = os.path.join(self.volume_path, CONFIG_STARTUP_FILE)
-    self.config_app_file = os.path.join(self.volume_path, CONFIG_APP_FILE)
-    self.addrs_file = os.path.join(self.volume_path, ADDRS_FILE)    
     return
   
   def docker_initialize(self):
@@ -321,24 +316,6 @@ class _DockerUtilsMixin:
         f.write(str_env)    
     return
 
-
-  def __get_volume_path(self):
-    docker_check = self.check_docker()
-    if not docker_check:
-      sys.exit(1)
-    if platform.system() == 'Windows':
-      if os.path.isdir(WINDOWS_VOLUME_PATH1):
-        return WINDOWS_VOLUME_PATH1
-      elif os.path.isdir(WINDOWS_VOLUME_PATH2):
-        return WINDOWS_VOLUME_PATH2
-      else:
-        msg = 'ERROR: Could not find any of the Windows volume paths.'
-        QMessageBox.information(self, 'Missing Docker or docker failed to start ', msg)        
-        sys.exit(1)
-    else:
-      return LINUX_VOLUME_PATH
-
-
   def check_docker(self):
     self.add_log('Checking Docker status...')
     try:
@@ -473,19 +450,26 @@ class _DockerUtilsMixin:
 
 
   def delete_and_restart(self):
-    pem_path = os.path.join(self.volume_path, E2_PEM_FILE)
     if not self.is_container_running():
-      QMessageBox.warning(self, 'Restart Edge Node', 'Edge Node is not running.')
+        QMessageBox.warning(self, 'Restart Edge Node', 'Edge Node is not running.')
     else:
-      # now we ask for confirmation
-      reply = QMessageBox.question(self, 'Restart Edge Node', 'Are you sure you want to reset the local node?', QMessageBox.Yes | QMessageBox.No)
-      if reply == QMessageBox.Yes:
-        try:
-          self.stop_container()
-          os.remove(pem_path)
-          self.launch_container()
-          QMessageBox.information(self, 'Restart Edge Node', f'{E2_PEM_FILE} deleted and Edge Node restarted.')
-        except Exception as e:
-          QMessageBox.warning(self, 'Restart Edge Node', f'Failed to reset Edge Node: {e}')
+        # now we ask for confirmation
+        reply = QMessageBox.question(self, 'Restart Edge Node', 'Are you sure you want to reset the local node?', QMessageBox.Yes | QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            try:
+                # Call reset_address with callbacks
+                def on_success(data):
+                    self.stop_container()
+                    self.launch_container()
+                    QMessageBox.information(self, 'Restart Edge Node', f'{E2_PEM_FILE} deleted and Edge Node restarted.')
+                
+                def on_error(error):
+                    self.stop_container()
+                    self.launch_container()
+                    QMessageBox.warning(self, 'Restart Edge Node', f'Failed to do proper cleanup: {error}')
+                
+                self.docker_commands.reset_address(on_success, on_error)
+            except Exception as e:
+                QMessageBox.warning(self, 'Restart Edge Node', f'Failed to reset Edge Node: {e}')
     return
   

@@ -21,8 +21,12 @@ jobs:
       - name: Get latest release version
         id: latest-version
         run: |
-          LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1`)
+          LATEST_TAG=$(git describe --tags $(git rev-list --tags --max-count=1) 2>/dev/null || echo "none")
+          if [ "$LATEST_TAG" = "none" ]; then
+          echo "No tags found."
+          else
           echo "Latest tag is $LATEST_TAG"
+          fi
           echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
 
       # Step to read version.py and compare
@@ -78,20 +82,12 @@ jobs:
             name: EdgeNodeLauncher-LINUX_Ubuntu-20.04
             platformDependencies: sudo apt-get update && sudo apt-get install -y '^libxcb.*-dev' libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev --fix-missing
 
-          # disabled for now as we are testing basic functionality & fixes
-          # - os: macos-12
-          #   build: |
-          #     chmod +x build_scripts/unix_build.sh
-          #     ./build_scripts/unix_build.sh
-          #   zip: zip -r EdgeNodeLauncher-OSX-x86.zip dist/*
-          #   name: EdgeNodeLauncher-OSX-x86
-
-          # - os: macos-latest
-          #   build: |
-          #     chmod +x build_scripts/unix_build.sh
-          #     ./build_scripts/unix_build.sh
-          #   zip: zip -r EdgeNodeLauncher-OSX-arm64.zip dist/*
-          #   name: EdgeNodeLauncher-OSX-arm64
+          - os: macos-latest
+            build: |
+              chmod +x build_scripts/unix_build.sh
+              ./build_scripts/unix_build.sh
+            zip: zip -r EdgeNodeLauncher-OSX-arm64.zip dist/*
+            name: EdgeNodeLauncher-OSX-arm64
 
     name: Build installers ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -143,10 +139,12 @@ jobs:
       - name: Zip App
         run: ${{ matrix.zip }}
       - name: Save zip File as artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: release
           path: ./${{ matrix.name }}.zip
+          overwrite: true
+
       - name: Save zip File as artifact on EdgeNodeLauncherRelease
         uses: svenstaro/upload-release-action@master
         with:
@@ -167,10 +165,12 @@ jobs:
         run: |
           echo "VERSION=$(cat ver.py | grep -o "'.*'")" >> $GITHUB_OUTPUT
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: release
           path: release
+          overwrite: true
+
       - run: ls release
 
       - uses: ncipollo/release-action@v1
