@@ -1,13 +1,13 @@
 import sys
-import os
-import json
 import platform
 import os
-
+import json
+import dataclasses
 
 from datetime import datetime
 from time import time
-from copy import deepcopy
+from typing import Optional
+import re
 
 from PyQt5.QtWidgets import (
   QApplication, 
@@ -16,9 +16,8 @@ from PyQt5.QtWidgets import (
   QPushButton, 
   QLabel, 
   QGridLayout,
-  QFrame, 
-  QMessageBox, 
-  QTextEdit, 
+  QFrame,
+  QTextEdit,
   QDialog, 
   QHBoxLayout, 
   QSpacerItem, 
@@ -26,21 +25,29 @@ from PyQt5.QtWidgets import (
   QCheckBox
 )
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QFont, QPixmap, QIcon
+from PyQt5.QtGui import QFont
 import pyqtgraph as pg
 
-import services.messaging_service as messaging_service
+from models.NodeInfo import NodeInfo
+from models.NodeHistory import NodeHistory
+from widgets.ToastWidget import ToastWidget, NotificationType
 from utils.const import *
 from utils.docker import _DockerUtilsMixin
+from utils.docker_commands import DockerCommandHandler
 from utils.updater import _UpdaterMixin
 
 from utils.icon import ICON_BASE64
 
 from app_forms.frm_utils import (
-  get_icon_from_base64, DateAxisItem, ToggleButton1
+  get_icon_from_base64, DateAxisItem
 )
 
 from ver import __VER__ as __version__
+from widgets.dialogs.AuthorizedAddressedDialog import AuthorizedAddressesDialog
+from models.AllowedAddress import AllowedAddress, AllowedAddressList
+from models.StartupConfig import StartupConfig
+from models.ConfigApp import ConfigApp
+
 
 def get_platform_and_os_info():
   platform_info = platform.platform()
@@ -74,6 +81,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin):
     self.log_buffer = []
     self.__force_debug = False
     super().__init__()
+
+    # Set current environment (you'll need to get this from your configuration)
+    self.current_environment = DEFAULT_ENVIRONMENT
 
     self.__current_node_uptime = -1
     self.__current_node_epoch = -1
@@ -109,7 +119,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin):
       sys.exit(1)    
 
     self.docker_initialize()
-      
+    self.docker_handler = DockerCommandHandler(DOCKER_CONTAINER_NAME)
+
     if self.is_container_running():
       self.post_launch_setup()
       self.refresh_local_address()
@@ -120,8 +131,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin):
     self.timer = QTimer(self)
     self.timer.timeout.connect(self.refresh_all)
     self.timer.start(REFRESH_TIME)  # Refresh every 10 seconds
+    self.toast = ToastWidget(self)
 
-      
     return
 
   @staticmethod
@@ -272,6 +283,15 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin):
     self.copyButton.clicked.connect(self.copy_address)
     bottom_button_area.addWidget(self.copyButton)
 
+    self.copyEthButton = QPushButton(COPY_ETHEREUM_ADDRESS_BUTTON_TEXT)
+    self.copyEthButton.clicked.connect(self.copy_eht_address)
+    bottom_button_area.addWidget(self.copyEthButton)
+
+    # Add Rename Node button
+    self.renameNodeButton = QPushButton(RENAME_NODE_BUTTON_TEXT)
+    self.renameNodeButton.clicked.connect(self.show_rename_dialog)
+    bottom_button_area.addWidget(self.renameNodeButton)
+
     self.envEditButton = QPushButton(EDIT_ENV_BUTTON_TEXT)
     self.envEditButton.clicked.connect(self.edit_env_file)
     bottom_button_area.addWidget(self.envEditButton)
@@ -364,7 +384,15 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin):
       self.themeToggleButton.setText('Switch to Light Theme')
     self.apply_stylesheet()
     self.plot_graphs()
+    self.change_text_color()
     return  
+
+  # TODO: Find a better approach. It's a hotfix for the text color issue.
+  def change_text_color(self):
+    if self._current_stylesheet == DARK_STYLESHEET:
+      self.force_debug_checkbox.setStyleSheet("color: white;")
+    else:
+      self.force_debug_checkbox.setStyleSheet("color: black;")
 
   def apply_stylesheet(self):
     self.setStyleSheet(self._current_stylesheet)
@@ -445,45 +473,205 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin):
     return
   
   
-  def edit_addrs(self): 
-    self.edit_file(
-      file_path=self.addrs_file, 
-      func=self.save_addrs_file, 
-      title='Edit authorized addrs file'
-    )
-    return    
-  
-  
-  def save_addrs_file(self, content, dialog):
-    with open(self.addrs_file, 'w') as file:
-      file.write(content)
-    dialog.accept()
-    return
-  
-  
+  # def edit_addrs(self):
+  #   self.edit_file(
+  #     file_path=self.addrs_file,
+  #     func=self.save_addrs_file,
+  #     title='Edit authorized addrs file'
+  #   )
+  #   return
+
+
+  def edit_addrs(self):
+    if not self.is_container_running():
+        self.toast.show_notification(NotificationType.ERROR, "Container not running. Could not edit Authorized Addressees.")
+        return
+
+    dialog = AuthorizedAddressesDialog(self, on_save_callback=None)
+
+    def on_success(data: dict) -> None:
+        allowed_list = AllowedAddressList.from_dict(data)
+        dialog.load_data(allowed_list.to_batch_format())
+        
+        while True:  # Keep showing dialog until properly saved or cancelled
+            if dialog.exec_() != QDialog.Accepted:
+                break  # User clicked Cancel on the main dialog
+                
+            # Check for long aliases and duplicates before saving
+            data_to_save = dialog.get_data()
+            
+            # Check for duplicate aliases
+            aliases = [item['alias'] for item in data_to_save]
+            duplicate_aliases = [alias for alias in set(aliases) if aliases.count(alias) > 1]
+            
+            if duplicate_aliases:
+                # Show duplicate aliases warning
+                warning_msg = "The following aliases are duplicated:\n\n"
+                for alias in duplicate_aliases:
+                    warning_msg += f"• {alias}\n"
+                warning_msg += "\nPlease make all aliases unique before saving."
+                
+                # Show warning dialog
+                dup_dialog = QDialog(dialog)
+                dup_dialog.setWindowTitle("Warning: Duplicate Aliases")
+                layout = QVBoxLayout()
+                
+                # Add message
+                label = QLabel(warning_msg)
+                layout.addWidget(label)
+                
+                # Add OK button
+                ok_btn = QPushButton("OK")
+                ok_btn.clicked.connect(dup_dialog.accept)
+                layout.addWidget(ok_btn)
+                
+                dup_dialog.setLayout(layout)
+                dup_dialog.exec_()
+                continue  # Go back to editing
+            
+            # Check for long aliases
+            long_aliases = [(item['alias'], len(item['alias'])) for item in data_to_save if len(item['alias']) > MAX_ALIAS_LENGTH]
+            
+            if not long_aliases:  # No long aliases, proceed with save
+                def save_success(data: dict) -> None:
+                    self.add_log('Successfully updated authorized addresses', debug=True)
+                    self.toast.show_notification(
+                        NotificationType.SUCCESS, 
+                        'Authorized addresses updated successfully'
+                    )
+
+                def save_error(error: str) -> None:
+                    self.add_log(f'Error updating authorized addresses: {error}', debug=True)
+                    self.toast.show_notification(
+                        NotificationType.ERROR, 
+                        'Failed to update authorized addresses'
+                    )
+
+                self.docker_handler.update_allowed_batch(data_to_save, save_success, save_error)
+                break  # Exit the loop after successful save
+            
+            # Show warning for long aliases
+            warning_msg = f"The following aliases are too long (max {MAX_ALIAS_LENGTH} characters) and will be truncated:\n\n"
+            for alias, length in long_aliases:
+                warning_msg += f"• {alias} ({length} characters)\n"
+            warning_msg += "\nDo you want to proceed with truncation?"
+            
+            # Show confirmation dialog
+            confirm_dialog = QDialog(dialog)
+            confirm_dialog.setWindowTitle("Warning: Long Aliases")
+            layout = QVBoxLayout()
+            
+            # Add message
+            label = QLabel(warning_msg)
+            layout.addWidget(label)
+            
+            # Add buttons
+            button_layout = QHBoxLayout()
+            proceed_btn = QPushButton("Proceed")
+            cancel_btn = QPushButton("Cancel")
+            
+            button_layout.addWidget(proceed_btn)
+            button_layout.addWidget(cancel_btn)
+            layout.addLayout(button_layout)
+            
+            confirm_dialog.setLayout(layout)
+            
+            # Connect buttons
+            proceed_btn.clicked.connect(confirm_dialog.accept)
+            cancel_btn.clicked.connect(confirm_dialog.reject)
+            
+            if confirm_dialog.exec_() == QDialog.Accepted:
+                # Truncate long aliases
+                for item in data_to_save:
+                    if len(item['alias']) > MAX_ALIAS_LENGTH:
+                        item['alias'] = item['alias'][:MAX_ALIAS_LENGTH]
+                
+                def save_success(data: dict) -> None:
+                    self.add_log('Successfully updated authorized addresses', debug=True)
+                    self.toast.show_notification(
+                        NotificationType.SUCCESS, 
+                        'Authorized addresses updated successfully'
+                    )
+
+                def save_error(error: str) -> None:
+                    self.add_log(f'Error updating authorized addresses: {error}', debug=True)
+                    self.toast.show_notification(
+                        NotificationType.ERROR, 
+                        'Failed to update authorized addresses'
+                    )
+
+                self.docker_handler.update_allowed_batch(data_to_save, save_success, save_error)
+                break  # Exit the loop after successful save
+            # If user clicked Cancel on confirmation, loop continues and shows main dialog again
+
+    def on_error(error: str) -> None:
+        self.add_log(f'Error getting allowed addresses: {error}', debug=True)
+        dialog.load_data([])
+        dialog.exec_()
+
+    if self.is_container_running():
+        self.docker_handler.get_allowed_addresses(on_success, on_error)
+    else:
+        on_error("Container not running")
+
+
   def view_config_files(self):
-    config_startup_content = ''
-    config_app_content = ''
-    try:
-      with open(self.config_startup_file, 'r') as file:
-        config_startup_content = file.read()
-      
-      with open(self.config_app_file, 'r') as file:
-        config_app_content = file.read()
-    except FileNotFoundError:
-      return
+    startup_config = None
+    config_app = None
+    error_occurred = False
 
-    # Create the text edit widget with Courier New font and light font color
-    startup_text_edit = QTextEdit()
-    startup_text_edit.setText(config_startup_content)
-    startup_text_edit.setFont(QFont("Courier New", 11))
-    startup_text_edit.setStyleSheet("color: #FFFFFF; background-color: #0D1F2D;")
+    def check_and_show_configs():
+        if error_occurred:
+            return
+        if startup_config is not None and config_app is not None:
+            # Both configs are loaded, show them
+            config_startup_content = json.dumps(dataclasses.asdict(startup_config), indent=2)
+            config_app_content = json.dumps(dataclasses.asdict(config_app), indent=2)
 
-    app_text_edit = QTextEdit()
-    app_text_edit.setText(config_app_content)
-    app_text_edit.setFont(QFont("Courier New", 11))
-    app_text_edit.setStyleSheet("color: #FFFFFF; background-color: #0D1F2D;")
+            # Create the text edit widgets
+            startup_text_edit = QTextEdit()
+            startup_text_edit.setText(config_startup_content)
+            startup_text_edit.setFont(QFont("Courier New", 11))
+            startup_text_edit.setStyleSheet("color: #FFFFFF; background-color: #0D1F2D;")
 
+            app_text_edit = QTextEdit()
+            app_text_edit.setText(config_app_content)
+            app_text_edit.setFont(QFont("Courier New", 11))
+            app_text_edit.setStyleSheet("color: #FFFFFF; background-color: #0D1F2D;")
+
+            # Create and show dialog
+            self.show_config_dialog(startup_text_edit, app_text_edit)
+
+    def on_startup_success(config: StartupConfig) -> None:
+        nonlocal startup_config
+        startup_config = config
+        check_and_show_configs()
+
+    def on_startup_error(error: str) -> None:
+        nonlocal error_occurred
+        error_occurred = True
+        self.add_log(f'Error getting startup config: {error}', debug=True)
+        self.toast.show_notification(NotificationType.ERROR, 'Failed to load startup config')
+
+    def on_config_app_success(config: ConfigApp) -> None:
+        nonlocal config_app
+        config_app = config
+        check_and_show_configs()
+
+    def on_config_app_error(error: str) -> None:
+        nonlocal error_occurred
+        error_occurred = True
+        self.add_log(f'Error getting config app: {error}', debug=True)
+        self.toast.show_notification(NotificationType.ERROR, 'Failed to load config app')
+
+    if self.is_container_running():
+        # Start both requests in parallel
+        self.docker_handler.get_startup_config(on_startup_success, on_startup_error)
+        self.docker_handler.get_config_app(on_config_app_success, on_config_app_error)
+    else:
+        self.toast.show_notification(NotificationType.ERROR, 'Container not running')
+
+  def show_config_dialog(self, startup_text_edit, app_text_edit):
     # Create the dialog
     dialog = QDialog(self)
     dialog.setWindowTitle('View config files')
@@ -548,139 +736,140 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin):
     return result
 
   def plot_data(self):
-    data_path = os.path.join(self.volume_path, LOCAL_HISTORY_FILE)
-    self.add_log(f'Loading data from: {data_path}', debug=True) 
-    try:
-      if os.path.exists(data_path):
-        with open(data_path, 'r') as file:
-          data = json.load(file)
-        if self.check_data(data):
-          self.plot_graphs(data)
+    def on_success(history: NodeHistory) -> None:
+      self.__current_node_epoch = history.current_epoch
+      self.__current_node_epoch_avail = history.current_epoch_avail
+      self.__current_node_uptime = history.uptime
+      self.__current_node_ver = history.version
+
+      if history.timestamps != self.__last_timesteps:
+        self.__last_timesteps = history.timestamps.copy()
+        if len(history.timestamps) > MAX_HISTORY_QUEUE:
+          history.timestamps = history.timestamps[-MAX_HISTORY_QUEUE:]
+          history.cpu_load = history.cpu_load[-MAX_HISTORY_QUEUE:]
+          history.occupied_memory = history.occupied_memory[-MAX_HISTORY_QUEUE:]
+          if history.gpu_load:
+            history.gpu_load = history.gpu_load[-MAX_HISTORY_QUEUE:]
+          if history.gpu_occupied_memory:
+            history.gpu_occupied_memory = history.gpu_occupied_memory[-MAX_HISTORY_QUEUE:]
+
+        self.add_log(f'Data loaded & cleaned: {len(history.timestamps)} timestamps', debug=True)
+        self.plot_graphs(history)
       else:
-        self.plot_graphs(None)
-    except FileNotFoundError:
+        self.add_log('Data already up-to-date. No new data.', debug=True)
+
+    def on_error(error: str) -> None:
+      self.add_log(f'Error getting history: {error}', debug=True)
       self.plot_graphs(None)
-    return  
 
+    self.docker_handler.get_node_history(on_success, on_error)
 
-  def plot_graphs(self, data=None, limit=100):
-    if data is None:
+  def plot_graphs(self, history: Optional[NodeHistory] = None, limit: int = 100) -> None:
+    if history is None:
       data = self.__last_plot_data
     else:
-      self.__last_plot_data = deepcopy(data)
-      
+      self.__last_plot_data = history
+
     timestamps = [
-      datetime.fromisoformat(ts).timestamp() for ts in data['timestamps'][-limit:]
-    ] if data and 'timestamps' in data else [datetime.now().timestamp()]
+      datetime.fromisoformat(ts).timestamp()
+      for ts in history.timestamps[-limit:]
+    ] if history else [datetime.now().timestamp()]
+
     start_time = datetime.fromtimestamp(timestamps[0]).strftime('%Y-%m-%d %H:%M:%S')
     end_time = datetime.fromtimestamp(timestamps[-1]).strftime('%Y-%m-%d %H:%M:%S')
 
-    def update_plot(plot, timestamps, values, label, color):      
+    def update_plot(plot, timestamps, values, label, color):
       plot.clear()
       plot.addLegend()
       values = [x for x in values if x is not None]
       if values:
         values = values[-limit:]
-        plot.plot(timestamps, values, pen=pg.mkPen(color=color, width=2), name=label, color=color)
+        plot.plot(timestamps, values, pen=pg.mkPen(color=color, width=2), name=label)
       else:
         plot.plot([0], [0], pen=None, symbol='o', symbolBrush=color, name='NO DATA')
       plot.setLabel('left', text=label, color=color)
       plot.setLabel('bottom', text='Time', color=color)
       if timestamps:
-        plot.setLabel('bottom', f"Time ({start_time} to {end_time})", color=color)      
+        plot.setLabel('bottom', f"Time ({start_time} to {end_time})", color=color)
       plot.getAxis('bottom').autoVisible = False
       plot.getAxis('bottom').enableAutoSIPrefix(False)
-      return
-    
 
-    # Plot CPU Load
-    # Create the custom DateAxisItem
-    cpu_data = data.get('cpu_load', []) if data else []
+    color = 'white' if self._current_stylesheet == DARK_STYLESHEET else 'black'
+    self.add_log(f'Plotting data: {len(timestamps)} timestamps with color: {color}')
+
+    # CPU Load
+    cpu_data = history.cpu_load if history else []
     cpu_date_axis = DateAxisItem(orientation='bottom')
-    cpu_date_axis.setTimestamps(timestamps, parent="cpu")  # Pass the actual timestamps    
+    cpu_date_axis.setTimestamps(timestamps, parent="cpu")
     self.cpu_plot.getAxis('bottom').setTickSpacing(60, 10)
     self.cpu_plot.getAxis('bottom').setStyle(tickTextOffset=10)
     self.cpu_plot.setAxisItems({'bottom': cpu_date_axis})
     self.cpu_plot.setTitle('CPU Load')
-    color = 'white' if self._current_stylesheet == DARK_STYLESHEET else 'black'    
-    self.add_log(f'Plotting data: {len(timestamps)} timestamps with color: {color}')    
     update_plot(self.cpu_plot, timestamps, cpu_data, 'CPU Load', color)
 
-    # Plot Memory Load
-    # Create the custom DateAxisItem
-    mem_data = data.get('occupied_memory', []) if data else []
+    # Memory Load
+    mem_data = history.occupied_memory if history else []
     mem_date_axis = DateAxisItem(orientation='bottom')
-    mem_date_axis.setTimestamps(timestamps, parent="mem")  # Pass the actual timestamps    
+    mem_date_axis.setTimestamps(timestamps, parent="mem")
     self.memory_plot.getAxis('bottom').setTickSpacing(60, 10)
     self.memory_plot.getAxis('bottom').setStyle(tickTextOffset=10)
     self.memory_plot.setAxisItems({'bottom': mem_date_axis})
     self.memory_plot.setTitle('Memory Load')
-    # update_plot(self.memory_plot, timestamps, data.get('total_memory', []) if data else [], 'Total Memory', 'y')
     update_plot(self.memory_plot, timestamps, mem_data, 'Occupied Memory', color)
 
-    # Plot GPU Load if available
-    # Create the custom DateAxisItem
-    gpu_data = data.get('gpu_load', []) if data else []
-    gpu_date_axis = DateAxisItem(orientation='bottom')
-    gpu_date_axis.setTimestamps(timestamps, parent="gpu")  # Pass the actual timestamps    
-    self.gpu_plot.getAxis('bottom').setTickSpacing(60, 10)
-    self.gpu_plot.getAxis('bottom').setStyle(tickTextOffset=10)
-    self.gpu_plot.setAxisItems({'bottom': gpu_date_axis})
-    self.gpu_plot.setTitle('GPU Load')
-    update_plot(self.gpu_plot, timestamps, gpu_data, 'GPU Load', color)
+    # GPU Load if available
+    if history and history.gpu_load:
+      gpu_date_axis = DateAxisItem(orientation='bottom')
+      gpu_date_axis.setTimestamps(timestamps, parent="gpu")
+      self.gpu_plot.getAxis('bottom').setTickSpacing(60, 10)
+      self.gpu_plot.getAxis('bottom').setStyle(tickTextOffset=10)
+      self.gpu_plot.setAxisItems({'bottom': gpu_date_axis})
+      self.gpu_plot.setTitle('GPU Load')
+      update_plot(self.gpu_plot, timestamps, history.gpu_load, 'GPU Load', color)
 
-    # Plot GPU Memory Load if available
-    # Create the custom DateAxisItem
-    gpu_mem_data = data.get('gpu_occupied_memory', []) if data else []
-    gpumem_date_axis = DateAxisItem(orientation='bottom')
-    gpumem_date_axis.setTimestamps(timestamps, parent="gpu_mem")  # Pass the actual timestamps    
-    self.gpu_memory_plot.getAxis('bottom').setTickSpacing(60, 10)
-    self.gpu_memory_plot.getAxis('bottom').setStyle(tickTextOffset=10)
-    self.gpu_memory_plot.setAxisItems({'bottom': gpumem_date_axis})
-    self.gpu_memory_plot.setTitle('GPU Memory Load')
-    # update_plot(self.gpu_memory_plot, timestamps, data.get('gpu_total_memory', []) if data else [], 'Total GPU Memory', 'y')
-    update_plot(self.gpu_memory_plot, timestamps, gpu_mem_data, 'Occupied GPU Memory', color)
-    return
-
-
+    # GPU Memory if available
+    if history and history.gpu_occupied_memory:
+      gpumem_date_axis = DateAxisItem(orientation='bottom')
+      gpumem_date_axis.setTimestamps(timestamps, parent="gpu_mem")
+      self.gpu_memory_plot.getAxis('bottom').setTickSpacing(60, 10)
+      self.gpu_memory_plot.getAxis('bottom').setStyle(tickTextOffset=10)
+      self.gpu_memory_plot.setAxisItems({'bottom': gpumem_date_axis})
+      self.gpu_memory_plot.setTitle('GPU Memory Load')
+      update_plot(self.gpu_memory_plot, timestamps, history.gpu_occupied_memory, 'Occupied GPU Memory', color)
 
   def refresh_local_address(self):
-    address_path = os.path.join(self.volume_path, LOCAL_ADDRESS_FILE)
-    try:
-      with open(address_path, 'r') as file:
-        data = json.load(file)
-        node_addr = data['address']
-        node_alias= data.get('alias', '')
-        node_eth_addr = data.get('eth_address', '')
-        node_signature = data.get('signature', '')
-        self.node_eth_addr = node_eth_addr
-        self.node_signature = node_signature
-        if node_addr != self.node_addr:
-          self.node_addr = node_addr
-          self.node_name = node_alias
-          str_display = node_addr[:8] + '...' + node_addr[-8:]
-          self.addressDisplay.setText('Addr: ' + str_display)
-          self.nameDisplay.setText('Name: ' + node_alias)
-          self.add_log(f'Local address updated: {self.node_addr} : {self.node_name}, ETH: {self.node_eth_addr}')
-        # endif new address
-      # endwith open                    
-    except FileNotFoundError:
-      self.addressDisplay.setText('Address file not found.')
+    if not self.is_container_running():
+      self.addressDisplay.setText('Node not running')
       self.nameDisplay.setText('')
-    except PermissionError as e:
-      messaging_service.show_critical_message(self, "Permission Denied",
-                           f"Unable to read the file at {address_path}. Please change the file permissions.")
-    except Exception as e:
-      self.add_log(f'Error loading address: {e}', debug=True)
-    return
-  
+      return
+
+    def on_success(node_info: NodeInfo) -> None:
+      self.node_name = node_info.alias
+      self.nameDisplay.setText('Name: ' + node_info.alias)
+
+      if node_info.address != self.node_addr:
+        self.node_addr = node_info.address
+        self.node_eth_address = node_info.eth_address
+
+        str_display = f"{node_info.address[:8]}...{node_info.address[-8:]}"
+        self.addressDisplay.setText('Addr: ' + str_display)
+        self.add_log(f'Node info updated: {self.node_addr} : {self.node_name}, ETH: {self.node_eth_address}')
+
+    def on_error(error):
+      self.add_log(f'Error getting node info: {error}', debug=True)
+      self.addressDisplay.setText('Error getting node info')
+      self.nameDisplay.setText('')
+
+    self.docker_handler.get_node_info(on_success, on_error)
+
+
   def maybe_refresh_uptime(self):
     # update uptime, epoch and epoch avail
     uptime = self.__current_node_uptime
     node_epoch = self.__current_node_epoch
     node_epoch_avail = self.__current_node_epoch_avail
     ver = self.__current_node_ver
-    color = 'white'
+    color = 'black'
     if not self.container_last_run_status:
       uptime = "STOPPED"
       node_epoch = "N/A"
@@ -690,7 +879,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin):
     #end if overwrite if stopped      
     if uptime != self.__display_uptime:
       if self.__display_uptime is not None and node_epoch_avail is not None and node_epoch_avail > 0:
-        color = 'lightgreen'
+        color = 'green'
         
       self.node_uptime.setText(f'Up Time: {uptime}')
       self.node_uptime.setStyleSheet(f'color: {color}')
@@ -707,13 +896,27 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin):
       
       self.__display_uptime = uptime
     return
-    
 
   def copy_address(self):
+    if not self.node_addr:
+      self.toast.show_notification(NotificationType.ERROR, NOTIFICATION_ADDRESS_COPY_FAILED)
+      return
+
     clipboard = QApplication.clipboard()
     clipboard.setText(self.node_addr)
+    self.toast.show_notification(NotificationType.SUCCESS, NOTIFICATION_ADDRESS_COPIED.format(address=self.node_addr))
     return
-    
+
+  def copy_eht_address(self):
+    if not self.node_eth_address:
+      self.toast.show_notification(NotificationType.ERROR, NOTIFICATION_ADDRESS_COPY_FAILED)
+      return
+
+    clipboard = QApplication.clipboard()
+    clipboard.setText(self.node_eth_address)
+    self.toast.show_notification(NotificationType.SUCCESS, NOTIFICATION_ADDRESS_COPIED.format(address=self.node_eth_address))
+    return
+
   def refresh_all(self):
     t_t1 = time()
     self.update_toggle_button_text()
@@ -744,10 +947,25 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin):
 
 
   def dapp_button_clicked(self):
+    import webbrowser
+    dapp_url = DAPP_URLS.get(self.current_environment)
+    if dapp_url:
+      webbrowser.open(dapp_url)
+      self.add_log(f'Opening dApp URL: {dapp_url}', debug=True)
+    else:
+      self.add_log(f'Unknown environment: {self.current_environment}', debug=True)
+      self.toast.show_notification(
+        NotificationType.ERROR,
+        f'Unknown environment: {self.current_environment}'
+      )
     return
   
   
   def explorer_button_clicked(self):
+    self.toast.show_notification(
+      NotificationType.INFO,
+      'Ratio1 Explorer is not yet implemented'
+    )
     return
   
   
@@ -758,3 +976,97 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin):
     else:
       self.add_log('Force Debug disabled.')
     return
+
+  def show_rename_dialog(self):
+    if not self.is_container_running():
+        self.toast.show_notification(NotificationType.ERROR, "Container not running. Could not rename node.")
+        return
+
+    dialog = QDialog(self)
+    dialog.setWindowTitle('Rename Node')
+    dialog_layout = QVBoxLayout()
+
+    # Add note about max length
+    note_label = QLabel(f"Note: Maximum node name length is {MAX_ALIAS_LENGTH} characters")
+    note_label.setStyleSheet("color: gray; font-style: italic;")
+    dialog_layout.addWidget(note_label)
+
+    # Text input field
+    text_edit = QTextEdit()
+    text_edit.setText(self.node_name)
+    text_edit.setFixedHeight(50)
+    dialog_layout.addWidget(text_edit)
+
+    # Button layout
+    button_layout = QHBoxLayout()
+    
+    save_button = QPushButton('Save')
+    save_button.clicked.connect(lambda: self.validate_and_save_node_name(text_edit.toPlainText(), dialog))
+    button_layout.addWidget(save_button)
+
+    cancel_button = QPushButton('Cancel')
+    cancel_button.clicked.connect(dialog.reject)
+    button_layout.addWidget(cancel_button)
+
+    dialog_layout.addLayout(button_layout)
+    dialog.setLayout(dialog_layout)
+    dialog.exec_()
+
+  def validate_and_save_node_name(self, new_name: str, dialog: QDialog):
+    new_name = new_name.strip()
+    if len(new_name) > MAX_ALIAS_LENGTH:
+        # Show warning dialog
+        warning_dialog = QDialog(dialog)
+        warning_dialog.setWindowTitle("Warning: Name Too Long")
+        layout = QVBoxLayout()
+        
+        # Add message
+        warning_msg = f"The node name is too long ({len(new_name)} characters).\n\n"
+        warning_msg += f"'{new_name}' will be truncated to '{new_name[:MAX_ALIAS_LENGTH]}'\n\n"
+        warning_msg += "Do you want to proceed?"
+        
+        label = QLabel(warning_msg)
+        layout.addWidget(label)
+        
+        # Add buttons
+        button_layout = QHBoxLayout()
+        proceed_btn = QPushButton("Proceed")
+        cancel_btn = QPushButton("Cancel")
+        
+        button_layout.addWidget(proceed_btn)
+        button_layout.addWidget(cancel_btn)
+        layout.addLayout(button_layout)
+        
+        warning_dialog.setLayout(layout)
+        
+        # Connect buttons
+        proceed_btn.clicked.connect(warning_dialog.accept)
+        cancel_btn.clicked.connect(warning_dialog.reject)
+        
+        if warning_dialog.exec_() == QDialog.Accepted:
+            new_name = new_name[:MAX_ALIAS_LENGTH]
+        else:
+            return  # Return to editing if user cancels
+    
+    def on_success(data: dict) -> None:
+        self.add_log('Successfully renamed node, restarting container...', debug=True)
+        self.toast.show_notification(
+            NotificationType.SUCCESS,
+            'Node renamed successfully. Restarting...'
+        )
+        dialog.accept()
+        
+        # Stop and restart the container
+        self.stop_container()
+        self.launch_container()
+        self.post_launch_setup()
+        self.refresh_local_address()
+
+    def on_error(error: str) -> None:
+        self.add_log(f'Error renaming node: {error}', debug=True)
+        self.toast.show_notification(
+            NotificationType.ERROR,
+            'Failed to rename node'
+        )
+
+    self.docker_handler.update_node_name(new_name, on_success, on_error)

@@ -11,30 +11,24 @@ DOCKER_IMAGE = 'naeural/edge_node'
 DOCKER_TAG = 'develop'
 DOCKER_CONTAINER_NAME = 'edge_node_container'
 
-# Volume paths
-WINDOWS_VOLUME_PATH1 = f'\\\\wsl.localhost\\docker-desktop-data\\data\\docker\\volumes\\{DOCKER_VOLUME}\\_data'
-WINDOWS_VOLUME_PATH2 = f'\\\\wsl.localhost\\docker-desktop\\mnt\\docker-desktop-disk\\data\\docker\\volumes\\{DOCKER_VOLUME}\\_data'
-LINUX_VOLUME_PATH = '/var/lib/docker/volumes/naeural_vol/_data'
-LOCAL_HISTORY_FILE = '_data/local_history.json'
-E2_PEM_FILE = '_data/e2.pem'
-LOCAL_ADDRESS_FILE = '_data/local_address.json'
-CONFIG_STARTUP_FILE = 'config_startup.json'
-CONFIG_APP_FILE = '_data/box_configuration/config_app.txt'
-ADDRS_FILE = 'authorized_addrs'
+# Files names
+E2_PEM_FILE = 'e2.pem'
 
 # titles, buttons, labels, captions
 WINDOW_TITLE = f'Edge Node Manager v{__VER__}'
-EDIT_ENV_BUTTON_TEXT = 'Edit startup env'
-EDIT_AUTHORIZED_ADDRS = 'Edit Authorized Addrs'
+EDIT_ENV_BUTTON_TEXT = 'Edit Startup Environment'
+EDIT_AUTHORIZED_ADDRS = 'Edit Authorized Addresses'
 VIEW_CONFIGS_BUTTON_TEXT = 'View Configs'
 LAUNCH_CONTAINER_BUTTON_TEXT = 'Launch Edge Node'
 STOP_CONTAINER_BUTTON_TEXT = 'Stop Edge Node'
 DAPP_BUTTON_TEXT = 'Launch dApp'
-EXPLORER_BUTTON_TEXT = 'Naeural Explorer'
+EXPLORER_BUTTON_TEXT = 'Ratio1 Explorer'
 DELETE_AND_RESTART_BUTTON_TEXT = 'Reset Node Address'
 LOCAL_NODE_ADDRESS_LABEL_TEXT = 'Local Node Address'
 REFRESH_LOCAL_ADDRESS_BUTTON_TEXT = 'Refresh Local Address'
 COPY_ADDRESS_BUTTON_TEXT = 'Copy Address'
+COPY_ETHEREUM_ADDRESS_BUTTON_TEXT = 'Copy Ethereum Address'
+RENAME_NODE_BUTTON_TEXT = 'Change Node Alias'
 LIGHT_DASHBOARD_BUTTON_TEXT = 'Switch to Light Theme'
 
 UPTIME_LABEL = 'Up Time:'
@@ -46,13 +40,23 @@ MAX_HISTORY_QUEUE = 5 * 60 // 10 # 5 minutes @ 10 seconds each hb
 
 AUTO_UPDATE_CHECK_INTERVAL = 60
 
+# Notification messages
+NOTIFICATION_TITLE_STRINGS_ENUM = {
+    'success': 'Success',
+    'error': 'Error',
+    'warning': 'Warning',
+    'info': 'Information'
+}
+
+NOTIFICATION_ADDRESS_COPIED = "Address {address} copied to clipboard"
+NOTIFICATION_ADDRESS_COPY_FAILED = "No address available to copy. Try again after launching the Edge Node."
 
 ENV_TEMPLATE = '''
 # LOCAL FILE TEMPLATE
 
 # admin
 EE_ID={}
-EE_SUPERVISOR=true
+EE_SUPERVISOR=false
 EE_DEVICE=cuda:0
 
 
@@ -119,7 +123,11 @@ DARK_STYLESHEET = """
   PlotWidget {
     background-color: #243447;
     border: 1px solid #87CEEB;
-    color: yellow;  
+    color: white;  
+  }
+
+  PlotWidget LabelItem {
+    color: white;
   }
 """
 
@@ -162,11 +170,38 @@ LIGHT_STYLESHEET = """
   }
   
   PlotWidget {
-    background-color: #909090;
+    background-color: #FFFFFF;
     border: 1px solid #A9A9A9;
   }
 
   PlotWidget LabelItem {
-        color: #0F0F0F;  /* Set the desired font color here */
-  }  
+    color: black;
+  }
+
+  PlotWidget .axis {
+    color: black;
+  }
+
+  PlotWidget .plotLabel {
+    color: black;
+  }
 """
+
+# Environment settings
+ENVIRONMENTS = {
+    'mainnet': 'Mainnet',
+    'testnet': 'Testnet',
+    'devnet': 'Devnet'
+}
+
+DAPP_URLS = {
+    'mainnet': 'https://app.ratio1.ai/',
+    'testnet': 'https://testnet-app.ratio1.ai/',
+    'devnet': 'https://devnet-app.ratio1.ai/'
+}
+
+DEFAULT_ENVIRONMENT = 'testnet'
+
+# Maximum length for aliases (node name and authorized addresses)
+MAX_ALIAS_LENGTH = 15
+
