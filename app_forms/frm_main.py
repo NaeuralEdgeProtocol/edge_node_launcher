@@ -22,7 +22,8 @@ from PyQt5.QtWidgets import (
   QHBoxLayout, 
   QSpacerItem, 
   QSizePolicy,
-  QCheckBox
+  QCheckBox,
+  QStyle
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont
@@ -47,6 +48,7 @@ from widgets.dialogs.AuthorizedAddressedDialog import AuthorizedAddressesDialog
 from models.AllowedAddress import AllowedAddress, AllowedAddressList
 from models.StartupConfig import StartupConfig
 from models.ConfigApp import ConfigApp
+from widgets.HostSelector import HostSelector
 
 
 def get_platform_and_os_info():
@@ -211,28 +213,35 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin):
     menu_layout = QVBoxLayout(menu_widget)
     menu_layout.setAlignment(Qt.AlignTop)
     
+    # Add host selector at the top
+    self.host_selector = HostSelector()
+    self.host_selector.host_selected.connect(self._on_host_selected)
+    self.host_selector.mode_changed.connect(self._on_mode_changed)
+    self.host_selector.apply_stylesheet(self._current_stylesheet == DARK_STYLESHEET)  # Set initial theme
+    menu_layout.addWidget(self.host_selector)
+    
     top_button_area = QVBoxLayout()
 
+    # Launch Edge Node button
     self.toggleButton = QPushButton(LAUNCH_CONTAINER_BUTTON_TEXT)
     self.toggleButton.clicked.connect(self.toggle_container)
     top_button_area.addWidget(self.toggleButton)
 
+    # Docker download button right under Launch Edge Node
+    self.docker_download_button = QPushButton('Download Docker')
+    self.docker_download_button.setToolTip('Ratio1 Edge Node requires Docker Desktop running in parallel')
+    self.docker_download_button.clicked.connect(self.open_docker_download)
+    top_button_area.addWidget(self.docker_download_button)
+
+    # dApp button
     self.dapp_button = QPushButton(DAPP_BUTTON_TEXT)
     self.dapp_button.clicked.connect(self.dapp_button_clicked)
     top_button_area.addWidget(self.dapp_button)
-    
-    # b1 = ToggleButton1()
-    # b2 = ToggleButton1()
-    # b3 = ToggleButton1()
-    # top_button_area.addWidget(b1)
-    # top_button_area.addWidget(b2)
-    # top_button_area.addWidget(b3)
-    
 
+    # Explorer button
     self.explorer_button = QPushButton(EXPLORER_BUTTON_TEXT)
     self.explorer_button.clicked.connect(self.explorer_button_clicked)
     top_button_area.addWidget(self.explorer_button)
-
 
     menu_layout.addLayout(top_button_area)
 
@@ -251,9 +260,37 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin):
     info_box.setMidLineWidth(1)
     info_box_layout = QVBoxLayout()
 
+    # Address display with copy button
+    addr_layout = QHBoxLayout()
     self.addressDisplay = QLabel('')
     self.addressDisplay.setFont(QFont("Courier New"))
-    info_box_layout.addWidget(self.addressDisplay)
+    addr_layout.addWidget(self.addressDisplay)
+    
+    self.copyAddrButton = QPushButton()
+    self.copyAddrButton.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
+    self.copyAddrButton.setToolTip('Copy address')
+    self.copyAddrButton.clicked.connect(self.copy_address)
+    self.copyAddrButton.setFixedSize(24, 24)
+    self.copyAddrButton.hide()  # Initially hidden
+    addr_layout.addWidget(self.copyAddrButton)
+    addr_layout.addStretch()
+    info_box_layout.addLayout(addr_layout)
+
+    # ETH address display with copy button
+    eth_addr_layout = QHBoxLayout()
+    self.ethAddressDisplay = QLabel('')
+    self.ethAddressDisplay.setFont(QFont("Courier New"))
+    eth_addr_layout.addWidget(self.ethAddressDisplay)
+    
+    self.copyEthButton = QPushButton()
+    self.copyEthButton.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
+    self.copyEthButton.setToolTip('Copy Ethereum address')
+    self.copyEthButton.clicked.connect(self.copy_eth_address)
+    self.copyEthButton.setFixedSize(24, 24)
+    self.copyEthButton.hide()  # Initially hidden
+    eth_addr_layout.addWidget(self.copyEthButton)
+    eth_addr_layout.addStretch()
+    info_box_layout.addLayout(eth_addr_layout)
 
     self.nameDisplay = QLabel('')
     self.nameDisplay.setFont(QFont("Courier New"))
@@ -279,22 +316,10 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin):
     bottom_button_area.addWidget(info_box)
     
     ## buttons
-    self.copyButton = QPushButton(COPY_ADDRESS_BUTTON_TEXT)
-    self.copyButton.clicked.connect(self.copy_address)
-    bottom_button_area.addWidget(self.copyButton)
-
-    self.copyEthButton = QPushButton(COPY_ETHEREUM_ADDRESS_BUTTON_TEXT)
-    self.copyEthButton.clicked.connect(self.copy_eht_address)
-    bottom_button_area.addWidget(self.copyEthButton)
-
     # Add Rename Node button
     self.renameNodeButton = QPushButton(RENAME_NODE_BUTTON_TEXT)
     self.renameNodeButton.clicked.connect(self.show_rename_dialog)
     bottom_button_area.addWidget(self.renameNodeButton)
-
-    self.envEditButton = QPushButton(EDIT_ENV_BUTTON_TEXT)
-    self.envEditButton.clicked.connect(self.edit_env_file)
-    bottom_button_area.addWidget(self.envEditButton)
 
     self.btn_edit_addrs = QPushButton(EDIT_AUTHORIZED_ADDRS)
     self.btn_edit_addrs.clicked.connect(self.edit_addrs)
@@ -379,9 +404,11 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin):
     if self._current_stylesheet == DARK_STYLESHEET:
       self._current_stylesheet = LIGHT_STYLESHEET
       self.themeToggleButton.setText('Switch to Dark Theme')
+      self.host_selector.apply_stylesheet(False)  # Light theme
     else:
       self._current_stylesheet = DARK_STYLESHEET
       self.themeToggleButton.setText('Switch to Light Theme')
+      self.host_selector.apply_stylesheet(True)  # Dark theme
     self.apply_stylesheet()
     self.plot_graphs()
     self.change_text_color()
@@ -839,26 +866,39 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin):
 
   def refresh_local_address(self):
     if not self.is_container_running():
-      self.addressDisplay.setText('Node not running')
-      self.nameDisplay.setText('')
-      return
+        self.addressDisplay.setText('Address: Node not running')
+        self.ethAddressDisplay.setText('ETH Address: Not available')
+        self.nameDisplay.setText('')
+        self.copyAddrButton.hide()
+        self.copyEthButton.hide()
+        return
 
     def on_success(node_info: NodeInfo) -> None:
-      self.node_name = node_info.alias
-      self.nameDisplay.setText('Name: ' + node_info.alias)
+        self.node_name = node_info.alias
+        self.nameDisplay.setText('Name: ' + node_info.alias)
 
-      if node_info.address != self.node_addr:
-        self.node_addr = node_info.address
-        self.node_eth_address = node_info.eth_address
+        if node_info.address != self.node_addr:
+            self.node_addr = node_info.address
+            self.node_eth_address = node_info.eth_address
 
-        str_display = f"{node_info.address[:8]}...{node_info.address[-8:]}"
-        self.addressDisplay.setText('Addr: ' + str_display)
-        self.add_log(f'Node info updated: {self.node_addr} : {self.node_name}, ETH: {self.node_eth_address}')
+            # Format addresses with clear labels and truncated values
+            str_display = f"Address: {node_info.address[:16]}...{node_info.address[-8:]}"
+            self.addressDisplay.setText(str_display)
+            self.copyAddrButton.setVisible(bool(node_info.address))
+            
+            str_eth_display = f"ETH Address: {node_info.eth_address[:16]}...{node_info.eth_address[-8:]}"
+            self.ethAddressDisplay.setText(str_eth_display)
+            self.copyEthButton.setVisible(bool(node_info.eth_address))
+            
+            self.add_log(f'Node info updated: {self.node_addr} : {self.node_name}, ETH: {self.node_eth_address}')
 
     def on_error(error):
-      self.add_log(f'Error getting node info: {error}', debug=True)
-      self.addressDisplay.setText('Error getting node info')
-      self.nameDisplay.setText('')
+        self.add_log(f'Error getting node info: {error}', debug=True)
+        self.addressDisplay.setText('Address: Error getting node info')
+        self.ethAddressDisplay.setText('ETH Address: Not available')
+        self.nameDisplay.setText('')
+        self.copyAddrButton.hide()
+        self.copyEthButton.hide()
 
     self.docker_handler.get_node_info(on_success, on_error)
 
@@ -907,7 +947,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin):
     self.toast.show_notification(NotificationType.SUCCESS, NOTIFICATION_ADDRESS_COPIED.format(address=self.node_addr))
     return
 
-  def copy_eht_address(self):
+  def copy_eth_address(self):
     if not self.node_eth_address:
       self.toast.show_notification(NotificationType.ERROR, NOTIFICATION_ADDRESS_COPY_FAILED)
       return
@@ -1070,3 +1110,202 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin):
         )
 
     self.docker_handler.update_node_name(new_name, on_success, on_error)
+
+  def _clear_info_display(self):
+    """Clear all information displays."""
+    # Set text color based on theme
+    text_color = "white" if self._current_stylesheet == DARK_STYLESHEET else "black"
+    
+    # Set text and color for each label
+    self.addressDisplay.setText('Address: Not available')
+    self.addressDisplay.setStyleSheet(f"color: {text_color};")
+    self.copyAddrButton.hide()
+    
+    self.ethAddressDisplay.setText('ETH Address: Not available')
+    self.ethAddressDisplay.setStyleSheet(f"color: {text_color};")
+    self.copyEthButton.hide()
+    
+    self.nameDisplay.setText('')
+    self.nameDisplay.setStyleSheet(f"color: {text_color};")
+    
+    self.node_uptime.setText(UPTIME_LABEL)
+    self.node_uptime.setStyleSheet(f"color: {text_color};")
+    
+    self.node_epoch.setText(EPOCH_LABEL)
+    self.node_epoch.setStyleSheet(f"color: {text_color};")
+    
+    self.node_epoch_avail.setText(EPOCH_AVAIL_LABEL)
+    self.node_epoch_avail.setStyleSheet(f"color: {text_color};")
+    
+    self.node_version.setText('')
+    self.node_version.setStyleSheet(f"color: {text_color};")
+    
+    # Reset state variables
+    self.__display_uptime = None
+    self.node_addr = None
+    self.node_eth_address = None
+    self.__current_node_uptime = -1
+    self.__current_node_epoch = -1
+    self.__current_node_epoch_avail = -1
+    self.__current_node_ver = -1
+    self.__last_plot_data = None
+    self.__last_timesteps = []
+    
+    # Clear all graphs
+    self.cpu_plot.clear()
+    self.memory_plot.clear()
+    self.gpu_plot.clear()
+    self.gpu_memory_plot.clear()
+    
+    # Reset graph titles and labels with current theme color
+    for plot in [self.cpu_plot, self.memory_plot, self.gpu_plot, self.gpu_memory_plot]:
+        plot.setTitle('')
+        plot.setLabel('left', '')
+        plot.setLabel('bottom', '')
+    
+    # Update toggle button state and color
+    self.toggleButton.setText(LAUNCH_CONTAINER_BUTTON_TEXT)
+    self.toggleButton.setStyleSheet("background-color: green; color: white;")
+
+  def _on_host_selected(self, host_name: str):
+    """Handle host selection."""
+    # Clear current display and state
+    self._clear_info_display()
+    
+    if not host_name:
+        return
+        
+    # Disable button and show checking status
+    self.toggleButton.setText("Checking Host...")
+    self.toggleButton.setStyleSheet("background-color: gray; color: white;")
+    self.toggleButton.setEnabled(False)
+        
+    ssh_command = self.host_selector.get_ssh_command(host_name)
+    if not ssh_command:
+        self.add_log(f"Failed to get SSH command for host: {host_name}")
+        self.toast.show_notification(NotificationType.ERROR, f"Failed to get SSH command for host: {host_name}")
+        self.toggleButton.setText("SSH Error")
+        self.toggleButton.setStyleSheet("background-color: gray; color: white;")
+        self.toggleButton.setEnabled(False)
+        return
+
+    # Start status check if not already running
+    if not self.host_selector.status_threads.get(host_name) or not self.host_selector.status_threads[host_name].isRunning():
+        self.host_selector.check_host_status(host_name)
+        
+        # Wait for status check to complete
+        def check_status():
+            is_online = self.host_selector.current_status.property("is_online")
+            
+            if not is_online:
+                self.add_log(f"Host {host_name} is offline")
+                self.toggleButton.setText("Host Offline")
+                self.toggleButton.setStyleSheet("background-color: gray; color: white;")
+                self.toggleButton.setEnabled(False)
+                self.toast.show_notification(NotificationType.ERROR, f"Host {host_name} is offline")
+                return
+            
+            # Only proceed with connection if host is online
+            self._check_host_connection(host_name, ssh_command)
+            
+        # Check status after a delay to allow the check to complete
+        QTimer.singleShot(2000, check_status)
+        return
+    
+    # If status check is already running, use current status
+    is_online = self.host_selector.current_status.property("is_online")
+    if not is_online:
+        self.add_log(f"Host {host_name} is offline")
+        self.toggleButton.setText("Host Offline")
+        self.toggleButton.setStyleSheet("background-color: gray; color: white;")
+        self.toggleButton.setEnabled(False)
+        self.toast.show_notification(NotificationType.ERROR, f"Host {host_name} is offline")
+        return
+        
+    # Only proceed with connection if host is online
+    self._check_host_connection(host_name, ssh_command)
+
+  def _check_host_connection(self, host_name: str, ssh_command: str):
+    """Check connection and Docker status for a host."""
+    try:
+        # Set up remote connection
+        self.set_remote_connection(ssh_command)
+        
+        # Test SSH connection first
+        if not self.ssh_service.check_connection():
+            raise Exception("Failed to establish SSH connection")
+            
+        self.docker_handler.set_remote_connection(ssh_command)
+        self.add_log(f"Connected to remote host: {host_name}")
+        
+        # Check if Docker is available on the remote host
+        stdout, stderr, return_code = self.ssh_service.execute_command(['docker', '--version'])
+        if return_code != 0:
+            self.add_log(f"Docker not found on host {host_name}")
+            self.toggleButton.setText("Docker Not Found")
+            self.toggleButton.setStyleSheet("background-color: gray; color: white;")
+            self.toggleButton.setEnabled(False)
+            self.toast.show_notification(NotificationType.ERROR, f"Docker not found on host {host_name}")
+            return
+        
+        # Check if Docker daemon is running
+        stdout, stderr, return_code = self.ssh_service.execute_command(['docker', 'info'])
+        if return_code != 0:
+            self.add_log(f"Docker daemon not running on host {host_name}")
+            self.toggleButton.setText("Docker Not Running")
+            self.toggleButton.setStyleSheet("background-color: gray; color: white;")
+            self.toggleButton.setEnabled(False)
+            self.toast.show_notification(NotificationType.ERROR, f"Docker daemon not running on host {host_name}")
+            return
+        
+        self.add_log(f"Docker is available on host {host_name}")
+        self.toggleButton.setEnabled(True)
+        
+        # Refresh container status
+        if self.is_container_running():
+            self.post_launch_setup()
+            self.refresh_local_address()
+            self.plot_data()
+        self.update_toggle_button_text()
+        
+    except Exception as e:
+        # Clear any partial connection state
+        self.clear_remote_connection()
+        self.docker_handler.clear_remote_connection()
+        
+        self.add_log(f"Connection failed to host {host_name}: {str(e)}")
+        self.toggleButton.setText("Connection Failed")
+        self.toggleButton.setStyleSheet("background-color: gray; color: white;")
+        self.toggleButton.setEnabled(False)
+        self.toast.show_notification(NotificationType.ERROR, f"Failed to connect to host {host_name}")
+        return
+
+  def _on_mode_changed(self, is_multi_host: bool):
+    """Handle mode change."""
+    # Clear current display and state
+    self._clear_info_display()
+    
+    if not is_multi_host:
+        self.clear_remote_connection()
+        self.docker_handler.clear_remote_connection()  # Clear remote connection for docker_handler
+        self.add_log("Switched to local mode")
+        self.toggleButton.setEnabled(True)
+        # Refresh container status
+        if self.is_container_running():
+            self.post_launch_setup()
+            self.refresh_local_address()
+            self.plot_data()
+        self.update_toggle_button_text()
+    else:
+        self.add_log("Switched to multi-host mode")
+        self.toggleButton.setEnabled(False)  # Disable toggle button until a host is selected
+        
+        # Check the initial host if one is selected
+        current_host = self.host_selector.get_current_host()
+        if current_host:
+            self._on_host_selected(current_host)  # This will check the host's status
+
+  def open_docker_download(self):
+    """Open Docker download page in default browser."""
+    import webbrowser
+    webbrowser.open('https://docs.docker.com/get-docker/')

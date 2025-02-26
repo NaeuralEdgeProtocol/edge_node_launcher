@@ -14,11 +14,12 @@ class DockerCommandThread(QThread):
     command_finished = pyqtSignal(dict)
     command_error = pyqtSignal(str)
 
-    def __init__(self, container_name: str, command: str, input_data: str = None):
+    def __init__(self, container_name: str, command: str, input_data: str = None, remote_ssh_command: list = None):
         super().__init__()
         self.container_name = container_name
         self.command = command
         self.input_data = input_data
+        self.remote_ssh_command = remote_ssh_command
 
     def run(self):
         try:
@@ -27,17 +28,14 @@ class DockerCommandThread(QThread):
                 full_command.extend(['-i'])  # Add interactive flag when input is provided
             full_command.extend([self.container_name] + self.command.split())
 
-            # Disabled for now
-            # Ensure input_data is encoded bytes
-            # encoded_input = (self.input_data.encode() if isinstance(self.input_data, str)
-            #                else self.input_data if isinstance(self.input_data, bytes)
-            #                else None)
+            # Add remote prefix if needed
+            if self.remote_ssh_command:
+                full_command = self.remote_ssh_command + full_command
 
             if os.name == 'nt':
                 result = subprocess.run(
                     full_command,
                     input=self.input_data,
-                    # input=encoded_input,
                     capture_output=True,
                     text=True,
                     creationflags=subprocess.CREATE_NO_WINDOW
@@ -46,7 +44,6 @@ class DockerCommandThread(QThread):
                 result = subprocess.run(
                     full_command,
                     input=self.input_data,
-                    # input=encoded_input,
                     capture_output=True,
                     text=True
                 )
@@ -55,7 +52,7 @@ class DockerCommandThread(QThread):
                 self.command_error.emit(f"Command failed: {result.stderr}\nCommand: {' '.join(full_command)}\nInput data: {self.input_data}")
                 return
 
-            # TODO: Imrove output handling.
+            # TODO: Improve output handling.
             # Maybe implement it in a way that the command itself can specify the output format.
             # For reset_address and commands starting with change_alias, treat output as plain text
             if self.command == 'reset_address' or self.command.startswith('change_alias'):
@@ -77,9 +74,18 @@ class DockerCommandHandler:
     def __init__(self, container_name: str):
         self.container_name = container_name
         self.threads = []
+        self.remote_ssh_command = None
+
+    def set_remote_connection(self, ssh_command: str):
+        """Set up remote connection using SSH command."""
+        self.remote_ssh_command = ssh_command.split() if ssh_command else None
+
+    def clear_remote_connection(self):
+        """Clear remote connection settings."""
+        self.remote_ssh_command = None
 
     def _execute_threaded(self, command: str, callback, error_callback, input_data: str = None) -> None:
-        thread = DockerCommandThread(self.container_name, command, input_data)
+        thread = DockerCommandThread(self.container_name, command, input_data, self.remote_ssh_command)
         thread.command_finished.connect(callback)
         thread.command_error.connect(error_callback)
         self.threads.append(thread)  # Keep reference to prevent GC
@@ -125,6 +131,11 @@ class DockerCommandHandler:
 
         try:
             full_command = ['docker', 'exec', self.container_name, 'get_allowed']
+            
+            # Add remote prefix if needed
+            if self.remote_ssh_command:
+                full_command = self.remote_ssh_command + full_command
+
             if os.name == 'nt':
                 result = subprocess.run(
                     full_command,
