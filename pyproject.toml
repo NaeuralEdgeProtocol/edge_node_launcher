@@ -1,0 +1,26 @@
+[project]
+name = "edge-node-launcher"
+version = "1.1.10"
+description = "Desktop launcher for managing the Ratio1 edge node container."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "PyQt5",
+    "matplotlib",
+    "pyqtgraph",
+    "requests",
+    "pyyaml",
+    "psutil",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-qt",
+    "pyinstaller",
+    "pyinstaller-hooks-contrib",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+qt_api = "pyqt5"
