@@ -1,6 +1,6 @@
 from PyQt5.QtCore import QRect
 
-from app_forms.frm_main import calculate_initial_window_geometry, format_rect
+from utils.window_geometry import calculate_initial_window_geometry, format_rect
 
 
 def test_initial_window_geometry_stays_inside_available_screen():
