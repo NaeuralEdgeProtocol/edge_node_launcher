@@ -101,9 +101,8 @@ def run_main_application():
             except Exception as e:
                 logging.error(f"Error setting AppUserModelID: {e}")
         
-        # Create and show the main window
+        # Create the main window. The launcher shows itself after UI setup so startup checks can log into it.
         manager = EdgeNodeLauncher(icon)
-        manager.show()
         
         # Start the event loop
         return app.exec_()
@@ -127,4 +126,4 @@ if __name__ == "__main__":
     hide_console_window()
     
     # Run the application directly instead of importing main.py
-    sys.exit(run_main_application()) 
+    sys.exit(run_main_application())

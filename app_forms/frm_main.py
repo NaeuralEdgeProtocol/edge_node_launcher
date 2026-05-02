@@ -22,8 +22,6 @@ from PyQt5.QtWidgets import (
   QTextEdit,
   QDialog,
   QHBoxLayout,
-  QSpacerItem,
-  QSizePolicy,
   QCheckBox,
   QStyle,
   QComboBox,
@@ -52,7 +50,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import (
     Qt, QTimer, QSize, QThread, QObject, pyqtSignal, QUrl, QSettings,
-    QProcess, QPropertyAnimation, QModelIndex, QSortFilterProxyModel
+    QProcess, QPropertyAnimation, QModelIndex, QSortFilterProxyModel, QRect
 )
 from PyQt5.QtGui import QFont, QIcon, QPixmap, QPainter
 import pyqtgraph as pg
@@ -88,6 +86,33 @@ from widgets.LoadingDialog import LoadingDialog
 
 from ver import __VER__ as CURRENT_VERSION
 
+PREFERRED_WINDOW_WIDTH = 1600
+PREFERRED_WINDOW_HEIGHT = 900
+WINDOW_SCREEN_MARGIN = 24
+
+
+def format_rect(rect: QRect) -> str:
+  return f"x={rect.x()}, y={rect.y()}, w={rect.width()}, h={rect.height()}"
+
+
+def calculate_initial_window_geometry(
+    available_geometry: QRect,
+    preferred_width: int = PREFERRED_WINDOW_WIDTH,
+    preferred_height: int = PREFERRED_WINDOW_HEIGHT,
+    margin: int = WINDOW_SCREEN_MARGIN,
+) -> QRect:
+  if available_geometry is None or available_geometry.isNull() or not available_geometry.isValid():
+    return QRect(100, 100, preferred_width, preferred_height)
+
+  safe_margin = max(0, min(margin, available_geometry.width() // 4, available_geometry.height() // 4))
+  max_width = max(1, available_geometry.width() - safe_margin * 2)
+  max_height = max(1, available_geometry.height() - safe_margin * 2)
+  width = min(preferred_width, max_width)
+  height = min(preferred_height, max_height)
+  x = available_geometry.x() + max(0, (available_geometry.width() - width) // 2)
+  y = available_geometry.y() + max(0, (available_geometry.height() - height) // 2)
+  return QRect(x, y, width, height)
+
 
 
 def get_platform_and_os_info():
@@ -122,6 +147,10 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.log_buffer = []
     self.__force_debug = False
     super().__init__()
+    self._window_geometry_log_timer = QTimer(self)
+    self._window_geometry_log_timer.setSingleShot(True)
+    self._window_geometry_log_timer.timeout.connect(self._flush_window_geometry_log)
+    self._pending_window_geometry_context = "changed"
 
     # Set current environment (you'll need to get this from your configuration)
     self.current_environment = DEFAULT_ENVIRONMENT
@@ -179,7 +208,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     self.__cwd = os.getcwd()
     
-    self.showMaximized()
+    self.show_initial_window()
     self.add_log(f'Edge Node Launcher v{self.__version__} started. Running in production: {self.runs_in_production}, running with debugger: {self.runs_with_debugger()}, running in ipython: {self.runs_from_ipython()},  running from exe: {not self.not_running_from_exe()}')
     self.add_log(f'Running from: {self.__cwd}')
 
@@ -386,10 +415,76 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     return  
   
   def center(self):
-    screen_geometry = QApplication.desktop().screenGeometry()
-    x = (screen_geometry.width() - self.width()) // 2
-    y = (screen_geometry.height() - self.height()) // 2
-    self.move(x, y)
+    geometry = calculate_initial_window_geometry(
+      self._available_screen_geometry(),
+      preferred_width=self.width(),
+      preferred_height=self.height(),
+    )
+    self.setGeometry(geometry)
+    return
+
+  def _available_screen_geometry(self):
+    screen = self.screen() or QApplication.primaryScreen()
+    if screen:
+      return screen.availableGeometry()
+    return QApplication.desktop().availableGeometry(self)
+
+  def _screen_geometry(self):
+    screen = self.screen() or QApplication.primaryScreen()
+    if screen:
+      return screen.geometry()
+    return QApplication.desktop().screenGeometry(self)
+
+  def apply_initial_window_geometry(self):
+    available_geometry = self._available_screen_geometry()
+    window_geometry = calculate_initial_window_geometry(available_geometry)
+    min_width = min(1100, window_geometry.width())
+    min_height = min(700, window_geometry.height())
+    self.setMinimumSize(min_width, min_height)
+    self.setGeometry(window_geometry)
+    self.log_window_geometry("configured", visible=True)
+    return
+
+  def show_initial_window(self):
+    self.showMaximized()
+    QTimer.singleShot(0, lambda: self.log_window_geometry("shown", visible=True))
+    return
+
+  def log_window_geometry(self, context="window", visible=False):
+    try:
+      message = (
+        f"Window geometry ({context}): "
+        f"screen=[{format_rect(self._screen_geometry())}], "
+        f"available=[{format_rect(self._available_screen_geometry())}], "
+        f"client=[{format_rect(self.geometry())}], "
+        f"frame=[{format_rect(self.frameGeometry())}], "
+        f"maximized={self.isMaximized()}, full_screen={self.isFullScreen()}"
+      )
+      logging.info(message)
+      if visible:
+        self.add_log(message, debug=True)
+    except Exception as e:
+      logging.error(f"Failed to log window geometry: {e}")
+    return
+
+  def _schedule_window_geometry_log(self, context):
+    if hasattr(self, "_window_geometry_log_timer") and self._window_geometry_log_timer is not None:
+      self._pending_window_geometry_context = context
+      self._window_geometry_log_timer.start(500)
+    return
+
+  def _flush_window_geometry_log(self):
+    self.log_window_geometry(self._pending_window_geometry_context)
+    return
+
+  def moveEvent(self, event):
+    super().moveEvent(event)
+    self._schedule_window_geometry_log("moved")
+    return
+
+  def resizeEvent(self, event):
+    super().resizeEvent(event)
+    self._schedule_window_geometry_log("resized")
     return
 
   def set_windows_taskbar_icon(self):
@@ -412,10 +507,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     return
 
   def initUI(self):
-    HEIGHT = 1100
     self.setWindowTitle(WINDOW_TITLE)
-    self.setGeometry(0, 0, 1800, HEIGHT)
-    self.center()
+    self.apply_initial_window_geometry()
 
     # Set the icon right at the beginning
     self.setWindowIcon(self._icon)
@@ -623,8 +716,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     
     menu_layout.addLayout(top_button_area)
 
-    # Spacer to push bottom_button_area to the bottom
-    menu_layout.addSpacerItem(QSpacerItem(20, int(HEIGHT * 0.75), QSizePolicy.Minimum, QSizePolicy.Expanding))
+    # Spacer to push bottom_button_area to the bottom without forcing the window taller than the screen.
+    menu_layout.addStretch(1)
 
     # Bottom button area
     bottom_button_area = QVBoxLayout()
@@ -665,8 +758,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     bottom_button_area.addStretch()
     menu_layout.addLayout(bottom_button_area)
     
-    content_widget.layout().addWidget(menu_widget)
-
     # Right panel with mode switch overlay
     right_container = QWidget()
     right_container_layout = QVBoxLayout(right_container)
@@ -3657,5 +3748,3 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     except Exception as e:
         self.add_log(f"Error during download or installation: {str(e)}")
         QMessageBox.critical(self, 'Update Failed', f'Failed to download or install the update: {str(e)}')
-
-

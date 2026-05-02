@@ -58,7 +58,8 @@ Checks:
 - Initial `uv run` checks did not use the repo-local `.venv`, so explicit `.venv\Scripts\python.exe` commands are used for baseline testing.
 - Baseline pytest command initially found no tests.
 - A first smoke/regression test suite was added under `tests/`.
-- Current baseline test result: 17 passing tests.
+- Current baseline test result: 20 passing tests.
+- Window startup now logs screen, available area, client geometry, frame geometry, and maximized/full-screen state so window position and size issues can be diagnosed from runtime logs.
 - Docker CLI is installed.
 - Docker Desktop was started successfully and `docker info` reported server version `29.4.1`.
 - The app was launched with `.venv\Scripts\python.exe main.py`; it stayed running for 10 seconds and did not crash during startup. The process did not close via `CloseMainWindow()` from the shell smoke command and was force-stopped to avoid leaving it running.
