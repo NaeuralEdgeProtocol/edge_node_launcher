@@ -108,6 +108,14 @@ GPU_MEMORY_LOAD_TITLE = 'GPU Memory Load'
 # ============================================================================
 # TOOLTIP TEXTS
 # ============================================================================
+ADD_NODE_TOOLTIP = 'Create another local edge node'
+TOGGLE_NODE_TOOLTIP = 'Start or stop the selected edge node container'
+DAPP_TOOLTIP = 'Open the Ratio1 dApp for the selected network'
+EXPLORER_TOOLTIP = 'Ratio1 Explorer is not yet implemented'
+REFRESH_NODE_INFO_TOOLTIP = 'Refresh node status, addresses, metrics, and resources'
+RENAME_NODE_TOOLTIP = 'Rename the selected node alias shown in the launcher'
+THEME_TOGGLE_TOOLTIP = 'Switch between dark and light themes'
+FORCE_DEBUG_TOOLTIP = 'Run node containers with debug mode enabled'
 DOCKER_DOWNLOAD_TOOLTIP = 'Ratio1 Edge Node requires Docker Desktop running in parallel'
 COPY_ADDRESS_TOOLTIP = 'Copy address'
 COPY_ETH_ADDRESS_TOOLTIP = 'Copy Ethereum address'

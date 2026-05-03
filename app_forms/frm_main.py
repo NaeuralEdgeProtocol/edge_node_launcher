@@ -676,6 +676,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.add_node_button = QPushButton("Add New Node")
     self.add_node_button.clicked.connect(self.show_add_node_dialog)
     self.add_node_button.setObjectName("addNodeButton")
+    self.add_node_button.setToolTip(ADD_NODE_TOOLTIP)
     container_selector_layout.addWidget(self.add_node_button)
 
     # Container dropdown
@@ -695,6 +696,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     # Launch Edge Node button
     self.toggleButton = QPushButton(LAUNCH_CONTAINER_BUTTON_TEXT)
     self.toggleButton.setObjectName("startNodeButton")
+    self.toggleButton.setToolTip(TOGGLE_NODE_TOOLTIP)
     self.toggleButton.clicked.connect(self.toggle_container)
     self.apply_button_style(self.toggleButton, 'toggle_start')
     top_button_area.addWidget(self.toggleButton)
@@ -711,12 +713,14 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     # dApp button
     self.dapp_button = QPushButton(DAPP_BUTTON_TEXT)
     self.dapp_button.setObjectName("openDappButton")
+    self.dapp_button.setToolTip(DAPP_TOOLTIP)
     self.dapp_button.clicked.connect(self.dapp_button_clicked)
     top_button_area.addWidget(self.dapp_button)
 
     # Explorer button
     self.explorer_button = QPushButton(EXPLORER_BUTTON_TEXT)
     self.explorer_button.setObjectName("openExplorerButton")
+    self.explorer_button.setToolTip(EXPLORER_TOOLTIP)
     self.explorer_button.clicked.connect(self.explorer_button_clicked)
     top_button_area.addWidget(self.explorer_button)
     
@@ -727,7 +731,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.refreshButton = QPushButton("Refresh Node Info")
     self.refreshButton.setObjectName("refreshNodeInfoButton")
     self.refreshButton.clicked.connect(self.force_refresh_all)
-    self.refreshButton.setToolTip("Force refresh all node information including address, metrics, and status")
+    self.refreshButton.setToolTip(REFRESH_NODE_INFO_TOOLTIP)
     top_button_area.addWidget(self.refreshButton)
     
     # Add some spacing between the refresh button and info box
@@ -869,12 +873,14 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     # Add Rename Node button
     self.renameNodeButton = QPushButton(RENAME_NODE_BUTTON_TEXT)
     self.renameNodeButton.setObjectName("renameNodeButton")
+    self.renameNodeButton.setToolTip(RENAME_NODE_TOOLTIP)
     self.renameNodeButton.clicked.connect(self.show_rename_dialog)
     bottom_button_area.addWidget(self.renameNodeButton)
 
     # Toggle theme button
     self.themeToggleButton = QPushButton(LIGHT_DASHBOARD_BUTTON_TEXT)
     self.themeToggleButton.setObjectName("themeToggleButton")
+    self.themeToggleButton.setToolTip(THEME_TOGGLE_TOOLTIP)
     # self.themeToggleButton.setCheckable(True)
     self.themeToggleButton.clicked.connect(self.toggle_theme)
     bottom_button_area.addWidget(self.themeToggleButton)    
@@ -882,6 +888,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     # add a checkbox item to force debug
     self.force_debug_checkbox = QCheckBox('Force Debug Mode')
     self.force_debug_checkbox.setObjectName("forceDebugCheckbox")
+    self.force_debug_checkbox.setToolTip(FORCE_DEBUG_TOOLTIP)
     self.force_debug_checkbox.setChecked(self.__force_debug)  # Set initial state from config
     self.force_debug_checkbox.setFont(QFont("Courier New", 9, QFont.Bold))
     

@@ -300,6 +300,24 @@ def test_main_window_theme_and_force_debug_buttons(qtbot, monkeypatch):
     assert fake_handler.debug_values == [True]
 
 
+def test_main_window_primary_sidebar_actions_have_tooltips(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+
+    expected_tooltips = {
+        launcher.add_node_button: frm_main.ADD_NODE_TOOLTIP,
+        launcher.toggleButton: frm_main.TOGGLE_NODE_TOOLTIP,
+        launcher.dapp_button: frm_main.DAPP_TOOLTIP,
+        launcher.explorer_button: frm_main.EXPLORER_TOOLTIP,
+        launcher.refreshButton: frm_main.REFRESH_NODE_INFO_TOOLTIP,
+        launcher.renameNodeButton: frm_main.RENAME_NODE_TOOLTIP,
+        launcher.themeToggleButton: frm_main.THEME_TOGGLE_TOOLTIP,
+        launcher.force_debug_checkbox: frm_main.FORCE_DEBUG_TOOLTIP,
+    }
+
+    for widget, tooltip in expected_tooltips.items():
+        assert widget.toolTip() == tooltip
+
+
 def test_main_window_rename_guard_reports_stopped_container(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
 
