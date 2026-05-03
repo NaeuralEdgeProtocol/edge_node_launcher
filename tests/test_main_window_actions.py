@@ -373,11 +373,7 @@ def test_docker_pull_completion_uses_captured_launch_target(qtbot, monkeypatch):
     launcher.refresh_container_list()
     assert launcher._select_container_by_name("r1node2")
 
-    setattr(
-        launcher,
-        "_EdgeNodeLauncher__pending_launch_context",
-        {"container_name": "r1node", "volume_name": "r1vol"},
-    )
+    launcher._start_docker_pull("r1node", "r1vol")
     launcher._begin_lifecycle_operation("launch", "r1node")
     monkeypatch.setattr(frm_main.QTimer, "singleShot", lambda _delay, callback: callback())
 
@@ -485,14 +481,10 @@ def test_stale_node_info_failures_do_not_restart_other_nodes(qtbot, monkeypatch)
     assert not launcher._should_restart_after_node_info_failure("r1node")
     launcher._end_lifecycle_operation("r1node2")
 
-    setattr(
-        launcher,
-        "_EdgeNodeLauncher__pending_launch_context",
-        {"container_name": "r1node2", "volume_name": "r1vol2"},
-    )
+    launcher._start_docker_pull("r1node2", "r1vol2")
     assert not launcher._should_restart_after_node_info_failure("r1node")
 
-    setattr(launcher, "_EdgeNodeLauncher__pending_launch_context", None)
+    launcher._finish_docker_pull()
     launcher.user_stopped_container = True
     assert not launcher._should_restart_after_node_info_failure("r1node")
 

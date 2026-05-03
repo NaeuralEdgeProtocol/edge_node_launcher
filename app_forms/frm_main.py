@@ -68,6 +68,7 @@ from utils.system_resources import _SystemResourcesMixin
 from utils.docker_utils import get_volume_name, generate_container_name
 from utils.config_manager import ConfigManager, ContainerConfig
 from utils.container_selection import SelectedContainer, selected_container_from_combo, select_container_by_name
+from utils.lifecycle_state import LifecycleState
 from utils.window_geometry import calculate_initial_window_geometry, calculate_visible_frame_client_geometry, format_rect
 
 from utils.icon import ICON_BASE64
@@ -146,6 +147,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.__update_dialog_shown = False
     
     # Track Docker pull state to prevent concurrent pulls
+    self.__lifecycle_state = LifecycleState()
     self.__docker_pull_in_progress = False
     self.__pending_launch_context = None
     self.__active_lifecycle_operation = None
@@ -1387,7 +1389,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   def plot_data(self, assume_running: Optional[bool] = None):
     """Plot container metrics data."""
     # Skip plotting if Docker pull is in progress to avoid conflicts
-    if self.__docker_pull_in_progress:
+    if self._docker_pull_in_progress():
         self.add_log("Docker pull in progress, skipping plot data", debug=True)
         return
         
@@ -1556,7 +1558,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   def refresh_node_info(self):
     """Refresh the node information by fetching fresh data from the container and updating the UI."""
     # Skip refresh if Docker pull is in progress to avoid conflicts
-    if self.__docker_pull_in_progress:
+    if self._docker_pull_in_progress():
         self.add_log("Docker pull in progress, skipping node info refresh", debug=True)
         return
         
@@ -1620,31 +1622,54 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     """Select a configured container by Docker name."""
     return select_container_by_name(self.container_combo, container_name)
 
+  def _sync_lifecycle_state_snapshot(self) -> None:
+    """Keep legacy diagnostic fields in sync while lifecycle state is extracted."""
+    self.__active_lifecycle_operation = self.__lifecycle_state.active_operation_dict()
+    self.__pending_launch_context = self.__lifecycle_state.pending_launch_context_dict()
+    self.__docker_pull_in_progress = self.__lifecycle_state.docker_pull_in_progress
+
+  def _active_lifecycle_operation(self) -> Optional[dict]:
+    return self.__lifecycle_state.active_operation_dict()
+
+  def _pending_launch_context(self) -> Optional[dict]:
+    return self.__lifecycle_state.pending_launch_context_dict()
+
+  def _docker_pull_in_progress(self) -> bool:
+    return self.__lifecycle_state.docker_pull_in_progress
+
   def _begin_lifecycle_operation(self, operation: str, container_name: str) -> None:
     """Mark that a user-visible lifecycle operation is in progress."""
-    self.__active_lifecycle_operation = {
-      "operation": operation,
-      "container_name": container_name,
-    }
+    self.__lifecycle_state.begin_operation(operation, container_name)
+    self._sync_lifecycle_state_snapshot()
     self.add_log(f"Lifecycle operation started: {operation} on {container_name}", debug=True)
 
   def _end_lifecycle_operation(self, container_name: str = None) -> None:
     """Clear an active lifecycle operation when its owning flow completes."""
-    if self.__active_lifecycle_operation is None:
+    ended = self.__lifecycle_state.end_operation(container_name)
+    self._sync_lifecycle_state_snapshot()
+    if ended is None:
       return
+    self.add_log(f"Lifecycle operation finished: {ended.operation} on {ended.container_name}", debug=True)
 
-    active_container = self.__active_lifecycle_operation.get("container_name")
-    if container_name is not None and active_container != container_name:
-      return
+  def _start_docker_pull(self, container_name: str, volume_name: str) -> None:
+    self.__lifecycle_state.start_docker_pull(container_name, volume_name)
+    self._sync_lifecycle_state_snapshot()
 
-    operation = self.__active_lifecycle_operation.get("operation")
-    self.add_log(f"Lifecycle operation finished: {operation} on {active_container}", debug=True)
-    self.__active_lifecycle_operation = None
+  def _finish_docker_pull(self) -> Optional[dict]:
+    context = self.__lifecycle_state.finish_docker_pull()
+    self._sync_lifecycle_state_snapshot()
+    return context.to_dict() if context else None
 
   def _should_restart_after_node_info_failure(self, container_name: str) -> bool:
     """Guard automatic restarts so stale callbacks cannot affect another node."""
-    if self.__active_lifecycle_operation is not None:
-      active = self.__active_lifecycle_operation
+    blocker = self.__lifecycle_state.auto_restart_blocker(
+      container_name,
+      self._selected_container_name(),
+      self.user_stopped_container,
+    )
+
+    if blocker == "active_operation":
+      active = self._active_lifecycle_operation()
       self.add_log(
         f"Skipping auto-restart for {container_name}; lifecycle operation {active.get('operation')} is active on {active.get('container_name')}",
         debug=True,
@@ -1652,8 +1677,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       )
       return False
 
-    selected_container = self._selected_container_name()
-    if selected_container != container_name:
+    if blocker == "stale_selection":
+      selected_container = self._selected_container_name()
       self.add_log(
         f"Skipping auto-restart for stale node info failure on {container_name}; selected container is {selected_container}",
         debug=True,
@@ -1661,7 +1686,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       )
       return False
 
-    if self.__docker_pull_in_progress or self.__pending_launch_context is not None:
+    if blocker == "launch_in_progress":
       self.add_log(
         f"Skipping auto-restart for {container_name}; a launch or Docker pull is already in progress",
         debug=True,
@@ -1669,7 +1694,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       )
       return False
 
-    if self.user_stopped_container:
+    if blocker == "user_stopped":
       self.add_log(
         f"Skipping auto-restart for {container_name}; user intentionally stopped the container",
         debug=True,
@@ -1766,7 +1791,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     """
     try:
       # Check if a main Docker pull is already in progress
-      if self.__docker_pull_in_progress:
+      if self._docker_pull_in_progress():
         self.add_log(f"Main Docker pull already in progress, skipping restart of {container_name}", color="yellow")
         return
       
@@ -2076,11 +2101,11 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
   def refresh_all(self):
     """Refresh all data and UI elements."""
-    if self.__docker_pull_in_progress:
+    if self._docker_pull_in_progress():
         self.add_log("Docker pull in progress, skipping refresh all", debug=True)
         return
-    if self.__active_lifecycle_operation is not None:
-        active = self.__active_lifecycle_operation
+    active = self._active_lifecycle_operation()
+    if active is not None:
         self.add_log(
             f"Lifecycle operation {active.get('operation')} active on {active.get('container_name')}, skipping refresh all",
             debug=True,
@@ -3194,7 +3219,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.add_log(f"Preparing Docker launch for {container_name} with volume {volume_name}. Container cleanup and command preparation will run in the background.", color="blue")
         
         # Check if Docker pull is already in progress
-        if self.__docker_pull_in_progress:
+        if self._docker_pull_in_progress():
             self.add_log(f"Docker pull already in progress, skipping launch of {container_name}", color="yellow")
             self._end_lifecycle_operation(container_name)
             
@@ -3212,11 +3237,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             return
         
         # Always pull the latest Docker image before launching
-        self.__docker_pull_in_progress = True
-        self.__pending_launch_context = {
-            "container_name": container_name,
-            "volume_name": volume_name,
-        }
+        self._start_docker_pull(container_name, volume_name)
         
         # Stop the loading indicator since we're switching to pull dialog
         self.loading_indicator.stop()
@@ -3457,17 +3478,15 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         success: Whether the pull was successful
         message: Success or error message
     """
-    launch_context = self.__pending_launch_context
+    launch_context = self._pending_launch_context()
     if self._is_shutting_down():
         if launch_context:
             self._skip_lifecycle_callback_if_shutting_down("Docker pull completion", launch_context["container_name"])
-        self.__docker_pull_in_progress = False
-        self.__pending_launch_context = None
+        self._finish_docker_pull()
         return
 
     # Reset the pull state first
-    self.__docker_pull_in_progress = False
-    self.__pending_launch_context = None
+    launch_context = self._finish_docker_pull()
     
     # Log the result
     if success:
