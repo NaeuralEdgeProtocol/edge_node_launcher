@@ -1,7 +1,10 @@
 from types import SimpleNamespace
 import webbrowser
 
+from PyQt5.QtWidgets import QDialog, QLabel, QLineEdit, QPushButton
+
 import tools.run_smoke_e2e as smoke
+from widgets.ToastWidget import NotificationType, ToastWidget
 
 
 def test_smoke_fake_docker_handler_never_reports_running():
@@ -24,6 +27,19 @@ def test_smoke_fake_docker_handler_returns_empty_history():
     assert received
     assert received[0].timestamps == []
     assert received[0].cpu_load == []
+
+
+def test_record_step_prints_unicode_as_ascii_json(tmp_path, capsys):
+    log = {"steps": []}
+    output_path = tmp_path / "smoke.json"
+
+    smoke.record_step(log, str(output_path), {"step": "toast", "icon": "\u26a0"})
+
+    captured = capsys.readouterr()
+    assert "\\u26a0" in captured.out
+    assert "\u26a0" not in captured.out
+    assert output_path.exists()
+    assert log["steps"] == [{"step": "toast", "icon": "\u26a0"}]
 
 
 def test_smoke_window_snapshot_serializes_geometry():
@@ -125,3 +141,77 @@ def test_click_visible_button_rejects_hidden_buttons():
         assert "copy node address button is not visible" in str(exc)
     else:
         raise AssertionError("hidden smoke buttons should fail fast")
+
+
+def test_dialog_visual_snapshot_records_dialog_content(qtbot):
+    dialog = QDialog()
+    dialog.setWindowTitle("Review Dialog")
+    label = QLabel("Important copy", dialog)
+    label.setObjectName("dialogCopy")
+    label.setWordWrap(True)
+    line_edit = QLineEdit(dialog)
+    line_edit.setObjectName("dialogInput")
+    line_edit.setText("alpha")
+    line_edit.setPlaceholderText("Alias")
+    button = QPushButton("Save", dialog)
+    button.setObjectName("dialogSaveButton")
+    qtbot.addWidget(dialog)
+
+    dialog.show()
+    qtbot.waitUntil(dialog.isVisible)
+
+    snapshot = smoke.dialog_visual_snapshot(dialog)
+
+    assert snapshot["title"] == "Review Dialog"
+    assert snapshot["visible"] is True
+    assert snapshot["labels"][0]["object_name"] == "dialogCopy"
+    assert snapshot["labels"][0]["text"] == "Important copy"
+    assert snapshot["labels"][0]["word_wrap"] is True
+    assert snapshot["line_edits"][0]["object_name"] == "dialogInput"
+    assert snapshot["line_edits"][0]["text"] == "alpha"
+    assert snapshot["line_edits"][0]["placeholder"] == "Alias"
+    assert snapshot["buttons"][0]["object_name"] == "dialogSaveButton"
+    assert snapshot["buttons"][0]["text"] == "Save"
+
+
+def test_capture_dialog_visual_evidence_omits_screenshot_without_dir(qtbot):
+    dialog = QDialog()
+    dialog.setWindowTitle("No Screenshot")
+    qtbot.addWidget(dialog)
+    dialog.show()
+    qtbot.waitUntil(dialog.isVisible)
+
+    evidence = smoke.capture_dialog_visual_evidence(dialog, "", "no_screenshot")
+
+    assert evidence["label"] == "no_screenshot"
+    assert evidence["dialog"]["title"] == "No Screenshot"
+    assert "screenshot" not in evidence
+
+
+def test_toast_visual_snapshot_records_visible_notification(qtbot):
+    parent = QDialog()
+    parent.resize(500, 300)
+    toast = ToastWidget(parent)
+    qtbot.addWidget(parent)
+    parent.show()
+    qtbot.waitUntil(parent.isVisible)
+
+    launcher = SimpleNamespace(toast=toast)
+    toast.show_notification(NotificationType.INFO, "Visual review message", duration=5000)
+    qtbot.waitUntil(toast.isVisible)
+
+    snapshot = smoke.toast_visual_snapshot(launcher)
+
+    assert snapshot["found"] is True
+    assert snapshot["visible"] is True
+    assert snapshot["title"] == "Information"
+    assert snapshot["message"] == "Visual review message"
+    assert snapshot["icon"] == "i"
+    assert snapshot["icon"].isascii()
+    assert snapshot["rect"]["w"] >= 280
+    assert "#FFFFFF" in toast.styleSheet()
+
+
+def test_toast_notification_icons_are_ascii_safe():
+    for style in ToastWidget.STYLES.values():
+        assert style["icon"].isascii()

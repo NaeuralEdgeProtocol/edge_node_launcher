@@ -35,6 +35,16 @@ def test_docker_check_dialog_buttons_are_clickable(qtbot, monkeypatch):
         qtbot.mouseClick(quit_dialog.quit_button, Qt.LeftButton)
 
 
+def test_docker_check_quit_button_has_readable_yellow_contrast(qtbot):
+    dialog = docker_check_module.DockerCheckDialog()
+    qtbot.addWidget(dialog)
+
+    stylesheet = dialog.styleSheet()
+
+    assert "#1F2937" in stylesheet
+    assert "#C4AC26" not in stylesheet
+
+
 def test_image_pull_cancel_button_rejects_dialog(qtbot):
     dialog = ImagePullProgressDialog()
     qtbot.addWidget(dialog)

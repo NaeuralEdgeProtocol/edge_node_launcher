@@ -77,7 +77,7 @@ class DockerCheckDialog(QDialog):
             }
             QPushButton[type="toggle_button_stop"] {
                 background-color: #FADC33 !important;
-                color: #C4AC26;
+                color: #1F2937;
                 border: 1px solid transparent;
                 border-radius: 15px;
                 padding: 10px 20px;
@@ -109,7 +109,7 @@ class DockerCheckDialog(QDialog):
                 }
                 QPushButton[type="toggle_button_stop"] {
                     background-color: #FADC33;
-                    color: #C4AC26;
+                    color: #1F2937;
                     border: 1px solid transparent;
                     border-radius: 15px;
                     padding: 10px 20px;

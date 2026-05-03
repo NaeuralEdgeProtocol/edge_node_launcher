@@ -71,7 +71,7 @@ def write_log(log, output_path):
 def record_step(log, output_path, step):
     log["steps"].append(step)
     write_log(log, output_path)
-    print(f"SMOKE_E2E_STEP: {step}", flush=True)
+    print(f"SMOKE_E2E_STEP: {json.dumps(step, ensure_ascii=True)}", flush=True)
 
 
 def wait_until(app, predicate, timeout, label, interval=0.1):
@@ -243,6 +243,107 @@ def capture_visual_evidence(launcher, screenshot_dir, label):
     return evidence
 
 
+def dialog_visual_snapshot(dialog):
+    from PyQt5.QtWidgets import QLabel, QLineEdit, QPushButton
+
+    return {
+        "title": dialog.windowTitle(),
+        "object_name": dialog.objectName(),
+        "visible": dialog.isVisible(),
+        "rect": widget_global_rect(dialog),
+        "labels": [
+            {
+                "object_name": label.objectName(),
+                "text": label.text(),
+                "visible": label.isVisible(),
+                "word_wrap": label.wordWrap(),
+                "rect": widget_global_rect(label),
+            }
+            for label in dialog.findChildren(QLabel)
+        ],
+        "line_edits": [
+            {
+                "object_name": line_edit.objectName(),
+                "text": line_edit.text(),
+                "placeholder": line_edit.placeholderText(),
+                "visible": line_edit.isVisible(),
+                "enabled": line_edit.isEnabled(),
+                "rect": widget_global_rect(line_edit),
+            }
+            for line_edit in dialog.findChildren(QLineEdit)
+        ],
+        "buttons": [
+            {
+                "object_name": button.objectName(),
+                "text": button.text(),
+                "visible": button.isVisible(),
+                "enabled": button.isEnabled(),
+                "rect": widget_global_rect(button),
+            }
+            for button in dialog.findChildren(QPushButton)
+        ],
+    }
+
+
+def capture_dialog_visual_evidence(dialog, screenshot_dir, label):
+    evidence = {
+        "label": label,
+        "dialog": dialog_visual_snapshot(dialog),
+    }
+    if screenshot_dir:
+        evidence["screenshot"] = save_widget_screenshot(
+            dialog,
+            screenshot_dir,
+            f"{label}_dialog.png",
+        )
+    return evidence
+
+
+def toast_visual_snapshot(launcher):
+    toast = getattr(launcher, "toast", None)
+    if toast is None:
+        return {"found": False, "visible": False}
+
+    return {
+        "found": True,
+        "visible": toast.isVisible(),
+        "rect": widget_global_rect(toast),
+        "title": toast.title.text() if hasattr(toast, "title") else "",
+        "icon": toast.icon.text() if hasattr(toast, "icon") else "",
+        "message": toast.message.text() if hasattr(toast, "message") else "",
+    }
+
+
+def capture_toast_visual_evidence(launcher, screenshot_dir, label):
+    evidence = {
+        "label": label,
+        "toast": toast_visual_snapshot(launcher),
+    }
+    toast = getattr(launcher, "toast", None)
+    if screenshot_dir and toast is not None and toast.isVisible():
+        evidence["screenshot"] = save_widget_screenshot(
+            toast,
+            screenshot_dir,
+            f"{label}_toast.png",
+        )
+    return evidence
+
+
+def show_and_capture_dialog(app, dialog, log, output_path, screenshot_dir, label):
+    dialog.show()
+    app.processEvents()
+    record_step(
+        log,
+        output_path,
+        {
+            "step": f"captured {label} dialog visual evidence",
+            "visual": capture_dialog_visual_evidence(dialog, screenshot_dir, label),
+        },
+    )
+    dialog.close()
+    app.processEvents()
+
+
 def click_button(app, button, label):
     from PyQt5.QtCore import Qt
     from PyQt5.QtTest import QTest
@@ -330,6 +431,8 @@ def run_scenarios(args):
 
     import app_forms.frm_main as frm_main
     from utils.config_manager import ConfigManager, ContainerConfig
+    from widgets.dialogs.DockerCheckDialog import DockerCheckDialog
+    from widgets.LoadingDialog import LoadingDialog
 
     log = {
         "started_at": datetime.now().isoformat(),
@@ -402,12 +505,52 @@ def run_scenarios(args):
         launcher.resize(1600, 900)
         app.processEvents()
 
+        docker_check_dialog = DockerCheckDialog(launcher)
+        show_and_capture_dialog(
+            app,
+            docker_check_dialog,
+            log,
+            args.output,
+            args.screenshot_dir,
+            "docker_check",
+        )
+
+        loading_dialog = LoadingDialog(
+            launcher,
+            title="Starting Node",
+            message="Please wait while new Edge Node is being launched...",
+            size=50,
+            stylesheet=launcher._current_stylesheet,
+        )
+        show_and_capture_dialog(
+            app,
+            loading_dialog,
+            log,
+            args.output,
+            args.screenshot_dir,
+            "startup_loading",
+        )
+
         record_step(log, args.output, {"step": click_button(app, launcher.themeToggleButton, "toggle light theme")})
         wait_until(app, lambda: launcher.themeToggleButton.text() == frm_main.DARK_DASHBOARD_BUTTON_TEXT, args.timeout, "light theme")
         record_step(log, args.output, {"step": click_button(app, launcher.themeToggleButton, "toggle dark theme")})
         wait_until(app, lambda: launcher.themeToggleButton.text() == frm_main.LIGHT_DASHBOARD_BUTTON_TEXT, args.timeout, "dark theme")
 
         record_step(log, args.output, {"step": click_button(app, launcher.refreshButton, "refresh stopped node")})
+        wait_until(
+            app,
+            lambda: launcher.toast.isVisible() and "cached data" in launcher.toast.message.text(),
+            args.timeout,
+            "refresh stopped-node toast",
+        )
+        record_step(
+            log,
+            args.output,
+            {
+                "step": "captured refresh stopped-node toast visual evidence",
+                "visual": capture_toast_visual_evidence(launcher, args.screenshot_dir, "refresh_stopped_node"),
+            },
+        )
         record_step(
             log,
             args.output,
@@ -427,19 +570,79 @@ def run_scenarios(args):
         record_step(log, args.output, {"step": click_button(app, launcher.force_debug_checkbox, "toggle force debug")})
         record_step(log, args.output, {"step": click_button(app, launcher.dapp_button, "open dapp link")})
         record_step(log, args.output, {"step": click_button(app, launcher.explorer_button, "show explorer placeholder")})
+        wait_until(
+            app,
+            lambda: launcher.toast.isVisible() and "Explorer" in launcher.toast.message.text(),
+            args.timeout,
+            "explorer placeholder toast",
+        )
+        record_step(
+            log,
+            args.output,
+            {
+                "step": "captured explorer placeholder toast visual evidence",
+                "visual": capture_toast_visual_evidence(launcher, args.screenshot_dir, "explorer_placeholder"),
+            },
+        )
         record_step(log, args.output, {"step": click_button(app, launcher.docker_download_button, "open docker download link")})
 
-        def cancel_add_node_dialog():
+        def capture_and_cancel_add_node_dialog():
             dialog = find_dialog(app, "Add New Node")
             if dialog is None:
-                QTimer.singleShot(100, cancel_add_node_dialog)
+                QTimer.singleShot(100, capture_and_cancel_add_node_dialog)
                 return
+            record_step(
+                log,
+                args.output,
+                {
+                    "step": "captured add-node dialog visual evidence",
+                    "visual": capture_dialog_visual_evidence(dialog, args.screenshot_dir, "add_node"),
+                },
+            )
             click_dialog_button(app, dialog, "createNodeCancelButton")
 
-        QTimer.singleShot(100, cancel_add_node_dialog)
+        QTimer.singleShot(100, capture_and_cancel_add_node_dialog)
         record_step(log, args.output, {"step": click_button(app, launcher.add_node_button, "open and cancel add node dialog")})
 
+        original_is_container_running = launcher.is_container_running
+        launcher.is_container_running = lambda: True
+
+        def capture_and_cancel_rename_dialog():
+            dialog = find_dialog(app, "Rename Node")
+            if dialog is None:
+                QTimer.singleShot(100, capture_and_cancel_rename_dialog)
+                return
+            record_step(
+                log,
+                args.output,
+                {
+                    "step": "captured rename dialog visual evidence",
+                    "visual": capture_dialog_visual_evidence(dialog, args.screenshot_dir, "rename_node"),
+                },
+            )
+            click_dialog_button(app, dialog, "renameNodeCancelButton")
+
+        try:
+            QTimer.singleShot(100, capture_and_cancel_rename_dialog)
+            record_step(log, args.output, {"step": click_button(app, launcher.renameNodeButton, "open and cancel rename dialog")})
+        finally:
+            launcher.is_container_running = original_is_container_running
+
         record_step(log, args.output, {"step": click_button(app, launcher.renameNodeButton, "rename stopped node guard")})
+        wait_until(
+            app,
+            lambda: launcher.toast.isVisible() and "Container not running" in launcher.toast.message.text(),
+            args.timeout,
+            "rename stopped-node toast",
+        )
+        record_step(
+            log,
+            args.output,
+            {
+                "step": "captured rename stopped-node toast visual evidence",
+                "visual": capture_toast_visual_evidence(launcher, args.screenshot_dir, "rename_stopped_node"),
+            },
+        )
 
         log["result"] = "passed"
         return log

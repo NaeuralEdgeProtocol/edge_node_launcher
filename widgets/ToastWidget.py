@@ -17,27 +17,27 @@ class ToastWidget(QWidget):
     STYLES = {
         NotificationType.SUCCESS: {
             "bg_color": "#28A745",
-            "icon": "✓",
+            "icon": "OK",
             "title": NOTIFICATION_TITLE_STRINGS_ENUM['success'],
-            "icon_color": "#4CAF50"
+            "icon_color": "#FFFFFF"
         },
         NotificationType.ERROR: {
             "bg_color": "#DC3545",
-            "icon": "✗",
+            "icon": "X",
             "title": NOTIFICATION_TITLE_STRINGS_ENUM['error'],
-            "icon_color": "#FF5252"
+            "icon_color": "#FFFFFF"
         },
         NotificationType.WARNING: {
             "bg_color": "#FFC107",
-            "icon": "⚠",
+            "icon": "!",
             "title": NOTIFICATION_TITLE_STRINGS_ENUM['warning'],
-            "icon_color": "#FFD740"
+            "icon_color": "#1F2937"
         },
         NotificationType.INFO: {
             "bg_color": "#17A2B8",
-            "icon": "ℹ",
+            "icon": "i",
             "title": NOTIFICATION_TITLE_STRINGS_ENUM['info'],
-            "icon_color": "#40C4FF"
+            "icon_color": "#FFFFFF"
         }
     }
 
@@ -49,6 +49,8 @@ class ToastWidget(QWidget):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.raise_()  # Bring to front
         self.fade_animation = None
+        self.setMinimumWidth(280)
+        self.setMaximumWidth(360)
         self._setup_ui()
         self.hide()
 
@@ -63,15 +65,21 @@ class ToastWidget(QWidget):
         self.title = QLabel()
         self.title.setObjectName("title")
 
+        header.setSpacing(8)
+        self.icon.setFixedWidth(26)
+        self.title.setMinimumWidth(160)
         header.addWidget(self.icon)
         header.addWidget(self.title)
         header.addStretch()
 
         self.message = QLabel()
         self.message.setWordWrap(True)
+        self.message.setMinimumWidth(220)
 
         container = QWidget()
         container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(14, 12, 14, 12)
+        container_layout.setSpacing(6)
         container_layout.addLayout(header)
         container_layout.addWidget(self.message)
         layout.addWidget(container)

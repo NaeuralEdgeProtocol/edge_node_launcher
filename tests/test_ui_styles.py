@@ -1,4 +1,4 @@
-from utils.const import DARK_STYLESHEET, LIGHT_STYLESHEET
+from utils.const import DARK_COLORS, DARK_STYLESHEET, LIGHT_COLORS, LIGHT_STYLESHEET
 
 
 def test_stylesheets_do_not_use_unsupported_word_wrap_property():
@@ -21,3 +21,9 @@ def test_sidebar_action_buttons_are_styled_by_hierarchy_role():
         assert 'QPushButton[actionRole="secondary"]' in stylesheet
         assert 'QPushButton[actionRole="utility"]' in stylesheet
         assert "action_button_border_radius" not in stylesheet
+
+
+def test_stop_button_text_uses_readable_dark_color_on_yellow():
+    for colors in (DARK_COLORS, LIGHT_COLORS):
+        assert colors["toggle_button_stop_text"] == "#1F2937"
+        assert colors["toggle_button_stop_text"] != "#C4AC26"
