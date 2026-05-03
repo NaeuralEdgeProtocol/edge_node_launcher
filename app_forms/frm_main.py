@@ -686,60 +686,38 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     sidebar_scroll.setWidget(sidebar_widget)
     return sidebar_scroll
 
-  def initUI(self):
-    self.setWindowTitle(WINDOW_TITLE)
-    self.apply_initial_window_geometry()
-
-    # Set the icon right at the beginning
-    self.setWindowIcon(self._icon)
-    self.set_windows_taskbar_icon()
-
-    # Create the main layout
-    main_layout = QVBoxLayout(self)
-    main_layout.setContentsMargins(10, 10, 10, 10)  # Add padding around the entire window content
-    main_layout.setSpacing(0)
-
-    # Content area with overlay for mode switch
-    content_widget = QWidget()
-    content_widget.setLayout(QHBoxLayout())
-    content_widget.layout().setContentsMargins(0, 0, 0, 0)
-    content_widget.layout().setSpacing(0)
-
-    # Left menu layout with fixed width
+  def _create_sidebar_panel(self) -> QWidget:
+    """Create the left navigation and status sidebar."""
     menu_widget = QWidget()
     menu_widget.setObjectName("sidebarPanel")
-    menu_widget.setFixedWidth(300)  # Set the fixed width here
+    menu_widget.setProperty("role", "navigationSidebar")
+    menu_widget.setFixedWidth(300)
+
     menu_layout = QVBoxLayout(menu_widget)
     menu_layout.setAlignment(Qt.AlignTop)
-    menu_layout.setContentsMargins(0, 2, 0, 2)  # Small top and bottom margins, no side margins
-    
+    menu_layout.setContentsMargins(0, 2, 0, 2)
+
     top_button_area = QVBoxLayout()
     top_button_area.setObjectName("topButtonArea")
-    top_button_area.setContentsMargins(5, 0, 5, 4)  # Add left and right margins (5px)
+    top_button_area.setContentsMargins(5, 0, 5, 4)
     top_button_area.addWidget(self.create_sidebar_section_label("Node", "nodeControlsSectionLabel"))
 
-    # Container selector area
-    container_selector_layout = QVBoxLayout()  # Changed to QVBoxLayout
-    # container_selector_layout.setContentsMargins(5, 4, 5, 4)  # Add left and right margins (5px)
-    # Add Node button
+    container_selector_layout = QVBoxLayout()
     self.add_node_button = QPushButton("Add New Node")
     self.add_node_button.clicked.connect(self.show_add_node_dialog)
     self.add_node_button.setObjectName("addNodeButton")
     self.add_node_button.setToolTip(ADD_NODE_TOOLTIP)
     container_selector_layout.addWidget(self.add_node_button)
 
-    # Container dropdown
     self.container_combo = CenteredComboBox()
     self.container_combo.setFont(QFont("Courier New", 10))
     self.container_combo.currentTextChanged.connect(self._on_container_selected)
-    self.container_combo.setMinimumHeight(32)  # Make dropdown slightly taller
-    
-    # Set the initial theme directly
+    self.container_combo.setMinimumHeight(32)
     is_dark = self._current_stylesheet == DARK_STYLESHEET
     if hasattr(self.container_combo, 'set_theme'):
         self.container_combo.set_theme(is_dark)
     container_selector_layout.addWidget(self.container_combo)
-    
+
     top_button_area.addLayout(container_selector_layout)
 
     self.renameNodeButton = QPushButton(RENAME_NODE_BUTTON_TEXT)
@@ -748,7 +726,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.renameNodeButton.clicked.connect(self.show_rename_dialog)
     top_button_area.addWidget(self.renameNodeButton)
 
-    # Launch Edge Node button
     self.toggleButton = QPushButton(LAUNCH_CONTAINER_BUTTON_TEXT)
     self.toggleButton.setObjectName("startNodeButton")
     self.toggleButton.setToolTip(TOGGLE_NODE_TOOLTIP)
@@ -758,90 +735,88 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     top_button_area.addWidget(self.create_sidebar_section_label("Network", "networkActionsSectionLabel"))
 
-    # Docker download button right under Launch Edge Node
     self.docker_download_button = QPushButton(DOWNLOAD_DOCKER_BUTTON_TEXT)
     self.docker_download_button.setObjectName("downloadDockerButton")
     self.docker_download_button.setToolTip(DOCKER_DOWNLOAD_TOOLTIP)
     self.docker_download_button.clicked.connect(self.open_docker_download)
-    # top_button_area.addWidget(self.docker_download_button)
 
-    # dApp button
     self.dapp_button = QPushButton(DAPP_BUTTON_TEXT)
     self.dapp_button.setObjectName("openDappButton")
     self.dapp_button.setToolTip(DAPP_TOOLTIP)
     self.dapp_button.clicked.connect(self.dapp_button_clicked)
     top_button_area.addWidget(self.dapp_button)
 
-    # Explorer button
     self.explorer_button = QPushButton(EXPLORER_BUTTON_TEXT)
     self.explorer_button.setObjectName("openExplorerButton")
     self.explorer_button.setToolTip(EXPLORER_TOOLTIP)
     self.explorer_button.clicked.connect(self.explorer_button_clicked)
     top_button_area.addWidget(self.explorer_button)
-    
-    # Add some spacing between the explorer button and refresh button
+
     top_button_area.addSpacing(7)
     top_button_area.addWidget(self.create_sidebar_section_label("Status", "statusSectionLabel"))
-    
-    # Refresh button
+
     self.refreshButton = QPushButton("Refresh Node Info")
     self.refreshButton.setObjectName("refreshNodeInfoButton")
     self.refreshButton.clicked.connect(self.force_refresh_all)
     self.refreshButton.setToolTip(REFRESH_NODE_INFO_TOOLTIP)
     top_button_area.addWidget(self.refreshButton)
-    
-    # Add some spacing between the refresh button and info box
+
     top_button_area.addSpacing(7)
-    
-    # Info box
+    top_button_area.addWidget(self._create_node_status_panel())
+    top_button_area.addSpacing(7)
+    top_button_area.addWidget(self._create_resource_status_panel())
+
+    menu_layout.addLayout(top_button_area)
+    menu_layout.addStretch(1)
+    menu_layout.addLayout(self._create_sidebar_settings_section())
+
+    return menu_widget
+
+  def _create_node_status_panel(self) -> QGroupBox:
     info_box = QGroupBox()
     info_box.setObjectName("infoBox")
     info_box.setProperty("role", "statusPanel")
-    info_box.setContentsMargins(5, 0, 5, 0)  # Add left and right margins directly to the widget
-    info_box_layout = QVBoxLayout()
-    info_box_layout.setContentsMargins(5, 6, 5, 8)  # Left, Top, Right, Bottom margins inside the box
+    info_box.setContentsMargins(5, 0, 5, 0)
 
-    # Add loading indicator
+    info_box_layout = QVBoxLayout()
+    info_box_layout.setContentsMargins(5, 6, 5, 8)
+
     self.loading_indicator = LoadingIndicator(size=30)
-    self.loading_indicator.hide()  # Initially hidden
+    self.loading_indicator.hide()
     loading_layout = QHBoxLayout()
     loading_layout.addStretch()
     loading_layout.addWidget(self.loading_indicator)
     loading_layout.addStretch()
     info_box_layout.addLayout(loading_layout)
 
-    # Address display with copy button
     addr_layout = QHBoxLayout()
     self.addressDisplay = QLabel('')
     self.addressDisplay.setFont(QFont("Courier New"))
     self.addressDisplay.setObjectName("infoBoxText")
     addr_layout.addWidget(self.addressDisplay)
-    
-    # Add copy address button
+
     self.copyAddrButton = QPushButton()
     self.copyAddrButton.setToolTip(COPY_ADDRESS_TOOLTIP)
     self.copyAddrButton.clicked.connect(self.copy_address)
-    self.copyAddrButton.setFixedSize(28, 28)  # Slightly larger button size
+    self.copyAddrButton.setFixedSize(28, 28)
     self.copyAddrButton.setObjectName("copyAddrButton")
-    self.copyAddrButton.hide()  # Initially hidden
+    self.copyAddrButton.hide()
     addr_layout.addWidget(self.copyAddrButton)
     addr_layout.addStretch()
     info_box_layout.addLayout(addr_layout)
 
-    # ETH address display with copy button
     eth_addr_layout = QHBoxLayout()
     self.ethAddressDisplay = QLabel('')
     self.ethAddressDisplay.setObjectName("infoBoxText")
     self.ethAddressDisplay.setFont(QFont("Courier New"))
     eth_addr_layout.addWidget(self.ethAddressDisplay)
-    
-    # Add copy ethereum address button
+
     self.copyEthButton = QPushButton()
     self.copyEthButton.setToolTip(COPY_ETH_ADDRESS_TOOLTIP)
     self.copyEthButton.clicked.connect(self.copy_eth_address)
-    self.copyEthButton.setFixedSize(28, 28)  # Slightly larger button size
+    self.copyEthButton.setFixedSize(28, 28)
     self.copyEthButton.setObjectName("copyEthButton")
-    self.copyEthButton.hide()  # Initially hidden
+    self.copyEthButton.hide()
     eth_addr_layout.addWidget(self.copyEthButton)
     eth_addr_layout.addStretch()
     info_box_layout.addLayout(eth_addr_layout)
@@ -870,22 +845,19 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.node_version.setObjectName("infoBoxText")
     self.node_version.setFont(QFont("Courier New"))
     info_box_layout.addWidget(self.node_version)
-    
+
     info_box.setLayout(info_box_layout)
-    top_button_area.addWidget(info_box)
-    
-    # Add some spacing between info box and resources box
-    top_button_area.addSpacing(7)
-    
-    # Resources box
+    return info_box
+
+  def _create_resource_status_panel(self) -> QGroupBox:
     resources_box = QGroupBox()
     resources_box.setObjectName("resourcesBox")
     resources_box.setProperty("role", "resourcePanel")
-    resources_box.setContentsMargins(5, 0, 5, 0)  # Add left and right margins directly to the widget
-    resources_box_layout = QVBoxLayout()
-    resources_box_layout.setContentsMargins(5, 6, 5, 8)  # Left, Top, Right, Bottom margins inside the box
+    resources_box.setContentsMargins(5, 0, 5, 0)
 
-    # Memory display
+    resources_box_layout = QVBoxLayout()
+    resources_box_layout.setContentsMargins(5, 6, 5, 8)
+
     self.memoryDisplay = QLabel(MEMORY_LABEL + ' ' + MEMORY_NOT_AVAILABLE)
     self.memoryDisplay.setFont(QFont("Courier New"))
     self.memoryDisplay.setObjectName("resourcesBoxText")
@@ -894,7 +866,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.memoryDisplay.setAlignment(Qt.AlignLeft | Qt.AlignTop)
     resources_box_layout.addWidget(self.memoryDisplay)
 
-    # VCPUs display
     self.vcpusDisplay = QLabel(VCPUS_LABEL + ' ' + VCPUS_NOT_AVAILABLE)
     self.vcpusDisplay.setFont(QFont("Courier New"))
     self.vcpusDisplay.setObjectName("resourcesBoxText")
@@ -903,7 +874,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.vcpusDisplay.setAlignment(Qt.AlignLeft | Qt.AlignTop)
     resources_box_layout.addWidget(self.vcpusDisplay)
 
-    # Storage display
     self.storageDisplay = QLabel(STORAGE_LABEL + ' ' + STORAGE_NOT_AVAILABLE)
     self.storageDisplay.setFont(QFont("Courier New"))
     self.storageDisplay.setObjectName("resourcesBoxText")
@@ -911,37 +881,28 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.storageDisplay.setMaximumWidth(270)
     self.storageDisplay.setAlignment(Qt.AlignLeft | Qt.AlignTop)
     resources_box_layout.addWidget(self.storageDisplay)
-    
+
     resources_box.setLayout(resources_box_layout)
-    top_button_area.addWidget(resources_box)
-    
-    menu_layout.addLayout(top_button_area)
+    return resources_box
 
-    # Spacer to push bottom_button_area to the bottom without forcing the window taller than the screen.
-    menu_layout.addStretch(1)
-
-    # Bottom button area
+  def _create_sidebar_settings_section(self) -> QVBoxLayout:
     bottom_button_area = QVBoxLayout()
     bottom_button_area.setObjectName("bottomButtonArea")
-    bottom_button_area.setContentsMargins(5, 4, 5, 0)  # Add left and right margins (5px)
+    bottom_button_area.setContentsMargins(5, 4, 5, 0)
     bottom_button_area.addWidget(self.create_sidebar_section_label("Settings", "settingsSectionLabel"))
-    
-    # Toggle theme button
+
     self.themeToggleButton = QPushButton(LIGHT_DASHBOARD_BUTTON_TEXT)
     self.themeToggleButton.setObjectName("themeToggleButton")
     self.themeToggleButton.setToolTip(THEME_TOGGLE_TOOLTIP)
-    # self.themeToggleButton.setCheckable(True)
     self.themeToggleButton.clicked.connect(self.toggle_theme)
-    bottom_button_area.addWidget(self.themeToggleButton)    
-    
-    # add a checkbox item to force debug
+    bottom_button_area.addWidget(self.themeToggleButton)
+
     self.force_debug_checkbox = QCheckBox('Force Debug Mode')
     self.force_debug_checkbox.setObjectName("forceDebugCheckbox")
     self.force_debug_checkbox.setToolTip(FORCE_DEBUG_TOOLTIP)
-    self.force_debug_checkbox.setChecked(self.__force_debug)  # Set initial state from config
+    self.force_debug_checkbox.setChecked(self.__force_debug)
     self.force_debug_checkbox.setFont(QFont("Courier New", 9, QFont.Bold))
-    
-    # Apply custom styling to the debug checkbox
+
     is_dark = self._current_stylesheet == DARK_STYLESHEET
     if is_dark:
         self.force_debug_checkbox.setStyleSheet(DETAILED_CHECKBOX_STYLE.format(
@@ -951,13 +912,33 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.force_debug_checkbox.setStyleSheet(DETAILED_CHECKBOX_STYLE.format(
             debug_checkbox_color=LIGHT_COLORS["debug_checkbox_color"]
         ))
-    
+
     self.force_debug_checkbox.stateChanged.connect(self.toggle_force_debug)
     bottom_button_area.addWidget(self.force_debug_checkbox)
-
     bottom_button_area.addStretch()
-    menu_layout.addLayout(bottom_button_area)
-    
+
+    return bottom_button_area
+
+  def initUI(self):
+    self.setWindowTitle(WINDOW_TITLE)
+    self.apply_initial_window_geometry()
+
+    # Set the icon right at the beginning
+    self.setWindowIcon(self._icon)
+    self.set_windows_taskbar_icon()
+
+    # Create the main layout
+    main_layout = QVBoxLayout(self)
+    main_layout.setContentsMargins(10, 10, 10, 10)  # Add padding around the entire window content
+    main_layout.setSpacing(0)
+
+    # Content area with overlay for mode switch
+    content_widget = QWidget()
+    content_widget.setLayout(QHBoxLayout())
+    content_widget.layout().setContentsMargins(0, 0, 0, 0)
+    content_widget.layout().setSpacing(0)
+
+    menu_widget = self._create_sidebar_panel()
     right_container = self._create_right_dashboard_container()
     
     # Add the main content widgets

@@ -882,5 +882,6 @@ def test_main_window_sidebar_controls_are_scrollable(qtbot, monkeypatch):
     assert sidebar_scroll.widgetResizable()
     assert sidebar_scroll.horizontalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
     assert sidebar_scroll.widget().objectName() == "sidebarPanel"
+    assert sidebar_scroll.widget().property("role") == "navigationSidebar"
     assert sidebar_scroll.widget().findChild(QPushButton, "addNodeButton") is launcher.add_node_button
     assert sidebar_scroll.widget().findChild(QPushButton, "renameNodeButton") is launcher.renameNodeButton
