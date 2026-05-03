@@ -217,6 +217,7 @@ COMMON_STYLES = {
     "button_font_size": "16px",
     "button_margin": "4px 5px",
     "button_border_radius": "15px",
+    "panel_border_radius": "8px",
     "combo_border_radius": "15px",
     "combo_padding": "4px",
     "combo_min_width": "100px",
@@ -645,17 +646,22 @@ COMMON_STYLESHEET_TEMPLATE = """
     min-height: 40px;
     max-height: 40px;
   }}
-  #infoBox {{
+  QGroupBox[role="statusPanel"],
+  QGroupBox[role="resourcePanel"] {{
     background-color: {info_box_bg};
     border: 1px solid {info_box_border};
-    border-radius: {border_radius};
+    border-radius: {panel_border_radius};
     margin: 6px;
     margin-left: 5px;
     margin-right: 5px;
     padding: 8px;
     color: {info_box_text};
   }}
-  #infoBox QLabel {{
+  QGroupBox[role="resourcePanel"] {{
+    min-height: 60px;
+  }}
+  QGroupBox[role="statusPanel"] QLabel,
+  QGroupBox[role="resourcePanel"] QLabel {{
     color: {info_box_text};
     font-family: "Courier New";
     font-size: 10pt;
@@ -663,7 +669,11 @@ COMMON_STYLESHEET_TEMPLATE = """
     margin: 2px;
     background-color: transparent;
   }}
-  #infoBox QPushButton {{
+  QGroupBox[role="resourcePanel"] QLabel {{
+    padding: 2px 4px;
+    max-width: 270px;
+  }}
+  QGroupBox[role="statusPanel"] QPushButton {{
     background-color: {button_copy_address_bg};
     border: none;
     padding: 0px;
@@ -672,36 +682,13 @@ COMMON_STYLESHEET_TEMPLATE = """
     margin-right: 0px;
     color: {text_color};
   }}
-  #infoBoxText QLabel {{
+  QLabel#infoBoxText,
+  QLabel#resourcesBoxText {{
     color: {info_box_text};
     background-color: transparent;
     font-weight: {info_box_font_weight};
   }}
-  #resourcesBox {{
-    background-color: {info_box_bg};
-    border: 1px solid {info_box_border};
-    border-radius: {border_radius};
-    margin: 6px;
-    margin-left: 5px;
-    margin-right: 5px;
-    padding: 8px;
-    color: {info_box_text};
-    min-height: 60px;
-  }}
-  #resourcesBox QLabel {{
-    color: {info_box_text};
-    font-family: "Courier New";
-    font-size: 10pt;
-    font-weight: {info_box_font_weight};
-    margin: 2px;
-    padding: 2px 4px;
-    background-color: transparent;
-    max-width: 270px;
-  }}
-  #resourcesBoxText QLabel {{
-    color: {info_box_text};
-    background-color: transparent;
-    font-weight: {info_box_font_weight};
+  QLabel#resourcesBoxText {{
     max-width: 270px;
   }}
   #myComboPopup {{
