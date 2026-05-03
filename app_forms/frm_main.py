@@ -626,6 +626,17 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     return right_container
 
+  def _create_sidebar_scroll_area(self, sidebar_widget: QWidget) -> QScrollArea:
+    sidebar_scroll = QScrollArea()
+    sidebar_scroll.setObjectName("sidebarScrollArea")
+    sidebar_scroll.setWidgetResizable(True)
+    sidebar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    sidebar_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+    sidebar_scroll.setFrameShape(QFrame.NoFrame)
+    sidebar_scroll.setFixedWidth(300)
+    sidebar_scroll.setWidget(sidebar_widget)
+    return sidebar_scroll
+
   def initUI(self):
     self.setWindowTitle(WINDOW_TITLE)
     self.apply_initial_window_geometry()
@@ -647,6 +658,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     # Left menu layout with fixed width
     menu_widget = QWidget()
+    menu_widget.setObjectName("sidebarPanel")
     menu_widget.setFixedWidth(300)  # Set the fixed width here
     menu_layout = QVBoxLayout(menu_widget)
     menu_layout.setAlignment(Qt.AlignTop)
@@ -893,7 +905,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     right_container = self._create_right_dashboard_container()
     
     # Add the main content widgets
-    content_widget.layout().addWidget(menu_widget)
+    content_widget.layout().addWidget(self._create_sidebar_scroll_area(menu_widget))
     content_widget.layout().addWidget(right_container)
     
     main_layout.addWidget(content_widget)
