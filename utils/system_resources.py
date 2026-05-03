@@ -337,9 +337,9 @@ class _SystemResourcesMixin:
         """
         if can_add:
             return (f"Node can be created. System supports {ram_info['max_nodes_supported']} nodes total "
-                   f"({ram_info['total_ram_gb']:.1f} GB ÷ {ram_info['min_required_gb']} GB per node), "
+                   f"({ram_info['total_ram_gb']:.1f} GB / {ram_info['min_required_gb']} GB per node), "
                    f"currently running {ram_info['current_node_count']} nodes")
         else:
             return (f"Maximum node capacity reached. System supports {ram_info['max_nodes_supported']} nodes "
-                   f"({ram_info['total_ram_gb']:.1f} GB ÷ {ram_info['min_required_gb']} GB per node), "
-                   f"currently running {ram_info['current_node_count']} nodes") 
+                   f"({ram_info['total_ram_gb']:.1f} GB / {ram_info['min_required_gb']} GB per node), "
+                   f"currently running {ram_info['current_node_count']} nodes")
