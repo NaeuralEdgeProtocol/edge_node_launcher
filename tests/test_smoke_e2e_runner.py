@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 import webbrowser
 
-from PyQt5.QtWidgets import QApplication, QComboBox, QDialog, QLabel, QLineEdit, QProgressBar, QPushButton, QWidget
+from PyQt5.QtWidgets import QApplication, QComboBox, QDialog, QLabel, QLineEdit, QProgressBar, QPushButton, QScrollArea, QWidget
 
 import tools.run_smoke_e2e as smoke
 from widgets.ToastWidget import NotificationType, ToastWidget
@@ -211,6 +211,34 @@ def test_save_widget_region_screenshot_crops_composed_parent_region(qtbot, tmp_p
     image = QImage(screenshot)
     assert image.width() == 45
     assert image.height() == 30
+
+
+def test_scroll_sidebar_to_moves_and_restores_scroll_position(qtbot):
+    parent = QDialog()
+    parent.resize(140, 120)
+    sidebar_scroll = QScrollArea(parent)
+    sidebar_scroll.setObjectName("sidebarScrollArea")
+    sidebar_scroll.setGeometry(0, 0, 120, 90)
+    sidebar_content = QWidget()
+    sidebar_content.setFixedSize(100, 360)
+    sidebar_scroll.setWidget(sidebar_content)
+    qtbot.addWidget(parent)
+    parent.show()
+    qtbot.waitUntil(parent.isVisible)
+
+    scrollbar = sidebar_scroll.verticalScrollBar()
+    assert scrollbar.maximum() > 0
+
+    original_position = smoke.scroll_sidebar_to(parent, "bottom")
+
+    assert original_position == 0
+    assert scrollbar.value() == scrollbar.maximum()
+
+    smoke.scroll_sidebar_to(parent, original_position)
+    assert scrollbar.value() == 0
+
+    smoke.scroll_sidebar_to(parent, "top")
+    assert scrollbar.value() == scrollbar.minimum()
 
 
 def test_combo_popup_visual_evidence_records_items_and_hides_popup(qtbot):

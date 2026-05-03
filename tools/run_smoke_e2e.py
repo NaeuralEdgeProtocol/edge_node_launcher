@@ -209,6 +209,24 @@ def sidebar_visual_snapshot(launcher):
     }
 
 
+def scroll_sidebar_to(launcher, position):
+    from PyQt5.QtWidgets import QScrollArea
+
+    sidebar_scroll = launcher.findChild(QScrollArea, "sidebarScrollArea")
+    if sidebar_scroll is None:
+        raise AssertionError("sidebarScrollArea was not found")
+
+    scrollbar = sidebar_scroll.verticalScrollBar()
+    original_value = scrollbar.value()
+    if position == "bottom":
+        scrollbar.setValue(scrollbar.maximum())
+    elif position == "top":
+        scrollbar.setValue(scrollbar.minimum())
+    else:
+        scrollbar.setValue(int(position))
+    return original_value
+
+
 def save_widget_screenshot(widget, screenshot_dir, filename):
     if not screenshot_dir:
         return ""
@@ -577,6 +595,19 @@ def run_scenarios(args):
         record_step(log, args.output, {"step": "captured startup visual evidence", "visual": startup_visual})
         if not startup_visual["sidebar"]["passed"]:
             raise AssertionError("; ".join(startup_visual["sidebar"]["issues"]))
+
+        original_sidebar_scroll = scroll_sidebar_to(launcher, "bottom")
+        app.processEvents()
+        sidebar_bottom_visual = capture_visual_evidence(launcher, args.screenshot_dir, "sidebar_bottom")
+        record_step(
+            log,
+            args.output,
+            {"step": "captured lower sidebar visual evidence", "visual": sidebar_bottom_visual},
+        )
+        if not sidebar_bottom_visual["sidebar"]["passed"]:
+            raise AssertionError("; ".join(sidebar_bottom_visual["sidebar"]["issues"]))
+        scroll_sidebar_to(launcher, original_sidebar_scroll)
+        app.processEvents()
 
         original_minimum_size = launcher.minimumSize()
         launcher.setMinimumSize(800, 520)

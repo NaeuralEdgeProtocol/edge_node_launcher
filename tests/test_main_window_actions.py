@@ -316,12 +316,34 @@ def test_status_card_uses_semantic_label_roles(qtbot, monkeypatch):
     assert 'QLabel[statusField="metadata"]' in frm_main.DARK_STYLESHEET
 
 
+def test_resource_panel_uses_semantic_label_roles(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+    resource_labels = (
+        (launcher.memoryDisplay, "memoryResourceDisplay", "memory", "Memory usage"),
+        (launcher.vcpusDisplay, "cpuResourceDisplay", "cpu", "CPU usage"),
+        (launcher.storageDisplay, "storageResourceDisplay", "storage", "Storage usage"),
+    )
+
+    for label, object_name, field_role, accessible_name in resource_labels:
+        assert label.objectName() == object_name
+        assert label.property("resourceField") == field_role
+        assert label.accessibleName() == accessible_name
+        assert label.font().family() == "Segoe UI"
+        assert label.wordWrap()
+
+    assert 'QLabel[resourceField="memory"]' in frm_main.DARK_STYLESHEET
+    assert 'QLabel[resourceField="cpu"]' in frm_main.DARK_STYLESHEET
+    assert 'QLabel[resourceField="storage"]' in frm_main.DARK_STYLESHEET
+
+
 def test_stylesheets_do_not_reference_removed_status_selectors():
     source = Path(frm_main.__file__).read_text(encoding="utf-8")
     combined_stylesheets = frm_main.DARK_STYLESHEET + frm_main.LIGHT_STYLESHEET
 
     assert "infoBoxText" not in source
     assert "infoBoxText" not in combined_stylesheets
+    assert "resourcesBoxText" not in source
+    assert "resourcesBoxText" not in combined_stylesheets
     assert "myComboPopup" not in combined_stylesheets
     assert "No additional styles needed" not in combined_stylesheets
 
@@ -1607,7 +1629,9 @@ def test_status_panels_have_semantic_roles(qtbot, monkeypatch):
     assert resources_box.property("role") == "resourcePanel"
     assert info_box.findChild(QPushButton, "copyAddrButton") is launcher.copyAddrButton
     assert info_box.findChild(QPushButton, "copyEthButton") is launcher.copyEthButton
-    assert resources_box.findChild(QLabel, "resourcesBoxText") is not None
+    assert resources_box.findChild(QLabel, "memoryResourceDisplay") is launcher.memoryDisplay
+    assert resources_box.findChild(QLabel, "cpuResourceDisplay") is launcher.vcpusDisplay
+    assert resources_box.findChild(QLabel, "storageResourceDisplay") is launcher.storageDisplay
 
 
 def test_main_window_sidebar_controls_are_scrollable(qtbot, monkeypatch):

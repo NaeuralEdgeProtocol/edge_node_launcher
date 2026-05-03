@@ -776,6 +776,11 @@ COMMON_STYLESHEET_TEMPLATE = """
   QGroupBox[role="resourcePanel"] QLabel {{
     padding: 2px 4px;
   }}
+  QGroupBox[role="resourcePanel"] QLabel[resourceField="memory"],
+  QGroupBox[role="resourcePanel"] QLabel[resourceField="cpu"],
+  QGroupBox[role="resourcePanel"] QLabel[resourceField="storage"] {{
+    font-family: "Segoe UI";
+  }}
   QGroupBox[role="statusPanel"] QPushButton {{
     background-color: {button_copy_address_bg};
     border: none;
@@ -784,11 +789,6 @@ COMMON_STYLESHEET_TEMPLATE = """
     margin-left: 0px;
     margin-right: 0px;
     color: {text_color};
-  }}
-  QLabel#resourcesBoxText {{
-    color: {info_box_text};
-    background-color: transparent;
-    font-weight: {info_box_font_weight};
   }}
 
 """

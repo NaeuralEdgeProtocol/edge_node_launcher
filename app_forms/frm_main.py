@@ -721,6 +721,18 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       return self._configure_sidebar_status_value(label)
     return self._configure_sidebar_status_label(label)
 
+  def _configure_sidebar_resource_field(
+    self,
+    label: QLabel,
+    field_role: str,
+    accessible_name: str,
+  ) -> QLabel:
+    label.setProperty("resourceField", field_role)
+    label.setAccessibleName(accessible_name)
+    label.setFont(QFont("Segoe UI", 10))
+    label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+    return self._configure_sidebar_status_label(label)
+
   def _create_sidebar_panel(self) -> QWidget:
     """Create the left navigation and status sidebar."""
     menu_widget = QWidget()
@@ -933,25 +945,19 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     resources_box_layout = QVBoxLayout()
     resources_box_layout.setContentsMargins(5, 6, 5, 8)
 
-    self.memoryDisplay = QLabel(MEMORY_LABEL + ' ' + MEMORY_NOT_AVAILABLE)
-    self.memoryDisplay.setFont(QFont("Courier New"))
-    self.memoryDisplay.setObjectName("resourcesBoxText")
-    self._configure_sidebar_status_label(self.memoryDisplay)
-    self.memoryDisplay.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+    self.memoryDisplay = QLabel(f"{MEMORY_LABEL} {MEMORY_NOT_AVAILABLE}")
+    self.memoryDisplay.setObjectName("memoryResourceDisplay")
+    self._configure_sidebar_resource_field(self.memoryDisplay, "memory", "Memory usage")
     resources_box_layout.addWidget(self.memoryDisplay)
 
-    self.vcpusDisplay = QLabel(VCPUS_LABEL + ' ' + VCPUS_NOT_AVAILABLE)
-    self.vcpusDisplay.setFont(QFont("Courier New"))
-    self.vcpusDisplay.setObjectName("resourcesBoxText")
-    self._configure_sidebar_status_label(self.vcpusDisplay)
-    self.vcpusDisplay.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+    self.vcpusDisplay = QLabel(f"{VCPUS_LABEL} {VCPUS_NOT_AVAILABLE}")
+    self.vcpusDisplay.setObjectName("cpuResourceDisplay")
+    self._configure_sidebar_resource_field(self.vcpusDisplay, "cpu", "CPU usage")
     resources_box_layout.addWidget(self.vcpusDisplay)
 
-    self.storageDisplay = QLabel(STORAGE_LABEL + ' ' + STORAGE_NOT_AVAILABLE)
-    self.storageDisplay.setFont(QFont("Courier New"))
-    self.storageDisplay.setObjectName("resourcesBoxText")
-    self._configure_sidebar_status_label(self.storageDisplay)
-    self.storageDisplay.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+    self.storageDisplay = QLabel(f"{STORAGE_LABEL} {STORAGE_NOT_AVAILABLE}")
+    self.storageDisplay.setObjectName("storageResourceDisplay")
+    self._configure_sidebar_resource_field(self.storageDisplay, "storage", "Storage usage")
     resources_box_layout.addWidget(self.storageDisplay)
 
     resources_box.setLayout(resources_box_layout)
