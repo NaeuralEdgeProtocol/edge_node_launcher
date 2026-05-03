@@ -3,6 +3,7 @@ from PyQt5.QtWidgets import QApplication, QLabel, QLineEdit, QPushButton
 
 import widgets.dialogs.DockerCheckDialog as docker_check_module
 from ui.ProgressDialog import ImagePullProgressDialog
+from utils.const import INSUFFICIENT_RAM_MESSAGE
 from widgets.dialogs.AddNodeDialog import AddNodeDialog
 from widgets.dialogs.AuthorizedAddressedDialog import AddressRow, AuthorizedAddressesDialog
 from widgets.dialogs.RenameNodeDialog import RenameNodeDialog
@@ -138,6 +139,22 @@ def test_add_node_dialog_capacity_copy_and_create_guard(qtbot):
     assert not create_button.isEnabled()
     assert not cancel_button.isEnabled()
     assert create_button.text() == "Creating..."
+
+
+def test_insufficient_ram_copy_uses_ascii_bullets():
+    copy = INSUFFICIENT_RAM_MESSAGE.format(
+        total_gb=32.0,
+        max_nodes=2,
+        current_nodes=2,
+        min_ram_gb=16,
+    )
+
+    assert "- Total RAM: 32.0 GB" in copy
+    assert "- Maximum Nodes Supported: 2" in copy
+    assert "- Current Nodes: 2" in copy
+    assert "•" not in copy
+    assert "Ã" not in copy
+    assert "â" not in copy
 
 
 def test_authorized_address_row_buttons_copy_and_delete(qtbot):

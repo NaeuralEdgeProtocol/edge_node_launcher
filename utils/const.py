@@ -137,7 +137,7 @@ RESETTING_NODE_ADDRESS_TEXT = 'Resetting node address...'
 
 # RAM checking messages
 INSUFFICIENT_RAM_TITLE = 'Cannot Add New Node'
-INSUFFICIENT_RAM_MESSAGE = 'Cannot add a new node - maximum capacity reached.\n\nSystem Information:\n• Total RAM: {total_gb:.1f} GB\n• Maximum Nodes Supported: {max_nodes} ({total_gb:.1f} GB / {min_ram_gb} GB per node)\n• Current Nodes: {current_nodes}\n\nEach node requires {min_ram_gb} GB of RAM.'
+INSUFFICIENT_RAM_MESSAGE = 'Cannot add a new node - maximum capacity reached.\n\nSystem Information:\n- Total RAM: {total_gb:.1f} GB\n- Maximum Nodes Supported: {max_nodes} ({total_gb:.1f} GB / {min_ram_gb} GB per node)\n- Current Nodes: {current_nodes}\n\nEach node requires {min_ram_gb} GB of RAM.'
 RAM_CHECK_ERROR_TITLE = 'RAM Check Error'
 RAM_CHECK_ERROR_MESSAGE = 'Unable to determine available system RAM.\n\nWould you like to proceed anyway?'
 
