@@ -2706,7 +2706,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     container_config = self.config_manager.get_container(container_name)
     volume_name = container_config.volume if container_config and container_config.volume else get_volume_name(container_name)
 
-    self._begin_lifecycle_operation("rename_restart", container_name)
+    if not self._try_begin_lifecycle_operation("rename_restart", container_name):
+      return
+
     self.docker_handler.set_container_name(container_name)
     self.user_stopped_container = False
     self._clear_info_display()

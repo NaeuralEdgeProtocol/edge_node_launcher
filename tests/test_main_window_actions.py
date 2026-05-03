@@ -440,6 +440,19 @@ def test_main_window_rename_save_restarts_without_legacy_stop_modal(qtbot, monke
     assert fake_config.get_container("r1node").node_alias == "renamed"
 
 
+def test_rename_restart_does_not_override_active_lifecycle(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    launcher._begin_lifecycle_operation("start", "r1node")
+
+    launcher._restart_container_after_rename("r1node")
+
+    assert fake_handler.stopped_containers == []
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") == {
+        "operation": "start",
+        "container_name": "r1node",
+    }
+
+
 def test_rename_dialog_copy_and_input_constraints(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
     observed = {}
