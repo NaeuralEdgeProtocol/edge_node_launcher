@@ -3410,6 +3410,37 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             self._end_lifecycle_operation(launch_context["container_name"])
         self.toast.show_notification(NotificationType.ERROR, f"Failed to pull Docker image: {message}")
 
+  def _finalize_launch_failure(self, container_name: str, error_msg: str) -> None:
+    """Close launch UI state and report a terminal launch failure."""
+    self.loading_indicator.stop()
+
+    if hasattr(self, 'launcher_dialog') and self.launcher_dialog is not None:
+      try:
+        self.launcher_dialog.update_progress(f"Error: {error_msg}", process_events=False)
+      except TypeError:
+        self.launcher_dialog.update_progress(f"Error: {error_msg}")
+      except RuntimeError:
+        pass
+
+    startup_dialog = getattr(self, 'startup_dialog', None)
+    if (
+      startup_dialog is not None
+      and not self._qt_object_deleted(startup_dialog)
+      and startup_dialog.isVisible()
+    ):
+      try:
+        startup_dialog.update_progress(f"Error: {error_msg}", process_events=False)
+      except TypeError:
+        startup_dialog.update_progress(f"Error: {error_msg}")
+      except RuntimeError:
+        pass
+
+    self._close_dialog_reference("launcher_dialog")
+    self._close_dialog_reference("startup_dialog")
+    self.add_log(error_msg, color="red")
+    self.toast.show_notification(NotificationType.ERROR, error_msg)
+    self._end_lifecycle_operation(container_name)
+
   def _perform_container_launch_after_pull(self, container_name, volume_name):
     """Perform the container launch operation after Docker pull is complete."""
     try:
@@ -3432,14 +3463,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
             stdout, stderr, return_code = result
             if return_code != 0:
-                # Handle error case
-                error_msg = f"Failed to launch container: {stderr}"
-                self.loading_indicator.stop()
-                self._close_dialog_reference("launcher_dialog")
-                self._close_dialog_reference("startup_dialog")
-                self.add_log(error_msg, color="red")
-                self.toast.show_notification(NotificationType.ERROR, error_msg)
-                self._end_lifecycle_operation(container_name)
+                self._finalize_launch_failure(container_name, f"Failed to launch container: {stderr}")
                 return
             
             # Update loading dialogs with progress    
@@ -3531,7 +3555,10 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                         def on_conflict_remove_success(result):
                             _stdout, stderr, return_code = result
                             if return_code != 0:
-                                self.add_log(f"Failed to remove conflicting container: {stderr}", color="red")
+                                self._finalize_launch_failure(
+                                    container_name,
+                                    f"Failed to remove conflicting container: {stderr}",
+                                )
                                 return
 
                             self.add_log("Successfully removed conflicting container, retrying launch", color="blue")
@@ -3542,29 +3569,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                 except Exception as retry_err:
                     self.add_log(f"Failed to resolve container conflict: {retry_err}", color="red")
             
-            # Update loading dialogs with error message
-            if hasattr(self, 'launcher_dialog') and self.launcher_dialog is not None :
-                self.launcher_dialog.update_progress(f"Error: {error_msg}")
-            elif hasattr(self, 'startup_dialog') and self.startup_dialog is not None and self.startup_dialog.isVisible():
-                self.startup_dialog.update_progress(f"Error: {error_msg}")
-            
-            # Close the loading dialogs immediately
-            launcher_dialog_visible = hasattr(self, 'launcher_dialog') and self.launcher_dialog is not None 
-            if launcher_dialog_visible:
-                self.launcher_dialog.safe_close()
-                # Schedule removal of the reference after a delay
-                QTimer.singleShot(500, lambda: setattr(self, 'launcher_dialog', None) if hasattr(self, 'launcher_dialog') else None)
-            
-            startup_dialog_visible = hasattr(self, 'startup_dialog') and self.startup_dialog is not None and self.startup_dialog.isVisible()
-            if startup_dialog_visible:
-                self.startup_dialog.safe_close()
-                # Schedule removal of the reference after a delay
-                QTimer.singleShot(500, lambda: setattr(self, 'startup_dialog', None) if hasattr(self, 'startup_dialog') else None)
-                
-            error_msg = f"Failed to launch container: {error_msg}"
-            self.add_log(error_msg, color="red")
-            self.toast.show_notification(NotificationType.ERROR, error_msg)
-            self._end_lifecycle_operation(container_name)
+            self._finalize_launch_failure(container_name, f"Failed to launch container: {error_msg}")
         
         # Launch the container in a thread (without pulling again)
         self.docker_handler.launch_container_threaded(volume_name, on_launch_success, on_launch_error)

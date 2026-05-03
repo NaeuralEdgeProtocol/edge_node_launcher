@@ -627,6 +627,47 @@ def test_late_launch_success_does_not_update_ui_during_shutdown(qtbot, monkeypat
     assert "Ignoring launch success for r1node" in log_text
 
 
+def test_launch_conflict_remove_failure_clears_lifecycle_and_reports_error(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    removed_containers = []
+
+    def fail_with_conflict(volume_name=None, callback=None, error_callback=None):
+        fake_handler.launched_containers.append((fake_handler.container_name, volume_name))
+        error_callback(
+            'Conflict. The container name "/r1node" is already in use by container "abc123".'
+        )
+
+    def fail_remove(container_name, callback, error_callback, force=True):
+        removed_containers.append((container_name, force))
+        callback(("", "permission denied", 1))
+
+    fake_handler.launch_container_threaded = fail_with_conflict
+    fake_handler.remove_container_threaded = fail_remove
+    launcher.launcher_dialog = frm_main.LoadingDialog(
+        launcher,
+        title="Launching Node",
+        message="Please wait",
+    )
+    launcher._begin_lifecycle_operation("launch", "r1node")
+
+    launcher._perform_container_launch_after_pull("r1node", "r1vol")
+
+    assert fake_handler.launched_containers == [("r1node", "r1vol")]
+    assert removed_containers == [("abc123", True)]
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+    assert launcher.launcher_dialog is None
+    assert launcher.toast.notifications == [
+        (
+            NotificationType.ERROR,
+            "Failed to remove conflicting container: permission denied",
+        )
+    ]
+    log_text = "\n".join(launcher.log_buffer)
+    if launcher.logView is not None:
+        log_text += launcher.logView.toPlainText()
+    assert "Failed to remove conflicting container: permission denied" in log_text
+
+
 def test_launch_preparation_does_not_run_blocking_docker_checks_on_ui_thread(qtbot, monkeypatch):
     launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
 
