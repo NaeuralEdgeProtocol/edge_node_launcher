@@ -1847,28 +1847,34 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.add_log(f"Lifecycle operation started: {operation} on {container_name}", debug=True)
 
   def _try_begin_lifecycle_operation(self, operation: str, container_name: str) -> bool:
-    active = self._active_lifecycle_operation()
-    if active is not None:
-      can_supersede_completed_stop = (
-        operation == "start"
-        and active.get("operation") == "stop"
-        and active.get("container_name") == container_name
-        and not self.is_container_running()
-      )
-      if can_supersede_completed_stop:
-        self.add_log(
-          f"Starting {container_name} after Docker reports the stop operation completed",
-          debug=True,
-        )
-        self._end_lifecycle_operation(container_name)
-      else:
-        self.add_log(
-          f"Ignoring {operation} on {container_name}; lifecycle operation {active.get('operation')} is already active on {active.get('container_name')}",
-          color="yellow",
-        )
-        return False
+    result = self.__lifecycle_state.try_begin_operation(
+      operation,
+      container_name,
+      container_running=self.is_container_running(),
+    )
+    self._sync_lifecycle_state_snapshot()
 
-    self._begin_lifecycle_operation(operation, container_name)
+    if not result.started:
+      blocked = result.blocked_operation
+      self.add_log(
+        f"Ignoring {operation} on {container_name}; lifecycle operation {blocked.operation} is already active on {blocked.container_name}",
+        color="yellow",
+      )
+      return False
+
+    if result.superseded_operation is not None:
+      superseded = result.superseded_operation
+      self.add_log(
+        f"Starting {container_name} after Docker reports the stop operation completed",
+        debug=True,
+      )
+      self.add_log(
+        f"Lifecycle operation finished: {superseded.operation} on {superseded.container_name}",
+        debug=True,
+      )
+
+    started = result.operation
+    self.add_log(f"Lifecycle operation started: {started.operation} on {started.container_name}", debug=True)
     return True
 
   def _end_lifecycle_operation(self, container_name: str = None) -> None:

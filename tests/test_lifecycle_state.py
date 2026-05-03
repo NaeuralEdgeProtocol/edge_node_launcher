@@ -33,6 +33,51 @@ def test_lifecycle_operation_can_be_force_cleared():
     assert state.active_operation_dict() is None
 
 
+def test_lifecycle_try_begin_blocks_overlapping_operations():
+    state = LifecycleState()
+    state.begin_operation("start", "r1node")
+
+    result = state.try_begin_operation("add_node", "r1node2", container_running=False)
+
+    assert result.started is False
+    assert result.blocked_operation.operation == "start"
+    assert result.blocked_operation.container_name == "r1node"
+    assert state.active_operation_dict() == {
+        "operation": "start",
+        "container_name": "r1node",
+    }
+
+
+def test_lifecycle_try_begin_supersedes_completed_stop_for_same_container():
+    state = LifecycleState()
+    state.begin_operation("stop", "r1node")
+
+    result = state.try_begin_operation("start", "r1node", container_running=False)
+
+    assert result.started is True
+    assert result.operation.operation == "start"
+    assert result.operation.container_name == "r1node"
+    assert result.superseded_operation.operation == "stop"
+    assert state.active_operation_dict() == {
+        "operation": "start",
+        "container_name": "r1node",
+    }
+
+
+def test_lifecycle_try_begin_does_not_supersede_running_stop():
+    state = LifecycleState()
+    state.begin_operation("stop", "r1node")
+
+    result = state.try_begin_operation("start", "r1node", container_running=True)
+
+    assert result.started is False
+    assert result.blocked_operation.operation == "stop"
+    assert state.active_operation_dict() == {
+        "operation": "stop",
+        "container_name": "r1node",
+    }
+
+
 def test_docker_pull_context_is_captured_and_cleared_together():
     state = LifecycleState()
 

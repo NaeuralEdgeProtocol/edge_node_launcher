@@ -26,6 +26,14 @@ class LaunchContext:
         }
 
 
+@dataclass(frozen=True)
+class BeginOperationResult:
+    started: bool
+    operation: Optional[LifecycleOperation] = None
+    blocked_operation: Optional[LifecycleOperation] = None
+    superseded_operation: Optional[LifecycleOperation] = None
+
+
 class LifecycleState:
     """Tracks user-visible lifecycle operation ownership."""
 
@@ -45,6 +53,39 @@ class LifecycleState:
     def begin_operation(self, operation: str, container_name: str) -> LifecycleOperation:
         self._active_operation = LifecycleOperation(operation, container_name)
         return self._active_operation
+
+    def try_begin_operation(
+        self,
+        operation: str,
+        container_name: str,
+        container_running: bool,
+    ) -> BeginOperationResult:
+        if self._active_operation is not None:
+            can_supersede_completed_stop = (
+                operation == "start"
+                and self._active_operation.operation == "stop"
+                and self._active_operation.container_name == container_name
+                and not container_running
+            )
+            if not can_supersede_completed_stop:
+                return BeginOperationResult(
+                    started=False,
+                    blocked_operation=self._active_operation,
+                )
+
+            superseded_operation = self._active_operation
+            self._active_operation = None
+            started_operation = self.begin_operation(operation, container_name)
+            return BeginOperationResult(
+                started=True,
+                operation=started_operation,
+                superseded_operation=superseded_operation,
+            )
+
+        return BeginOperationResult(
+            started=True,
+            operation=self.begin_operation(operation, container_name),
+        )
 
     def end_operation(self, container_name: str = None) -> Optional[LifecycleOperation]:
         if self._active_operation is None:
