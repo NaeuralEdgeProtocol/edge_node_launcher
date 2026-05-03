@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from PyQt5 import sip
 from PyQt5.QtCore import QRect, Qt
-from PyQt5.QtWidgets import QApplication, QDialog, QGroupBox, QLabel, QLineEdit, QPushButton, QScrollArea, QSplitter, QTextEdit, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QApplication, QDialog, QGroupBox, QLabel, QLineEdit, QPushButton, QScrollArea, QSizePolicy, QSplitter, QTextEdit, QVBoxLayout, QWidget
 
 import app_forms.frm_main as frm_main
 from models.NodeHistory import NodeHistory
@@ -1416,6 +1416,9 @@ def test_node_selector_exposes_stable_visual_identity(qtbot, monkeypatch):
     assert launcher.container_combo.objectName() == "nodeSelectorCombo"
     assert launcher.container_combo.accessibleName() == "Node selector"
     assert launcher.container_combo.toolTip() == "Select active node"
+    assert launcher.container_combo.minimumHeight() == 36
+    assert launcher.container_combo.sizePolicy().horizontalPolicy() == QSizePolicy.Expanding
+    assert "width: 30px" in launcher.container_combo.styleSheet()
 
 
 def test_main_window_metric_empty_states_remain_visible_without_history(qtbot, monkeypatch):

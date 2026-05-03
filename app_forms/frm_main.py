@@ -766,7 +766,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.container_combo.setToolTip("Select active node")
     self.container_combo.setFont(QFont("Courier New", 10))
     self.container_combo.currentTextChanged.connect(self._on_container_selected)
-    self.container_combo.setMinimumHeight(32)
+    self.container_combo.setMinimumHeight(36)
+    self.container_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
     is_dark = self._current_stylesheet == DARK_STYLESHEET
     if hasattr(self.container_combo, 'set_theme'):
         self.container_combo.set_theme(is_dark)

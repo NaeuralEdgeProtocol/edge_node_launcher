@@ -176,14 +176,26 @@ def test_centered_combo_light_popup_uses_supported_qt_stylesheet(qtbot):
     combo.set_theme(False)
     combo.addItem("alpha", "r1node")
 
+    assert combo.minimumHeight() == 36
+    assert combo.sizePolicy().horizontalPolicy() == QSizePolicy.Expanding
+    assert "background-color: #F8FAFC" in combo.styleSheet()
+    assert "width: 30px" in combo.styleSheet()
+    assert "#1F2937" in combo.lineEdit().styleSheet()
+    assert combo.lineEdit().textMargins().right() == 28
+
     combo.showPopup()
     qtbot.wait(50)
     try:
         stylesheet = combo.view().styleSheet()
         assert "QListView" in stylesheet
         assert "box-shadow" not in stylesheet
+        assert "border-radius: 8px" in stylesheet
     finally:
         combo.hidePopup()
+
+    combo.set_theme(True)
+    assert "background-color: #082747" in combo.styleSheet()
+    assert "#E8EEF8" in combo.lineEdit().styleSheet()
 
 
 def test_loading_dialog_progress_does_not_process_events_synchronously(qtbot, monkeypatch):
