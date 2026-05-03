@@ -979,6 +979,42 @@ def test_main_window_add_node_dialog_create_action_is_clickable(qtbot, monkeypat
     assert display_name is None
 
 
+def test_add_node_dialog_double_click_creates_once(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    created_nodes = []
+
+    monkeypatch.setattr(
+        launcher,
+        "check_ram_for_new_node",
+        lambda existing_node_count: {
+            "can_add_node": True,
+            "total_ram_gb": 32.0,
+            "max_nodes_supported": 4,
+            "current_node_count": existing_node_count,
+            "min_required_gb": frm_main.MIN_NODE_RAM_GB,
+        },
+    )
+
+    def record_create(container_name, volume_name, display_name, dialog):
+        created_nodes.append((container_name, volume_name, display_name))
+
+    monkeypatch.setattr(launcher, "_create_node_with_name", record_create)
+
+    def click_create_twice(dialog):
+        create_button = dialog.findChild(QPushButton, "createNodeConfirmButton")
+        assert create_button is not None
+        create_button.click()
+        assert not create_button.isEnabled()
+        create_button.click()
+        return QDialog.Accepted
+
+    monkeypatch.setattr(QDialog, "exec_", click_create_twice)
+
+    qtbot.mouseClick(launcher.add_node_button, Qt.LeftButton)
+
+    assert len(created_nodes) == 1
+
+
 def test_add_new_node_does_not_override_active_lifecycle(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
     launcher._begin_lifecycle_operation("start", "r1node")

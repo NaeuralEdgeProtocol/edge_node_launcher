@@ -3089,8 +3089,17 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     dialog.setLayout(layout)
     dialog.setStyleSheet(self._current_stylesheet)  # Apply current theme
 
+    def handle_create_clicked():
+      if not create_button.isEnabled():
+        return
+
+      create_button.setEnabled(False)
+      cancel_button.setEnabled(False)
+      create_button.setText("Creating...")
+      self._create_node_with_name(container_name, volume_name, None, dialog)
+
     # Connect buttons
-    create_button.clicked.connect(lambda: self._create_node_with_name(container_name, volume_name, None, dialog))
+    create_button.clicked.connect(handle_create_clicked)
     cancel_button.clicked.connect(dialog.reject)
 
     dialog.exec_()
