@@ -11,17 +11,17 @@ object name near construction.
 
 | Area | Object name | Control | Action | Current coverage |
 | --- | --- | --- | --- | --- |
-| Top actions | `addNodeButton` | button | Opens the create-node dialog. | Static inventory, startup smoke |
-| Top actions | `startNodeButton` | button | Starts or stops the selected node container. | Static inventory, startup smoke |
-| Top actions | `downloadDockerButton` | button | Opens Docker download flow. | Static inventory, startup smoke |
-| Top actions | `openDappButton` | button | Opens the node dApp URL. | Static inventory, startup smoke |
-| Top actions | `openExplorerButton` | button | Opens the node explorer URL. | Static inventory, startup smoke |
-| Node info | `refreshNodeInfoButton` | button | Refreshes node metadata from Docker. | Static inventory, startup smoke |
-| Node info | `copyAddrButton` | button | Copies node address. | Static inventory, startup smoke |
-| Node info | `copyEthButton` | button | Copies ETH address. | Static inventory, startup smoke |
-| Bottom actions | `renameNodeButton` | button | Opens rename-node dialog. | Static inventory, startup smoke |
-| Bottom actions | `themeToggleButton` | button | Switches light or dark theme. | Static inventory, startup smoke |
-| Bottom actions | `forceDebugCheckbox` | checkbox | Enables or disables debug logging. | Static inventory, startup smoke |
+| Top actions | `addNodeButton` | button | Opens the create-node dialog. | Static inventory, mocked main-window click |
+| Top actions | `startNodeButton` | button | Starts or stops the selected node container. | Static inventory, mocked start/stop dispatch click |
+| Top actions | `downloadDockerButton` | button | Opens Docker download flow. | Static inventory, direct action click; not shown in current layout |
+| Top actions | `openDappButton` | button | Opens the node dApp URL. | Static inventory, mocked main-window click |
+| Top actions | `openExplorerButton` | button | Opens the node explorer URL. | Static inventory, mocked main-window click |
+| Node info | `refreshNodeInfoButton` | button | Refreshes node metadata from Docker. | Static inventory, mocked main-window click |
+| Node info | `copyAddrButton` | button | Copies node address. | Static inventory, mocked main-window click |
+| Node info | `copyEthButton` | button | Copies ETH address. | Static inventory, mocked main-window click |
+| Bottom actions | `renameNodeButton` | button | Opens rename-node dialog. | Static inventory, mocked main-window guard |
+| Bottom actions | `themeToggleButton` | button | Switches light or dark theme. | Static inventory, mocked main-window click |
+| Bottom actions | `forceDebugCheckbox` | checkbox | Enables or disables debug logging. | Static inventory, mocked main-window click |
 | Rename dialog | `renameNodeSaveButton` | button | Saves renamed node alias. | Static inventory |
 | Rename dialog | `renameNodeCancelButton` | button | Closes rename dialog without saving. | Static inventory |
 | Create-node dialog | `createNodeConfirmButton` | button | Creates a new node container entry. | Static inventory |
