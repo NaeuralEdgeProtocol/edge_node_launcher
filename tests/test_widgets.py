@@ -2,10 +2,12 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QShowEvent
 from PyQt5.QtWidgets import (
     QApplication,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QLabel,
     QProgressBar,
+    QSizePolicy,
     QTabWidget,
     QTextEdit,
     QWidget,
@@ -17,7 +19,7 @@ from widgets.DockerPullDialog import DockerPullDialog
 from widgets.LoadingDialog import LoadingDialog
 from widgets.CenteredComboBox import CenteredComboBox
 from widgets.app_widgets.config_editor import ConfigEditorWidget
-from widgets.app_widgets.container_list import ContainerListWidget
+from widgets.app_widgets.container_list import CONTAINER_LIST_EMPTY_TEXT, ContainerListWidget
 from widgets.app_widgets.log_console import LogConsoleWidget
 from widgets.app_widgets.metric_plot_grid import (
     METRIC_AXIS_COLOR,
@@ -38,13 +40,25 @@ def test_container_list_updates_selection_and_emits_toggle(qtbot):
     assert widget.objectName() == "containerListWidget"
     assert widget.accessibleName() == "Container list"
     assert widget.containers_combo.objectName() == "containerListCombo"
+    assert isinstance(widget.containers_combo, QComboBox)
+    assert not widget.containers_combo.isEditable()
     assert widget.containers_combo.accessibleName() == "Container selector"
-    assert widget.containers_combo.toolTip() == "Select a node container"
+    assert widget.containers_combo.toolTip() == "No node containers are available"
+    assert widget.containers_combo.minimumHeight() == 36
+    assert widget.containers_combo.sizePolicy().horizontalPolicy() == QSizePolicy.Expanding
     assert widget.btn_toggle.accessibleName() == "Start selected container"
-    assert widget.btn_toggle.toolTip() == "Start selected container"
+    assert widget.btn_toggle.toolTip() == "Add a node before starting or stopping a container"
+    assert widget.btn_toggle.property("actionRole") == "primary"
+    assert widget.btn_toggle.property("state") == "stopped"
     assert widget.btn_add_node.objectName() == "containerListAddNodeButton"
     assert widget.btn_add_node.accessibleName() == "Add node"
     assert widget.btn_add_node.toolTip() == "Add a node container"
+    assert widget.btn_add_node.property("actionRole") == "secondary"
+    assert widget.containers_combo.currentText() == CONTAINER_LIST_EMPTY_TEXT
+    assert not widget.containers_combo.isEnabled()
+    assert not widget.btn_toggle.isEnabled()
+    assert "QComboBox#containerListCombo" in widget.styleSheet()
+    assert 'QPushButton#containerListToggleButton[state="running"]' in widget.styleSheet()
 
     widget.update_containers(
         [
@@ -56,8 +70,12 @@ def test_container_list_updates_selection_and_emits_toggle(qtbot):
     widget.update_toggle_button(is_running=True)
 
     assert widget.get_current_container() == "r1node2"
+    assert widget.containers_combo.toolTip() == "Select a node container"
+    assert widget.containers_combo.isEnabled()
+    assert widget.btn_toggle.isEnabled()
     assert widget.btn_toggle.text() == "Stop Container"
     assert widget.btn_toggle.accessibleName() == "Stop selected container"
+    assert widget.btn_toggle.property("state") == "running"
     assert widget.btn_toggle.toolTip() == "Stop selected container"
 
     with qtbot.waitSignal(widget.container_toggle_requested) as blocker:
@@ -72,6 +90,38 @@ def test_container_list_emits_add_container(qtbot):
 
     with qtbot.waitSignal(widget.add_container_requested):
         qtbot.mouseClick(widget.btn_add_node, Qt.LeftButton)
+
+
+def test_container_list_empty_state_disables_toggle(qtbot):
+    widget = ContainerListWidget()
+    qtbot.addWidget(widget)
+    emitted = []
+    widget.container_toggle_requested.connect(emitted.append)
+
+    widget.update_containers([])
+
+    assert widget.get_current_container() is None
+    assert widget.containers_combo.currentText() == CONTAINER_LIST_EMPTY_TEXT
+    assert not widget.containers_combo.isEnabled()
+    assert not widget.btn_toggle.isEnabled()
+    assert widget.btn_add_node.isEnabled()
+
+    qtbot.mouseClick(widget.btn_toggle, Qt.LeftButton)
+
+    assert emitted == []
+
+
+def test_container_list_theme_styles_are_switchable(qtbot):
+    widget = ContainerListWidget()
+    qtbot.addWidget(widget)
+
+    widget.apply_theme(True)
+    assert "#122033" in widget.styleSheet()
+    assert "#E8EEF8" in widget.styleSheet()
+
+    widget.apply_theme(False)
+    assert "#FFFFFF" in widget.styleSheet()
+    assert "#1F2937" in widget.styleSheet()
 
 
 def test_log_console_adds_and_clears_text(qtbot):
