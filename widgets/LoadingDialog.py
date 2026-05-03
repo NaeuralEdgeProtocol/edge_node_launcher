@@ -23,6 +23,7 @@ class LoadingDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setObjectName("loadingDialog")
+        self.setAccessibleName(title)
         
         # Set window flags based on platform
         # On some platforms, we need to keep the default flags for proper functioning
@@ -82,15 +83,18 @@ class LoadingDialog(QDialog):
         # Create loading indicator
         self.loading_indicator = LoadingIndicator(size=size)
         self.loading_indicator.setObjectName("loadingDialogIndicator")
+        self.loading_indicator.setAccessibleName("Loading indicator")
 
         self.title_label = QLabel(title)
         self.title_label.setObjectName("loadingDialogTitleLabel")
+        self.title_label.setAccessibleName("Loading dialog title")
         self.title_label.setAlignment(Qt.AlignCenter)
         self.title_label.setWordWrap(True)
         
         # Create message label
         self.message_label = QLabel(message)
         self.message_label.setObjectName("loadingDialogMessageLabel")
+        self.message_label.setAccessibleName("Loading dialog message")
         self.message_label.setAlignment(Qt.AlignCenter)
         self.message_label.setWordWrap(True)
         

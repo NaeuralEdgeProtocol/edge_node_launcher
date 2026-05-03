@@ -336,11 +336,13 @@ def dialog_visual_snapshot(dialog):
     return {
         "title": dialog.windowTitle(),
         "object_name": dialog.objectName(),
+        "accessible_name": dialog.accessibleName(),
         "visible": dialog.isVisible(),
         "rect": widget_global_rect(dialog),
         "labels": [
             {
                 "object_name": label.objectName(),
+                "accessible_name": label.accessibleName(),
                 "text": label.text(),
                 "visible": label.isVisible(),
                 "word_wrap": label.wordWrap(),
@@ -351,6 +353,7 @@ def dialog_visual_snapshot(dialog):
         "line_edits": [
             {
                 "object_name": line_edit.objectName(),
+                "accessible_name": line_edit.accessibleName(),
                 "text": line_edit.text(),
                 "placeholder": line_edit.placeholderText(),
                 "visible": line_edit.isVisible(),
@@ -362,6 +365,7 @@ def dialog_visual_snapshot(dialog):
         "buttons": [
             {
                 "object_name": button.objectName(),
+                "accessible_name": button.accessibleName(),
                 "text": button.text(),
                 "visible": button.isVisible(),
                 "enabled": button.isEnabled(),
@@ -372,6 +376,7 @@ def dialog_visual_snapshot(dialog):
         "progress_bars": [
             {
                 "object_name": progress_bar.objectName(),
+                "accessible_name": progress_bar.accessibleName(),
                 "value": progress_bar.value(),
                 "minimum": progress_bar.minimum(),
                 "maximum": progress_bar.maximum(),

@@ -9,6 +9,8 @@ class DockerCheckDialog(QDialog):
         super().__init__(parent)
         self.parent = parent
         self.setWindowTitle("Docker Check")
+        self.setObjectName("dockerCheckDialog")
+        self.setAccessibleName("Docker Check")
         if icon:
             self.setWindowIcon(icon)
         self.setWindowModality(Qt.ApplicationModal)
@@ -22,6 +24,8 @@ class DockerCheckDialog(QDialog):
             'Docker is not installed or not running.\n'
             'Please install Docker and start it to continue.'
         )
+        self.message.setObjectName("dockerCheckMessageLabel")
+        self.message.setAccessibleName("Docker status message")
         self.message.setWordWrap(True)
         layout.addWidget(self.message)
         
@@ -31,6 +35,7 @@ class DockerCheckDialog(QDialog):
         # Download Docker button - apply toggle_button_start styles
         self.download_button = QPushButton('Download Docker')
         self.download_button.setObjectName("dockerCheckDownloadButton")
+        self.download_button.setAccessibleName("Download Docker")
         self.download_button.clicked.connect(self.open_docker_download)
         self.download_button.setProperty("type", "toggle_button_start")
         button_layout.addWidget(self.download_button)
@@ -38,6 +43,7 @@ class DockerCheckDialog(QDialog):
         # Try Again button - apply toggle_button_start styles
         self.retry_button = QPushButton('Try Again')
         self.retry_button.setObjectName("dockerCheckRetryButton")
+        self.retry_button.setAccessibleName("Try Docker check again")
         self.retry_button.setProperty("type", "toggle_button_start")
         self.retry_button.clicked.connect(self.accept)
         button_layout.addWidget(self.retry_button)
@@ -45,6 +51,7 @@ class DockerCheckDialog(QDialog):
         # Quit button - explicitly using toggle_button_stop styles
         self.quit_button = QPushButton('Quit')
         self.quit_button.setObjectName("dockerCheckQuitButton")
+        self.quit_button.setAccessibleName("Quit launcher")
         # Set the property to use toggle_button_stop styles
         self.quit_button.setProperty("type", "toggle_button_stop")
         self.quit_button.clicked.connect(self.reject)

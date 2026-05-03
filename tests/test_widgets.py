@@ -104,10 +104,14 @@ def test_loading_dialog_exposes_visual_snapshot_targets(qtbot):
     qtbot.addWidget(dialog)
 
     assert dialog.objectName() == "loadingDialog"
+    assert dialog.accessibleName() == "Launching Node"
     assert dialog.title_label.objectName() == "loadingDialogTitleLabel"
+    assert dialog.title_label.accessibleName() == "Loading dialog title"
     assert dialog.title_label.text() == "Launching Node"
     assert dialog.message_label.objectName() == "loadingDialogMessageLabel"
+    assert dialog.message_label.accessibleName() == "Loading dialog message"
     assert dialog.loading_indicator.objectName() == "loadingDialogIndicator"
+    assert dialog.loading_indicator.accessibleName() == "Loading indicator"
 
 
 def test_docker_pull_dialog_exposes_stable_visual_targets(qtbot):
@@ -115,13 +119,22 @@ def test_docker_pull_dialog_exposes_stable_visual_targets(qtbot):
     qtbot.addWidget(dialog)
 
     assert dialog.objectName() == "dockerPullDialog"
+    assert dialog.accessibleName() == "Pulling Docker Image"
     assert dialog.findChild(QLabel, "dockerPullTitleLabel").text() == "Pulling Docker Image"
+    assert dialog.findChild(QLabel, "dockerPullTitleLabel").accessibleName() == "Docker pull title"
     assert dialog.findChild(QLabel, "dockerPullInfoLabel") is dialog.info_label
+    assert dialog.info_label.accessibleName() == "Docker pull status"
     assert dialog.findChild(QProgressBar, "dockerPullOverallProgress") is dialog.overall_progress
+    assert dialog.overall_progress.accessibleName() == "Docker pull overall progress"
     assert dialog.findChild(QWidget, "dockerPullLayerFrame") is not None
     assert dialog.findChild(QWidget, "dockerPullLayerScrollArea") is not None
     assert dialog.findChild(QWidget, "dockerPullLayerScrollContent") is not None
+    assert dialog.findChild(QWidget, "dockerPullLayerFrame").accessibleName() == "Docker pull layer progress"
+    assert dialog.findChild(QWidget, "dockerPullLayerScrollArea").accessibleName() == "Docker pull layer list"
+    assert dialog.findChild(QWidget, "dockerPullLayerScrollContent").accessibleName() == "Docker pull layer list content"
+    assert dialog.findChild(QLabel, "dockerPullLayerHeaderLabel").accessibleName() == "Layer progress heading"
     assert dialog.findChild(QLabel, "dockerPullLayerEmptyState").text() == "Waiting for Docker layer output..."
+    assert dialog.findChild(QLabel, "dockerPullLayerEmptyState").accessibleName() == "Docker pull waiting state"
 
 
 def test_docker_pull_dialog_updates_layer_progress_with_named_children(qtbot):
@@ -133,8 +146,11 @@ def test_docker_pull_dialog_updates_layer_progress_with_named_children(qtbot):
     assert not dialog.empty_layer_label.isVisible()
     assert dialog.overall_progress.value() == 50
     assert dialog.findChild(QLabel, "dockerPullLayerLabel_abcdef123456").text() == "abcdef12..."
+    assert dialog.findChild(QLabel, "dockerPullLayerLabel_abcdef123456").accessibleName() == "Docker layer abcdef12"
     assert dialog.findChild(QLabel, "dockerPullLayerStatus_abcdef123456").text() == "Downloading 50%"
+    assert dialog.findChild(QLabel, "dockerPullLayerStatus_abcdef123456").accessibleName() == "Docker layer abcdef12 status"
     assert dialog.findChild(QProgressBar, "dockerPullLayerProgress_abcdef123456").value() == 50
+    assert dialog.findChild(QProgressBar, "dockerPullLayerProgress_abcdef123456").accessibleName() == "Docker layer abcdef12 progress"
 
 
 def test_node_info_widget_baseline_clear_and_uptime_format(qtbot):

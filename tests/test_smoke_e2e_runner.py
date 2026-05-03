@@ -146,19 +146,24 @@ def test_click_visible_button_rejects_hidden_buttons():
 def test_dialog_visual_snapshot_records_dialog_content(qtbot):
     dialog = QDialog()
     dialog.setWindowTitle("Review Dialog")
+    dialog.setAccessibleName("Review Dialog")
     label = QLabel("Important copy", dialog)
     label.setObjectName("dialogCopy")
+    label.setAccessibleName("Dialog copy")
     label.setWordWrap(True)
     line_edit = QLineEdit(dialog)
     line_edit.setObjectName("dialogInput")
+    line_edit.setAccessibleName("Dialog input")
     line_edit.setText("alpha")
     line_edit.setPlaceholderText("Alias")
     progress_bar = QProgressBar(dialog)
     progress_bar.setObjectName("dialogProgress")
+    progress_bar.setAccessibleName("Dialog progress")
     progress_bar.setRange(0, 100)
     progress_bar.setValue(42)
     button = QPushButton("Save", dialog)
     button.setObjectName("dialogSaveButton")
+    button.setAccessibleName("Save dialog")
     qtbot.addWidget(dialog)
 
     dialog.show()
@@ -167,16 +172,21 @@ def test_dialog_visual_snapshot_records_dialog_content(qtbot):
     snapshot = smoke.dialog_visual_snapshot(dialog)
 
     assert snapshot["title"] == "Review Dialog"
+    assert snapshot["accessible_name"] == "Review Dialog"
     assert snapshot["visible"] is True
     assert snapshot["labels"][0]["object_name"] == "dialogCopy"
+    assert snapshot["labels"][0]["accessible_name"] == "Dialog copy"
     assert snapshot["labels"][0]["text"] == "Important copy"
     assert snapshot["labels"][0]["word_wrap"] is True
     assert snapshot["line_edits"][0]["object_name"] == "dialogInput"
+    assert snapshot["line_edits"][0]["accessible_name"] == "Dialog input"
     assert snapshot["line_edits"][0]["text"] == "alpha"
     assert snapshot["line_edits"][0]["placeholder"] == "Alias"
     assert snapshot["buttons"][0]["object_name"] == "dialogSaveButton"
+    assert snapshot["buttons"][0]["accessible_name"] == "Save dialog"
     assert snapshot["buttons"][0]["text"] == "Save"
     assert snapshot["progress_bars"][0]["object_name"] == "dialogProgress"
+    assert snapshot["progress_bars"][0]["accessible_name"] == "Dialog progress"
     assert snapshot["progress_bars"][0]["value"] == 42
 
 

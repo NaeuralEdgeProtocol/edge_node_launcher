@@ -16,7 +16,12 @@ def test_docker_check_dialog_buttons_are_clickable(qtbot, monkeypatch):
     download_dialog = docker_check_module.DockerCheckDialog()
     qtbot.addWidget(download_dialog)
 
+    assert download_dialog.objectName() == "dockerCheckDialog"
+    assert download_dialog.accessibleName() == "Docker Check"
+    assert download_dialog.message.objectName() == "dockerCheckMessageLabel"
+    assert download_dialog.message.accessibleName() == "Docker status message"
     assert download_dialog.download_button.objectName() == "dockerCheckDownloadButton"
+    assert download_dialog.download_button.accessibleName() == "Download Docker"
     qtbot.mouseClick(download_dialog.download_button, Qt.LeftButton)
     assert opened_urls == ["https://www.docker.com/products/docker-desktop"]
 
@@ -24,6 +29,7 @@ def test_docker_check_dialog_buttons_are_clickable(qtbot, monkeypatch):
     qtbot.addWidget(retry_dialog)
 
     assert retry_dialog.retry_button.objectName() == "dockerCheckRetryButton"
+    assert retry_dialog.retry_button.accessibleName() == "Try Docker check again"
     with qtbot.waitSignal(retry_dialog.accepted):
         qtbot.mouseClick(retry_dialog.retry_button, Qt.LeftButton)
 
@@ -31,6 +37,7 @@ def test_docker_check_dialog_buttons_are_clickable(qtbot, monkeypatch):
     qtbot.addWidget(quit_dialog)
 
     assert quit_dialog.quit_button.objectName() == "dockerCheckQuitButton"
+    assert quit_dialog.quit_button.accessibleName() == "Quit launcher"
     with qtbot.waitSignal(quit_dialog.rejected):
         qtbot.mouseClick(quit_dialog.quit_button, Qt.LeftButton)
 
@@ -67,13 +74,24 @@ def test_rename_node_dialog_preserves_submit_guard(qtbot):
     qtbot.addWidget(dialog)
 
     name_input = dialog.findChild(QLineEdit, "renameNodeNameInput")
+    explanation = dialog.findChild(QLabel, "renameNodeExplanationLabel")
+    restrictions_label = dialog.findChild(QLabel, "renameNodeRestrictionsLabel")
+    restrictions_text = dialog.findChild(QLabel, "renameNodeRestrictionsText")
     save_button = dialog.findChild(QPushButton, "renameNodeSaveButton")
     cancel_button = dialog.findChild(QPushButton, "renameNodeCancelButton")
 
+    assert dialog.objectName() == "renameNodeDialog"
+    assert dialog.accessibleName() == "Rename Node"
     assert dialog.windowTitle() == "Rename Node"
     assert name_input.text() == "alpha"
+    assert name_input.accessibleName() == "Node display name"
     assert name_input.placeholderText() == "Node display name"
     assert name_input.maxLength() == 15
+    assert explanation.accessibleName() == "Rename node explanation"
+    assert restrictions_label.accessibleName() == "Name restrictions heading"
+    assert restrictions_text.accessibleName() == "Name restrictions"
+    assert save_button.accessibleName() == "Save node name"
+    assert cancel_button.accessibleName() == "Cancel node rename"
 
     name_input.setText("beta")
     qtbot.mouseClick(save_button, Qt.LeftButton)
@@ -133,10 +151,16 @@ def test_add_node_dialog_capacity_copy_and_create_guard(qtbot):
     create_button = dialog.findChild(QPushButton, "createNodeConfirmButton")
     cancel_button = dialog.findChild(QPushButton, "createNodeCancelButton")
 
+    assert dialog.objectName() == "addNodeDialog"
+    assert dialog.accessibleName() == "Add New Node"
     assert dialog.windowTitle() == "Add New Node"
+    assert dialog.info_label.objectName() == "createNodeCapacityLabel"
+    assert dialog.info_label.accessibleName() == "Node capacity summary"
     assert "System Capacity:" in label_copy
     assert "- Total RAM: 32.0 GB" in label_copy
     assert "- RAM per node: 16 GB" in label_copy
+    assert create_button.accessibleName() == "Create node"
+    assert cancel_button.accessibleName() == "Cancel node creation"
     assert styled == [
         ("createNodeConfirmButton", "start"),
         ("createNodeCancelButton", "stop"),

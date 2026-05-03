@@ -27,18 +27,24 @@ class AddNodeDialog(QDialog):
         self._create_node = create_node
 
         self.setWindowTitle("Add New Node")
+        self.setObjectName("addNodeDialog")
+        self.setAccessibleName("Add New Node")
         self.setMinimumWidth(400)
 
         layout = QVBoxLayout()
         self.info_label = QLabel(self._capacity_copy(ram_check or {}, existing_node_count))
+        self.info_label.setObjectName("createNodeCapacityLabel")
+        self.info_label.setAccessibleName("Node capacity summary")
         self.info_label.setWordWrap(True)
         layout.addWidget(self.info_label)
 
         button_layout = QHBoxLayout()
         self.create_button = QPushButton("Create Node")
         self.create_button.setObjectName("createNodeConfirmButton")
+        self.create_button.setAccessibleName("Create node")
         self.cancel_button = QPushButton("Cancel")
         self.cancel_button.setObjectName("createNodeCancelButton")
+        self.cancel_button.setAccessibleName("Cancel node creation")
 
         if button_styler:
             button_styler(self.create_button, "start")
