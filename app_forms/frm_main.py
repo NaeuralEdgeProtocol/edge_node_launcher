@@ -61,6 +61,8 @@ from PyQt5.QtSvg import QSvgRenderer
 from models.NodeInfo import NodeInfo
 from models.NodeHistory import NodeHistory
 from widgets.ToastWidget import ToastWidget, NotificationType
+from widgets.dialogs.AddNodeDialog import AddNodeDialog
+from widgets.dialogs.RenameNodeDialog import RenameNodeDialog
 from utils.const import *
 from utils.docker import _DockerUtilsMixin
 from utils.docker_commands import DockerCommandHandler
@@ -2637,86 +2639,24 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     container_config = self.config_manager.get_container(container_name)
     current_alias = container_config.node_alias if container_config and container_config.node_alias else ""
     
-    # Create dialog
-    dialog = QDialog(self)
-    dialog.setWindowTitle("Rename Node")
-    dialog.setMinimumWidth(450)
-    
-    layout = QVBoxLayout()
-    
-    # Add explanation
-    explanation = QLabel("Name this node for display in the launcher.")
-    layout.addWidget(explanation)
-    
-    # Add input field
-    name_input = QLineEdit()
-    name_input.setObjectName("renameNodeNameInput")
-    name_input.setText(current_alias)
-    name_input.setMaxLength(15)
-    name_input.setPlaceholderText("Node display name")
-    
-    # Apply theme-appropriate styles
     is_dark = self._current_stylesheet == DARK_STYLESHEET
     text_color = "white" if is_dark else "black"
-    name_input.setStyleSheet(f"color: {text_color};")
-    layout.addWidget(name_input)
-    
-    # Add restrictions section
-    restrictions_label = QLabel("Name restrictions:")
-    restrictions_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
-    layout.addWidget(restrictions_label)
-    
-    restrictions_text = QLabel("- Maximum 15 characters\n- Letters, numbers, hyphens, and underscores only\n- Cannot be empty")
-    restrictions_text.setStyleSheet("margin-left: 10px; margin-bottom: 10px;")
-    restrictions_text.setWordWrap(True)
-    layout.addWidget(restrictions_text)
-    
-    # Add buttons
-    button_layout = QHBoxLayout()
-    save_btn = QPushButton("Save")
-    save_btn.setObjectName("renameNodeSaveButton")
-    save_btn.setProperty("type", "confirm")  # Set property for styling
-    cancel_btn = QPushButton("Cancel")
-    cancel_btn.setObjectName("renameNodeCancelButton")
-    cancel_btn.setProperty("type", "cancel")  # Set property for styling
-    
-    button_layout.addWidget(save_btn)
-    button_layout.addWidget(cancel_btn)
-    layout.addLayout(button_layout)
-    
-    dialog.setLayout(layout)
-    dialog.setStyleSheet(self._current_stylesheet)  # Apply current theme
-    
-    def reset_save_controls():
-      save_btn.setEnabled(True)
-      cancel_btn.setEnabled(True)
-      save_btn.setText("Save")
 
-    def handle_save_clicked():
-      if not save_btn.isEnabled():
-        return
-
-      validation_error = self._validate_node_alias(name_input.text().strip())
-      if validation_error:
-        self.toast.show_notification(NotificationType.ERROR, validation_error)
-        return
-
-      save_btn.setEnabled(False)
-      cancel_btn.setEnabled(False)
-      save_btn.setText("Saving...")
-
-      submitted = self.validate_and_save_node_name(
-        name_input.text(),
-        dialog,
-        container_name,
-        on_error_callback=reset_save_controls,
-      )
-      if not submitted:
-        reset_save_controls()
-
-    # Connect buttons
-    save_btn.clicked.connect(handle_save_clicked)
-    cancel_btn.clicked.connect(dialog.reject)
+    dialog = RenameNodeDialog(
+        self,
+        current_alias=current_alias,
+        max_length=MAX_ALIAS_LENGTH,
+        stylesheet=self._current_stylesheet,
+        input_text_color=text_color,
+        validate_alias=self._validate_node_alias,
+        show_error=lambda message: self.toast.show_notification(NotificationType.ERROR, message),
+        submit_alias=lambda new_name, on_error: self.validate_and_save_node_name(
+            new_name,
+            dialog,
+            container_name,
+            on_error_callback=on_error,
+        ),
+    )
     
     dialog.exec_()
 
@@ -3093,10 +3033,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
   def show_add_node_dialog(self):
     """Show confirmation dialog for adding a new node."""
-    from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QHBoxLayout, QPushButton, QMessageBox
-    from utils.const import (INSUFFICIENT_RAM_TITLE, INSUFFICIENT_RAM_MESSAGE, 
-                            RAM_CHECK_ERROR_TITLE, RAM_CHECK_ERROR_MESSAGE, MIN_NODE_RAM_GB)
-
     # Check RAM before showing the dialog
     existing_node_count = len(self.config_manager.get_all_containers())
     ram_check = self.check_ram_for_new_node(existing_node_count)
@@ -3130,59 +3066,16 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     container_name = generate_container_name()
     volume_name = get_volume_name(container_name)
 
-    # Create dialog
-    dialog = QDialog(self)
-    dialog.setWindowTitle(ADD_NEW_NODE_DIALOG_TITLE)
-    dialog.setMinimumWidth(400)
-
-    layout = QVBoxLayout()
-
-    # Add info text with more descriptive message including RAM info
-    if 'error' not in ram_check:
-        info_text = (f"This action will create a new Edge Node.\n\n"
-                    f"System Capacity:\n"
-                    f"- Total RAM: {ram_check['total_ram_gb']:.1f} GB\n"
-                    f"- RAM per node: {ram_check['min_required_gb']} GB\n"
-                    f"- Max nodes supported: {ram_check['max_nodes_supported']}\n"
-                    f"- Current nodes: {existing_node_count}\n\n"
-                    f"Do you want to proceed?")
-    else:
-        info_text = f"This action will create a new Edge Node. \n\nDo you want to proceed?"
-    
-    info_label = QLabel(info_text)
-    info_label.setWordWrap(True)  # Enable word wrapping for better readability
-    layout.addWidget(info_label)
-
-    # Add buttons
-    button_layout = QHBoxLayout()
-    create_button = QPushButton("Create Node")
-    create_button.setObjectName("createNodeConfirmButton")
-    cancel_button = QPushButton("Cancel")
-    cancel_button.setObjectName("createNodeCancelButton")
-
-    # Apply the same styling as Start/Stop buttons
-    self.apply_button_style(create_button, 'start')  # Use 'start' style for Create button
-    self.apply_button_style(cancel_button, 'stop')   # Use 'stop' style for Cancel button
-
-    button_layout.addWidget(create_button)
-    button_layout.addWidget(cancel_button)
-    layout.addLayout(button_layout)
-
-    dialog.setLayout(layout)
-    dialog.setStyleSheet(self._current_stylesheet)  # Apply current theme
-
-    def handle_create_clicked():
-      if not create_button.isEnabled():
-        return
-
-      create_button.setEnabled(False)
-      cancel_button.setEnabled(False)
-      create_button.setText("Creating...")
-      self._create_node_with_name(container_name, volume_name, None, dialog)
-
-    # Connect buttons
-    create_button.clicked.connect(handle_create_clicked)
-    cancel_button.clicked.connect(dialog.reject)
+    dialog = AddNodeDialog(
+        self,
+        ram_check=ram_check,
+        existing_node_count=existing_node_count,
+        container_name=container_name,
+        volume_name=volume_name,
+        stylesheet=self._current_stylesheet,
+        create_node=self._create_node_with_name,
+        button_styler=self.apply_button_style,
+    )
 
     dialog.exec_()
 

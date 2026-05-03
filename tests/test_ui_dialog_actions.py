@@ -1,9 +1,11 @@
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QPushButton
+from PyQt5.QtWidgets import QApplication, QLabel, QLineEdit, QPushButton
 
 import widgets.dialogs.DockerCheckDialog as docker_check_module
 from ui.ProgressDialog import ImagePullProgressDialog
+from widgets.dialogs.AddNodeDialog import AddNodeDialog
 from widgets.dialogs.AuthorizedAddressedDialog import AddressRow, AuthorizedAddressesDialog
+from widgets.dialogs.RenameNodeDialog import RenameNodeDialog
 
 
 def test_docker_check_dialog_buttons_are_clickable(qtbot, monkeypatch):
@@ -40,6 +42,102 @@ def test_image_pull_cancel_button_rejects_dialog(qtbot):
 
     with qtbot.waitSignal(dialog.rejected):
         qtbot.mouseClick(dialog.cancel_button, Qt.LeftButton)
+
+
+def test_rename_node_dialog_preserves_submit_guard(qtbot):
+    submitted = []
+    errors = []
+    dialog = RenameNodeDialog(
+        current_alias="alpha",
+        validate_alias=lambda value: None,
+        submit_alias=lambda value, on_error: submitted.append(value) or True,
+        show_error=errors.append,
+    )
+    qtbot.addWidget(dialog)
+
+    name_input = dialog.findChild(QLineEdit, "renameNodeNameInput")
+    save_button = dialog.findChild(QPushButton, "renameNodeSaveButton")
+    cancel_button = dialog.findChild(QPushButton, "renameNodeCancelButton")
+
+    assert dialog.windowTitle() == "Rename Node"
+    assert name_input.text() == "alpha"
+    assert name_input.placeholderText() == "Node display name"
+    assert name_input.maxLength() == 15
+
+    name_input.setText("beta")
+    qtbot.mouseClick(save_button, Qt.LeftButton)
+
+    assert submitted == ["beta"]
+    assert errors == []
+    assert not save_button.isEnabled()
+    assert not cancel_button.isEnabled()
+    assert save_button.text() == "Saving..."
+
+
+def test_rename_node_dialog_validation_keeps_controls_enabled(qtbot):
+    submitted = []
+    errors = []
+    dialog = RenameNodeDialog(
+        current_alias="alpha",
+        validate_alias=lambda value: "Invalid alias",
+        submit_alias=lambda value, on_error: submitted.append(value) or True,
+        show_error=errors.append,
+    )
+    qtbot.addWidget(dialog)
+
+    save_button = dialog.findChild(QPushButton, "renameNodeSaveButton")
+    cancel_button = dialog.findChild(QPushButton, "renameNodeCancelButton")
+
+    qtbot.mouseClick(save_button, Qt.LeftButton)
+
+    assert submitted == []
+    assert errors == ["Invalid alias"]
+    assert save_button.isEnabled()
+    assert cancel_button.isEnabled()
+    assert save_button.text() == "Save"
+
+
+def test_add_node_dialog_capacity_copy_and_create_guard(qtbot):
+    created = []
+    styled = []
+    dialog = AddNodeDialog(
+        ram_check={
+            "can_add_node": True,
+            "total_ram_gb": 32.0,
+            "max_nodes_supported": 4,
+            "current_node_count": 1,
+            "min_required_gb": 16,
+        },
+        existing_node_count=1,
+        container_name="r1node2",
+        volume_name="r1vol2",
+        create_node=lambda container, volume, display, owner: created.append(
+            (container, volume, display, owner)
+        ),
+        button_styler=lambda button, style: styled.append((button.objectName(), style)),
+    )
+    qtbot.addWidget(dialog)
+
+    label_copy = "\n".join(label.text() for label in dialog.findChildren(QLabel))
+    create_button = dialog.findChild(QPushButton, "createNodeConfirmButton")
+    cancel_button = dialog.findChild(QPushButton, "createNodeCancelButton")
+
+    assert dialog.windowTitle() == "Add New Node"
+    assert "System Capacity:" in label_copy
+    assert "- Total RAM: 32.0 GB" in label_copy
+    assert "- RAM per node: 16 GB" in label_copy
+    assert styled == [
+        ("createNodeConfirmButton", "start"),
+        ("createNodeCancelButton", "stop"),
+    ]
+
+    qtbot.mouseClick(create_button, Qt.LeftButton)
+    qtbot.mouseClick(create_button, Qt.LeftButton)
+
+    assert created == [("r1node2", "r1vol2", None, dialog)]
+    assert not create_button.isEnabled()
+    assert not cancel_button.isEnabled()
+    assert create_button.text() == "Creating..."
 
 
 def test_authorized_address_row_buttons_copy_and_delete(qtbot):
