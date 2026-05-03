@@ -693,6 +693,12 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     
     top_button_area.addLayout(container_selector_layout)
 
+    self.renameNodeButton = QPushButton(RENAME_NODE_BUTTON_TEXT)
+    self.renameNodeButton.setObjectName("renameNodeButton")
+    self.renameNodeButton.setToolTip(RENAME_NODE_TOOLTIP)
+    self.renameNodeButton.clicked.connect(self.show_rename_dialog)
+    top_button_area.addWidget(self.renameNodeButton)
+
     # Launch Edge Node button
     self.toggleButton = QPushButton(LAUNCH_CONTAINER_BUTTON_TEXT)
     self.toggleButton.setObjectName("startNodeButton")
@@ -869,14 +875,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     bottom_button_area.setContentsMargins(5, 4, 5, 0)  # Add left and right margins (5px)
     bottom_button_area.addWidget(self.create_sidebar_section_label("Settings", "settingsSectionLabel"))
     
-    ## buttons
-    # Add Rename Node button
-    self.renameNodeButton = QPushButton(RENAME_NODE_BUTTON_TEXT)
-    self.renameNodeButton.setObjectName("renameNodeButton")
-    self.renameNodeButton.setToolTip(RENAME_NODE_TOOLTIP)
-    self.renameNodeButton.clicked.connect(self.show_rename_dialog)
-    bottom_button_area.addWidget(self.renameNodeButton)
-
     # Toggle theme button
     self.themeToggleButton = QPushButton(LIGHT_DASHBOARD_BUTTON_TEXT)
     self.themeToggleButton.setObjectName("themeToggleButton")

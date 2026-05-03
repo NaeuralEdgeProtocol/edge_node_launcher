@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from PyQt5 import sip
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QLineEdit, QPushButton, QScrollArea, QSplitter, QTextEdit, QWidget
+from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QLineEdit, QPushButton, QScrollArea, QSplitter, QTextEdit, QVBoxLayout, QWidget
 
 import app_forms.frm_main as frm_main
 from models.NodeInfo import NodeInfo
@@ -740,6 +740,17 @@ def test_main_window_sidebar_sections_group_controls(qtbot, monkeypatch):
         assert label is not None
         assert label.text() == text
         assert label.property("role") == "sidebarSection"
+
+
+def test_rename_action_lives_with_node_controls(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+    top_button_area = launcher.findChild(QVBoxLayout, "topButtonArea")
+    bottom_button_area = launcher.findChild(QVBoxLayout, "bottomButtonArea")
+
+    assert top_button_area is not None
+    assert bottom_button_area is not None
+    assert top_button_area.indexOf(launcher.renameNodeButton) >= 0
+    assert bottom_button_area.indexOf(launcher.renameNodeButton) == -1
 
 
 def test_main_window_sidebar_controls_are_scrollable(qtbot, monkeypatch):
