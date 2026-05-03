@@ -32,19 +32,30 @@ def test_host_selector_mode_and_refresh_actions(qtbot):
     assert widget.mode_checkbox.objectName() == "hostSelectorModeCheckbox"
     assert widget.objectName() == "hostSelectorWidget"
     assert widget.accessibleName() == "Host selector"
+    assert widget.layout().contentsMargins().left() == 0
+    assert widget.layout().spacing() == 8
+    assert widget.mode_checkbox.text() == "Multi-host mode"
     assert widget.mode_checkbox.accessibleName() == "Multi-host mode"
     assert widget.mode_checkbox.toolTip() == "Enable multi-host mode"
+    assert widget.mode_checkbox.font().family() != "Courier New"
     assert widget.host_label.objectName() == "hostSelectorHostLabel"
+    assert widget.host_label.text() == "Host"
     assert widget.host_label.accessibleName() == "Host selector label"
+    assert widget.host_label.font().family() != "Courier New"
     assert widget.host_combo.objectName() == "hostSelectorCombo"
     assert widget.host_combo.accessibleName() == "Host selector"
     assert widget.host_combo.toolTip() == "Select a host"
+    assert widget.host_combo.minimumWidth() == 180
+    assert widget.host_combo.font().family() != "Courier New"
     assert widget.current_status.objectName() == "hostSelectorStatusIndicator"
     assert widget.current_status.accessibleName() == "Host status offline"
     assert widget.current_status.toolTip() == "Host status offline"
+    assert widget.current_status.width() == 10
+    assert widget.current_status.height() == 10
     assert widget.refresh_button.objectName() == "hostSelectorRefreshButton"
     assert widget.refresh_button.accessibleName() == "Refresh hosts"
     assert widget.refresh_button.toolTip() == "Refresh hosts"
+    assert widget.refresh_button.font().family() != "Courier New"
     assert not widget.status_timer.isActive()
 
     with qtbot.waitSignal(widget.mode_changed) as blocker:

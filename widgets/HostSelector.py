@@ -8,7 +8,6 @@ from PyQt5.QtWidgets import (
     QCheckBox
 )
 from PyQt5.QtCore import pyqtSignal, QThread, Qt, QTimer
-from PyQt5.QtGui import QFont
 import subprocess
 
 from models.AnsibleHosts import AnsibleHostsManager
@@ -99,7 +98,7 @@ class SSHCheckThread(QThread):
 class StatusIndicator(QLabel):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(12, 12)
+        self.setFixedSize(10, 10)
         self.setAlignment(Qt.AlignCenter)
         self.setProperty("is_online", False)
         self.set_status(False)
@@ -116,8 +115,8 @@ class StatusIndicator(QLabel):
         self.setStyleSheet(f"""
             QLabel {{
                 background-color: {color};
-                border-radius: 6px;
-                margin: 2px;
+                border: 1px solid #334155;
+                border-radius: 5px;
             }}
         """)
         
@@ -159,30 +158,35 @@ class HostSelector(QWidget):
 
     def initUI(self, auto_refresh: bool = True):
         layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
         
         # Mode selector
         mode_layout = QHBoxLayout()
-        self.mode_checkbox = QCheckBox("Multi-host Mode")
+        mode_layout.setContentsMargins(0, 0, 0, 0)
+        self.mode_checkbox = QCheckBox("Multi-host mode")
         self.mode_checkbox.setObjectName("hostSelectorModeCheckbox")
         self.mode_checkbox.setAccessibleName("Multi-host mode")
         self.mode_checkbox.setToolTip("Enable multi-host mode")
-        self.mode_checkbox.setFont(QFont("Courier New", 10, QFont.Bold))
         self.mode_checkbox.stateChanged.connect(self._on_mode_changed)
         mode_layout.addWidget(self.mode_checkbox)
         layout.addLayout(mode_layout)
 
         # Host selector - vertical layout
         host_layout = QVBoxLayout()
+        host_layout.setContentsMargins(0, 0, 0, 0)
+        host_layout.setSpacing(6)
         
         # Label in its own row
-        self.host_label = QLabel("Select Host:")
+        self.host_label = QLabel("Host")
         self.host_label.setObjectName("hostSelectorHostLabel")
         self.host_label.setAccessibleName("Host selector label")
-        self.host_label.setFont(QFont("Courier New", 10))
         host_layout.addWidget(self.host_label)
         
         # Dropdown, status indicator and refresh button in a horizontal layout
         controls_layout = QHBoxLayout()
+        controls_layout.setContentsMargins(0, 0, 0, 0)
+        controls_layout.setSpacing(8)
         
         # Create a widget to hold the combobox and status indicator
         combo_container = QWidget()
@@ -196,8 +200,7 @@ class HostSelector(QWidget):
         self.host_combo.setObjectName("hostSelectorCombo")
         self.host_combo.setAccessibleName("Host selector")
         self.host_combo.setToolTip("Select a host")
-        self.host_combo.setFont(QFont("Courier New", 10))
-        self.host_combo.setMinimumWidth(200)
+        self.host_combo.setMinimumWidth(180)
         
         # Add status indicator next to the combobox
         self.current_status = StatusIndicator()
@@ -210,7 +213,6 @@ class HostSelector(QWidget):
         self.refresh_button.setObjectName("hostSelectorRefreshButton")
         self.refresh_button.setAccessibleName("Refresh hosts")
         self.refresh_button.setToolTip("Refresh hosts")
-        self.refresh_button.setFont(QFont("Courier New", 10))
         
         controls_layout.addWidget(combo_container)
         controls_layout.addWidget(self.refresh_button)
