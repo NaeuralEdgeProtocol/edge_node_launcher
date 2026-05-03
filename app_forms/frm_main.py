@@ -840,7 +840,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     top_button_area.addWidget(self._create_resource_status_panel())
 
     menu_layout.addLayout(top_button_area)
-    menu_layout.addStretch(1)
+    menu_layout.addSpacing(10)
     menu_layout.addLayout(self._create_sidebar_settings_section())
 
     return menu_widget
@@ -989,7 +989,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     self.force_debug_checkbox.stateChanged.connect(self.toggle_force_debug)
     bottom_button_area.addWidget(self.force_debug_checkbox)
-    bottom_button_area.addStretch()
 
     return bottom_button_area
 

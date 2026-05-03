@@ -1645,6 +1645,22 @@ def test_status_panels_have_semantic_roles(qtbot, monkeypatch):
     assert resources_box.findChild(QLabel, "storageResourceDisplay") is launcher.storageDisplay
 
 
+def test_main_window_sidebar_settings_follow_resource_panel_without_large_gap(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+    launcher.resize(1600, 900)
+    qtbot.wait(50)
+
+    resources_box = launcher.findChild(QGroupBox, "resourcesBox")
+    settings_label = launcher.findChild(QLabel, "settingsSectionLabel")
+
+    assert resources_box is not None
+    assert settings_label is not None
+
+    gap = settings_label.y() - (resources_box.y() + resources_box.height())
+
+    assert 0 <= gap <= 80
+
+
 def test_main_window_sidebar_controls_are_scrollable(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
     sidebar_scroll = launcher.findChild(QScrollArea, "sidebarScrollArea")
