@@ -67,6 +67,7 @@ from utils.updater import _UpdaterMixin
 from utils.system_resources import _SystemResourcesMixin
 from utils.docker_utils import get_volume_name, generate_container_name
 from utils.config_manager import ConfigManager, ContainerConfig
+from utils.container_selection import SelectedContainer, selected_container_from_combo, select_container_by_name
 from utils.window_geometry import calculate_initial_window_geometry, calculate_visible_frame_client_geometry, format_rect
 
 from utils.icon import ICON_BASE64
@@ -1559,16 +1560,11 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.add_log("Docker pull in progress, skipping node info refresh", debug=True)
         return
         
-    # Get the current container
-    current_index = self.container_combo.currentIndex() 
-    if current_index < 0:
+    selection = self._selected_container()
+    if selection is None:
       self._update_ui_no_container()
       return
-
-    container_name = self.container_combo.itemData(current_index)
-    if not container_name:
-      self._update_ui_no_container()
-      return
+    container_name = selection.name
 
     # Make sure we're working with the correct container
     self.docker_handler.set_container_name(container_name)
@@ -1613,19 +1609,16 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
   def _selected_container_name(self) -> Optional[str]:
     """Return the selected Docker container name, not the display alias."""
-    current_index = self.container_combo.currentIndex()
-    if current_index < 0:
-      return None
-    return self.container_combo.itemData(current_index)
+    selection = self._selected_container()
+    return selection.name if selection else None
+
+  def _selected_container(self) -> Optional[SelectedContainer]:
+    """Return selected container identity, with item data as the Docker id."""
+    return selected_container_from_combo(self.container_combo)
 
   def _select_container_by_name(self, container_name: str) -> bool:
     """Select a configured container by Docker name."""
-    for index in range(self.container_combo.count()):
-      if self.container_combo.itemData(index) == container_name:
-        if self.container_combo.currentIndex() != index:
-          self.container_combo.setCurrentIndex(index)
-        return True
-    return False
+    return select_container_by_name(self.container_combo, container_name)
 
   def _begin_lifecycle_operation(self, operation: str, container_name: str) -> None:
     """Mark that a user-visible lifecycle operation is in progress."""
@@ -2120,16 +2113,11 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     recent data from the node, including addresses, metrics, and status.
     """
     try:
-        # Get the currently selected container
-        current_index = self.container_combo.currentIndex()
-        if current_index < 0:
+        selection = self._selected_container()
+        if selection is None:
             self.toast.show_notification(NotificationType.ERROR, "No container selected")
             return
-            
-        container_name = self.container_combo.itemData(current_index)
-        if not container_name:
-            self.toast.show_notification(NotificationType.ERROR, "No container selected")
-            return
+        container_name = selection.name
             
         self.add_log(f"Force refreshing all information for container: {container_name}", color="blue")
         
@@ -2317,30 +2305,19 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   
   def update_toggle_button_text(self, assume_running: Optional[bool] = None):
     """Update the toggle button text and style based on the current container state"""
-    # Get the current index from the combo box
-    current_index = self.container_combo.currentIndex()
-    
     # Get the current text to check if it needs to be updated
     current_text = self.toggleButton.text()
     current_enabled = self.toggleButton.isEnabled()
+    selection = self._selected_container()
     
-    if current_index < 0:
+    if selection is None:
         # Only update if state changed
         if current_text != LAUNCH_CONTAINER_BUTTON_TEXT or current_enabled:
             self.toggleButton.setText(LAUNCH_CONTAINER_BUTTON_TEXT)
             self.apply_button_style(self.toggleButton, 'toggle_disabled')
             self.toggleButton.setEnabled(False)
         return
-        
-    # Get the actual container name from the item data
-    container_name = self.container_combo.itemData(current_index)
-    if not container_name:
-        # Only update if state changed
-        if current_text != LAUNCH_CONTAINER_BUTTON_TEXT or current_enabled:
-            self.toggleButton.setText(LAUNCH_CONTAINER_BUTTON_TEXT)
-            self.apply_button_style(self.toggleButton, 'toggle_disabled')
-            self.toggleButton.setEnabled(False)
-        return
+    container_name = selection.name
     
     # Make sure the docker handler has the correct container name
     self.docker_handler.set_container_name(container_name)
@@ -2410,16 +2387,11 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.add_log("Note: You may need to restart the container for debug mode changes to take effect", color="yellow")
 
   def show_rename_dialog(self):
-    # Get the current index and container name from the data
-    current_index = self.container_combo.currentIndex()
-    if current_index < 0:
+    selection = self._selected_container()
+    if selection is None:
         self.toast.show_notification(NotificationType.ERROR, "No container selected")
         return
-        
-    container_name = self.container_combo.itemData(current_index)
-    if not container_name:
-        self.toast.show_notification(NotificationType.ERROR, "No container selected")
-        return
+    container_name = selection.name
     
     # Check if container is running
     if not self.is_container_running():
@@ -2497,14 +2469,11 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     
     # If container_name not provided, get from current selection
     if not container_name:
-        current_index = self.container_combo.currentIndex()
-        if current_index < 0:
+        selection = self._selected_container()
+        if selection is None:
             self.toast.show_notification(NotificationType.ERROR, "No container selected")
             return
-        container_name = self.container_combo.itemData(current_index)
-        if not container_name:
-            self.toast.show_notification(NotificationType.ERROR, "No container selected")
-            return
+        container_name = selection.name
     
     # Validate the new name
     validation_error = self._validate_node_alias(new_name)
@@ -3792,15 +3761,10 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         bool: True if the container is running, False otherwise
     """
     try:
-        # Get the current index and container name from the data
-        current_index = self.container_combo.currentIndex()
-        if current_index < 0:
+        selection = self._selected_container()
+        if selection is None:
             return False
-            
-        # Get the actual container name from the item data
-        container_name = self.container_combo.itemData(current_index)
-        if not container_name:
-            return False
+        container_name = selection.name
             
         # Make sure the docker handler has the correct container name
         self.docker_handler.set_container_name(container_name)

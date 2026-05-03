@@ -12,6 +12,7 @@ from widgets.ToastWidget import NotificationType
 
 
 REAL_PLOT_DATA = frm_main.EdgeNodeLauncher.plot_data
+REAL_REFRESH_NODE_INFO = frm_main.EdgeNodeLauncher.refresh_node_info
 
 
 class FakeToast:
@@ -119,7 +120,16 @@ class FakeDockerHandler:
 
     def get_node_info(self, on_success, on_error):
         self.node_info_requests += 1
-        on_success(NodeInfo(address="0xfreshnode", eth_address="0xfresheth", alias="fresh"))
+        on_success(
+            NodeInfo(
+                address="0xfreshnode",
+                eth_address="0xfresheth",
+                alias="fresh",
+                version_long="",
+                version_short="",
+                whitelist=[],
+            )
+        )
 
     def update_node_name(self, new_name, on_success, on_error):
         self.node_name_updates.append(new_name)
@@ -371,6 +381,31 @@ def test_plot_data_targets_selected_container_id_not_display_alias(qtbot, monkey
     launcher.plot_data(assume_running=True)
 
     assert fake_handler.history_container_requests == ["r1node"]
+    assert fake_handler.container_names[-1] == "r1node"
+
+
+def test_refresh_node_info_targets_selected_container_id_not_display_alias(qtbot, monkeypatch):
+    launcher, fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    launcher.refresh_node_info = REAL_REFRESH_NODE_INFO.__get__(launcher, frm_main.EdgeNodeLauncher)
+
+    assert launcher.container_combo.currentText() == "alpha"
+
+    launcher.refresh_node_info()
+
+    assert "alpha" not in fake_handler.container_names
+    assert fake_handler.container_names[-1] == "r1node"
+    assert fake_handler.node_info_requests == 1
+    assert fake_config.get_container("r1node").node_address == "0xfreshnode"
+
+
+def test_toggle_state_targets_selected_container_id_not_display_alias(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+
+    assert launcher.container_combo.currentText() == "alpha"
+
+    launcher.update_toggle_button_text()
+
+    assert "alpha" not in fake_handler.container_names
     assert fake_handler.container_names[-1] == "r1node"
 
 
