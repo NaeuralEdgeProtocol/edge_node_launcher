@@ -67,7 +67,7 @@ from utils.updater import _UpdaterMixin
 from utils.system_resources import _SystemResourcesMixin
 from utils.docker_utils import get_volume_name, generate_container_name
 from utils.config_manager import ConfigManager, ContainerConfig
-from utils.window_geometry import calculate_initial_window_geometry, format_rect
+from utils.window_geometry import calculate_initial_window_geometry, calculate_visible_frame_client_geometry, format_rect
 
 from utils.icon import ICON_BASE64
 
@@ -431,8 +431,28 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     return
 
   def show_initial_window(self):
-    self.showMaximized()
-    QTimer.singleShot(0, lambda: self.log_window_geometry("shown", visible=True))
+    self.show()
+    QTimer.singleShot(0, self.ensure_window_frame_visible)
+    QTimer.singleShot(50, self.ensure_window_frame_visible)
+    QTimer.singleShot(100, lambda: self.log_window_geometry("shown", visible=True))
+    return
+
+  def ensure_window_frame_visible(self):
+    if self.isFullScreen():
+      return
+
+    available_geometry = self._available_screen_geometry()
+    adjusted_geometry = calculate_visible_frame_client_geometry(
+      available_geometry,
+      self.geometry(),
+      self.frameGeometry(),
+    )
+    if adjusted_geometry != self.geometry():
+      self.setGeometry(adjusted_geometry)
+      self.add_log(
+        f"Adjusted startup window geometry to keep title bar visible: client=[{format_rect(self.geometry())}], frame=[{format_rect(self.frameGeometry())}], available=[{format_rect(available_geometry)}]",
+        debug=True,
+      )
     return
 
   def log_window_geometry(self, context="window", visible=False):
