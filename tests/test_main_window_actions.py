@@ -2,7 +2,7 @@ import webbrowser
 from types import SimpleNamespace
 
 from PyQt5 import sip
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QRect, Qt
 from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QLineEdit, QPushButton, QScrollArea, QSplitter, QTextEdit, QVBoxLayout, QWidget
 
 import app_forms.frm_main as frm_main
@@ -37,6 +37,7 @@ class FakeConfigManager:
         self.force_debug_values = []
         self.node_alias_updates = []
         self.dashboard_splitter_sizes = None
+        self.main_window_geometry = None
 
     def get_force_debug(self):
         return False
@@ -50,6 +51,13 @@ class FakeConfigManager:
 
     def set_dashboard_splitter_sizes(self, sizes):
         self.dashboard_splitter_sizes = list(sizes)
+        return True
+
+    def get_main_window_geometry(self):
+        return self.main_window_geometry
+
+    def set_main_window_geometry(self, geometry):
+        self.main_window_geometry = dict(geometry)
         return True
 
     def get_all_containers(self):
@@ -723,6 +731,46 @@ def test_dashboard_splitter_saves_current_sizes(qtbot, monkeypatch):
     launcher._save_dashboard_splitter_sizes()
 
     assert fake_config.dashboard_splitter_sizes == splitter.sizes()
+
+
+def test_main_window_restores_saved_geometry_inside_available_screen(qtbot, monkeypatch):
+    available = QRect(0, 40, 1366, 728)
+    monkeypatch.setattr(
+        frm_main.EdgeNodeLauncher,
+        "_available_screen_geometry",
+        lambda self: QRect(available),
+    )
+
+    launcher, _fake_config, _fake_handler = _build_launcher(
+        monkeypatch,
+        qtbot,
+        config_setup=lambda config: setattr(
+            config,
+            "main_window_geometry",
+            {"x": -2000, "y": -1000, "width": 1600, "height": 900},
+        ),
+    )
+
+    geometry = launcher.geometry()
+
+    assert geometry.x() >= available.x()
+    assert geometry.y() >= available.y()
+    assert geometry.width() <= available.width()
+    assert geometry.height() <= available.height()
+
+
+def test_main_window_geometry_flush_persists_current_size_and_position(qtbot, monkeypatch):
+    launcher, fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+
+    launcher.setGeometry(40, 50, 1200, 800)
+    launcher._flush_window_geometry_log()
+
+    assert fake_config.main_window_geometry == {
+        "x": 40,
+        "y": 50,
+        "width": 1200,
+        "height": 800,
+    }
 
 
 def test_main_window_sidebar_sections_group_controls(qtbot, monkeypatch):

@@ -70,3 +70,32 @@ def test_config_manager_ignores_invalid_dashboard_splitter_sizes(tmp_path):
     manager.settings["dashboard_splitter_sizes"] = ["wide", -10]
 
     assert manager.get_dashboard_splitter_sizes() is None
+
+
+def test_config_manager_persists_main_window_geometry(tmp_path):
+    manager = ConfigManager(config_dir=str(tmp_path))
+
+    assert manager.set_main_window_geometry(
+        {"x": 40, "y": 50, "width": 1200, "height": 800}
+    )
+
+    reloaded = ConfigManager(config_dir=str(tmp_path))
+
+    assert reloaded.get_main_window_geometry() == {
+        "x": 40,
+        "y": 50,
+        "width": 1200,
+        "height": 800,
+    }
+
+
+def test_config_manager_ignores_invalid_main_window_geometry(tmp_path):
+    manager = ConfigManager(config_dir=str(tmp_path))
+    manager.settings["main_window_geometry"] = {
+        "x": "left",
+        "y": 50,
+        "width": 0,
+        "height": -10,
+    }
+
+    assert manager.get_main_window_geometry() is None

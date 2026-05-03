@@ -2,6 +2,7 @@ from PyQt5.QtCore import QRect
 
 from utils.window_geometry import (
     calculate_initial_window_geometry,
+    calculate_restored_window_geometry,
     calculate_visible_frame_client_geometry,
     format_rect,
 )
@@ -64,6 +65,26 @@ def test_visible_frame_geometry_shrinks_overlarge_client_to_available_screen():
     assert adjusted_frame.x() >= available.x()
     assert adjusted_frame.width() <= available.width()
     assert adjusted_frame.height() <= available.height()
+
+
+def test_restored_window_geometry_clamps_stale_offscreen_position():
+    available = QRect(0, 40, 1366, 728)
+    saved = QRect(-2000, -1000, 1600, 900)
+
+    geometry = calculate_restored_window_geometry(available, saved)
+
+    assert geometry.x() >= available.x()
+    assert geometry.y() >= available.y()
+    assert geometry.width() <= available.width()
+    assert geometry.height() <= available.height()
+
+
+def test_restored_window_geometry_falls_back_to_initial_when_saved_invalid():
+    available = QRect(0, 40, 1366, 728)
+
+    geometry = calculate_restored_window_geometry(available, QRect())
+
+    assert geometry == calculate_initial_window_geometry(available)
 
 
 def test_format_rect_includes_position_and_size():

@@ -353,3 +353,39 @@ class ConfigManager:
         except Exception as e:
             logging.error(f"Error getting dashboard splitter sizes: {str(e)}")
             return None
+
+    def set_main_window_geometry(self, geometry: dict) -> bool:
+        """Persist main window client geometry."""
+        try:
+            normalized = {
+                "x": int(geometry["x"]),
+                "y": int(geometry["y"]),
+                "width": int(geometry["width"]),
+                "height": int(geometry["height"]),
+            }
+            if normalized["width"] <= 0 or normalized["height"] <= 0:
+                return False
+            self.settings["main_window_geometry"] = normalized
+            return self.save_settings()
+        except Exception as e:
+            logging.error(f"Error setting main window geometry: {str(e)}")
+            return False
+
+    def get_main_window_geometry(self):
+        """Get saved main window client geometry, or None when invalid/missing."""
+        try:
+            geometry = self.settings.get("main_window_geometry")
+            if not isinstance(geometry, dict):
+                return None
+            normalized = {
+                "x": int(geometry["x"]),
+                "y": int(geometry["y"]),
+                "width": int(geometry["width"]),
+                "height": int(geometry["height"]),
+            }
+            if normalized["width"] <= 0 or normalized["height"] <= 0:
+                return None
+            return normalized
+        except Exception as e:
+            logging.error(f"Error getting main window geometry: {str(e)}")
+            return None

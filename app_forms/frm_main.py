@@ -50,7 +50,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5 import sip
 from PyQt5.QtCore import (
-    Qt, QTimer, QSize, QThread, QObject, pyqtSignal, QUrl, QSettings,
+    Qt, QTimer, QSize, QThread, QObject, pyqtSignal, QUrl, QSettings, QRect,
     QProcess, QPropertyAnimation, QModelIndex, QSortFilterProxyModel
 )
 from PyQt5.QtGui import QFont, QIcon, QPixmap, QPainter
@@ -69,7 +69,7 @@ from utils.docker_utils import get_volume_name, generate_container_name
 from utils.config_manager import ConfigManager, ContainerConfig
 from utils.container_selection import SelectedContainer, selected_container_from_combo, select_container_by_name
 from utils.lifecycle_state import LifecycleState
-from utils.window_geometry import calculate_initial_window_geometry, calculate_visible_frame_client_geometry, format_rect
+from utils.window_geometry import calculate_initial_window_geometry, calculate_restored_window_geometry, calculate_visible_frame_client_geometry, format_rect
 
 from utils.icon import ICON_BASE64
 
@@ -429,13 +429,61 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
   def apply_initial_window_geometry(self):
     available_geometry = self._available_screen_geometry()
-    window_geometry = calculate_initial_window_geometry(available_geometry)
+    saved_geometry = self._saved_main_window_geometry()
+    if saved_geometry is not None:
+      window_geometry = calculate_restored_window_geometry(available_geometry, saved_geometry)
+    else:
+      window_geometry = calculate_initial_window_geometry(available_geometry)
     min_width = min(1100, window_geometry.width())
     min_height = min(700, window_geometry.height())
     self.setMinimumSize(min_width, min_height)
     self.setGeometry(window_geometry)
     self.log_window_geometry("configured", visible=True)
     return
+
+  def _saved_main_window_geometry(self):
+    if not hasattr(self, "config_manager") or self.config_manager is None:
+      return None
+
+    saved_geometry = self.config_manager.get_main_window_geometry()
+    if not saved_geometry:
+      return None
+
+    return QRect(
+      saved_geometry["x"],
+      saved_geometry["y"],
+      saved_geometry["width"],
+      saved_geometry["height"],
+    )
+
+  def _current_main_window_geometry_payload(self):
+    geometry = self.geometry()
+    if self.isMaximized():
+      normal_geometry = self.normalGeometry()
+      if normal_geometry.isValid():
+        geometry = normal_geometry
+
+    if geometry is None or geometry.isNull() or not geometry.isValid():
+      return None
+
+    return {
+      "x": geometry.x(),
+      "y": geometry.y(),
+      "width": geometry.width(),
+      "height": geometry.height(),
+    }
+
+  def _save_main_window_geometry(self):
+    if not hasattr(self, "config_manager") or self.config_manager is None:
+      return False
+    if self.isFullScreen() or self.isMinimized():
+      return False
+
+    geometry = self._current_main_window_geometry_payload()
+    if geometry is None:
+      return False
+
+    return self.config_manager.set_main_window_geometry(geometry)
 
   def show_initial_window(self):
     self.show()
@@ -487,6 +535,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
   def _flush_window_geometry_log(self):
     self.log_window_geometry(self._pending_window_geometry_context)
+    self._save_main_window_geometry()
     return
 
   def moveEvent(self, event):
@@ -1041,6 +1090,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     try:
         self.__shutting_down = True
         self.add_log("Starting application shutdown sequence...", debug=True)
+        self._save_main_window_geometry()
         
         # Stop any running timers first
         if hasattr(self, 'timer') and self.timer:

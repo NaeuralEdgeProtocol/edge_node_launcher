@@ -32,6 +32,23 @@ def calculate_initial_window_geometry(
     return QRect(x, y, width, height)
 
 
+def calculate_restored_window_geometry(
+    available_geometry: QRect,
+    saved_geometry: QRect,
+    margin: int = WINDOW_SCREEN_MARGIN,
+) -> QRect:
+    """Return a saved client geometry clamped to the current available screen."""
+    if saved_geometry is None or saved_geometry.isNull() or not saved_geometry.isValid():
+        return calculate_initial_window_geometry(available_geometry, margin=margin)
+
+    return calculate_visible_frame_client_geometry(
+        available_geometry,
+        saved_geometry,
+        saved_geometry,
+        margin=margin,
+    )
+
+
 def calculate_visible_frame_client_geometry(
     available_geometry: QRect,
     client_geometry: QRect,
