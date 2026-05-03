@@ -13,7 +13,7 @@ object name near construction.
 | --- | --- | --- | --- | --- |
 | Top actions | `addNodeButton` | button | Opens the create-node dialog. | Static inventory, mocked main-window click, destructive Docker second-node E2E |
 | Top actions | `startNodeButton` | button | Starts or stops the selected node container. | Static inventory, mocked start/stop dispatch click, destructive Docker start/stop/restart E2E |
-| Top actions | `downloadDockerButton` | button | Opens Docker download flow. | Static inventory, direct action click; not shown in current layout |
+| Top actions | `downloadDockerButton` | button | Opens Docker download flow. | Static inventory, direct action click, Network section layout/order regression |
 | Top actions | `openDappButton` | button | Opens the node dApp URL. | Static inventory, mocked main-window click |
 | Top actions | `openExplorerButton` | button | Opens the node explorer URL. | Static inventory, mocked main-window click |
 | Node info | `refreshNodeInfoButton` | button | Refreshes node metadata from Docker. | Static inventory, mocked main-window click |
