@@ -23,6 +23,7 @@ PRIMARY_VOLUME = "r1vole2e"
 SECOND_VOLUME = "r1vole2e2"
 DEFAULT_DOCKER_IMAGE = "ratio1/edge_node:mainnet"
 DEFAULT_STARTUP_TEMPLATE = REPO_ROOT.parent / "edge_node" / ".config_startup.json"
+RENAME_DIALOG_TITLES = ("Rename Node", "Change Node Name")
 
 
 def run_command(command, timeout=120, check=False):
@@ -378,8 +379,13 @@ def click_button(app, button, label):
 def find_dialog(app, title):
     from PyQt5.QtWidgets import QDialog
 
+    titles = (title,) if isinstance(title, str) else tuple(title)
     for widget in app.topLevelWidgets():
-        if isinstance(widget, QDialog) and title in widget.windowTitle() and widget.isVisible():
+        if (
+            isinstance(widget, QDialog)
+            and widget.isVisible()
+            and any(candidate in widget.windowTitle() for candidate in titles)
+        ):
             return widget
     return None
 
@@ -586,23 +592,32 @@ def run_scenarios(args):
             },
         )
 
-        rename_state = {"forced_close": False}
+        rename_state = {"forced_close": False, "error": None}
+        rename_deadline = time.monotonic() + args.rename_timeout
 
         def save_rename_dialog():
-            dialog = find_dialog(app, "Change Node Name")
+            dialog = find_dialog(app, RENAME_DIALOG_TITLES)
             if dialog is None:
+                if time.monotonic() >= rename_deadline:
+                    rename_state["forced_close"] = True
+                    rename_state["error"] = "Rename dialog was not found before timeout"
+                    return
                 QTimer.singleShot(250, save_rename_dialog)
                 return
-            name_input = dialog.findChild(QLineEdit)
+            name_input = dialog.findChild(QLineEdit, "renameNodeNameInput") or dialog.findChild(QLineEdit)
             if name_input is None:
-                raise AssertionError("Rename dialog has no text input")
+                rename_state["forced_close"] = True
+                rename_state["error"] = "Rename dialog has no text input"
+                dialog.reject()
+                return
             name_input.setText("e2e-renamed")
             click_dialog_button(app, dialog, object_name="renameNodeSaveButton")
 
         def abort_rename_dialog():
-            dialog = find_dialog(app, "Change Node Name")
+            dialog = find_dialog(app, RENAME_DIALOG_TITLES)
             if dialog is not None:
                 rename_state["forced_close"] = True
+                rename_state["error"] = "Rename dialog timed out"
                 dialog.reject()
 
         QTimer.singleShot(300, save_rename_dialog)
@@ -615,13 +630,13 @@ def run_scenarios(args):
             {
                 "step": "rename dialog returned",
                 "forced_close": rename_state["forced_close"],
+                "error": rename_state["error"],
             },
         )
         if rename_state["forced_close"]:
             log["result"] = "blocked_rename_dialog_timeout"
-            log["diagnostics"] = {
-                PRIMARY_CONTAINER: collect_container_diagnostics(PRIMARY_CONTAINER),
-            }
+            log["error"] = rename_state["error"] or "Rename dialog was closed by timeout guard"
+            log["diagnostics"] = collect_launcher_diagnostics(app, launcher, [PRIMARY_CONTAINER, SECOND_CONTAINER])
             write_log(log, args.output)
             return log
         wait_until(app, lambda: not docker_running(PRIMARY_CONTAINER), args.rename_timeout, "primary stopped during rename restart")

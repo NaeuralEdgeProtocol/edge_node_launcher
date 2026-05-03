@@ -314,7 +314,7 @@ def test_main_window_rename_save_restarts_without_legacy_stop_modal(qtbot, monke
     launcher.launch_container = lambda volume_name=None: launch_calls.append(volume_name)
 
     def save_rename(dialog):
-        name_input = dialog.findChild(QLineEdit)
+        name_input = dialog.findChild(QLineEdit, "renameNodeNameInput")
         save_button = dialog.findChild(QPushButton, "renameNodeSaveButton")
         assert name_input is not None
         assert save_button is not None
@@ -330,6 +330,35 @@ def test_main_window_rename_save_restarts_without_legacy_stop_modal(qtbot, monke
     assert fake_handler.stopped_containers == ["r1node"]
     assert launch_calls == ["r1vol"]
     assert fake_config.get_container("r1node").node_alias == "renamed"
+
+
+def test_rename_dialog_copy_and_input_constraints(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    observed = {}
+
+    def inspect_dialog(dialog):
+        observed["title"] = dialog.windowTitle()
+        observed["labels"] = [label.text() for label in dialog.findChildren(QLabel)]
+        name_input = dialog.findChild(QLineEdit, "renameNodeNameInput")
+        assert name_input is not None
+        observed["input_text"] = name_input.text()
+        observed["placeholder"] = name_input.placeholderText()
+        observed["max_length"] = name_input.maxLength()
+        return QDialog.Rejected
+
+    monkeypatch.setattr(QDialog, "exec_", inspect_dialog)
+
+    qtbot.mouseClick(launcher.renameNodeButton, Qt.LeftButton)
+
+    assert observed["title"] == "Rename Node"
+    assert observed["input_text"] == "alpha"
+    assert observed["placeholder"] == "Node display name"
+    assert observed["max_length"] == 15
+    label_text = "\n".join(observed["labels"])
+    assert "Name this node for display in the launcher." in label_text
+    assert "- Maximum 15 characters" in label_text
+    assert "- Letters, numbers, hyphens, and underscores only" in label_text
+    assert "â" not in label_text
 
 
 def test_docker_pull_completion_uses_captured_launch_target(qtbot, monkeypatch):

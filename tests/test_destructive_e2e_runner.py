@@ -116,3 +116,19 @@ def test_wait_for_launch_activity_records_existing_activity(monkeypatch, tmp_pat
 
     assert log["steps"][-1]["step"] == "launch activity observed"
     assert log["steps"][-1]["visible_dialogs"] == ["Pulling Docker Image"]
+
+
+def test_find_dialog_matches_any_supported_title(qtbot):
+    from PyQt5.QtWidgets import QDialog
+
+    dialog = QDialog()
+    qtbot.addWidget(dialog)
+    dialog.setWindowTitle("Rename Node")
+    dialog.show()
+
+    class FakeQtApp:
+        def topLevelWidgets(self):
+            return [dialog]
+
+    assert e2e.find_dialog(FakeQtApp(), e2e.RENAME_DIALOG_TITLES) is dialog
+    assert e2e.find_dialog(FakeQtApp(), "Change Node Name") is None

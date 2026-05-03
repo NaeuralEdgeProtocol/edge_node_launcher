@@ -2404,19 +2404,21 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     
     # Create dialog
     dialog = QDialog(self)
-    dialog.setWindowTitle("Change Node Name")
+    dialog.setWindowTitle("Rename Node")
     dialog.setMinimumWidth(450)
     
     layout = QVBoxLayout()
     
     # Add explanation
-    explanation = QLabel("Enter a friendly name for this node:")
+    explanation = QLabel("Name this node for display in the launcher.")
     layout.addWidget(explanation)
     
     # Add input field
     name_input = QLineEdit()
+    name_input.setObjectName("renameNodeNameInput")
     name_input.setText(current_alias)
-    name_input.setPlaceholderText("Enter node name")
+    name_input.setMaxLength(15)
+    name_input.setPlaceholderText("Node display name")
     
     # Apply theme-appropriate styles
     is_dark = self._current_stylesheet == DARK_STYLESHEET
@@ -2429,7 +2431,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     restrictions_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
     layout.addWidget(restrictions_label)
     
-    restrictions_text = QLabel("• Maximum 15 characters\n• Only letters (a-z, A-Z), numbers (0-9), hyphens (-), underscores (_)\n• Cannot be empty")
+    restrictions_text = QLabel("- Maximum 15 characters\n- Letters, numbers, hyphens, and underscores only\n- Cannot be empty")
     restrictions_text.setStyleSheet("margin-left: 10px; margin-bottom: 10px;")
     restrictions_text.setWordWrap(True)
     layout.addWidget(restrictions_text)
