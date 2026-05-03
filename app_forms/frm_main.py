@@ -189,9 +189,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     self.initUI()
     
-    # Set initial theme class
-    self.force_debug_checkbox.setProperty('class', 'dark')
-
     self.__cwd = os.getcwd()
     
     self.show_initial_window()
@@ -983,19 +980,12 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     self.force_debug_checkbox = QCheckBox('Force Debug Mode')
     self.force_debug_checkbox.setObjectName("forceDebugCheckbox")
+    self.force_debug_checkbox.setProperty("role", "settingsToggle")
+    self.force_debug_checkbox.setAccessibleName("Force Debug Mode")
     self.force_debug_checkbox.setToolTip(FORCE_DEBUG_TOOLTIP)
     self.force_debug_checkbox.setChecked(self.__force_debug)
-    self.force_debug_checkbox.setFont(QFont("Courier New", 9, QFont.Bold))
-
-    is_dark = self._current_stylesheet == DARK_STYLESHEET
-    if is_dark:
-        self.force_debug_checkbox.setStyleSheet(DETAILED_CHECKBOX_STYLE.format(
-            debug_checkbox_color=DARK_COLORS["debug_checkbox_color"]
-        ))
-    else:
-        self.force_debug_checkbox.setStyleSheet(DETAILED_CHECKBOX_STYLE.format(
-            debug_checkbox_color=LIGHT_COLORS["debug_checkbox_color"]
-        ))
+    self.force_debug_checkbox.setFont(QFont("Segoe UI", 9, QFont.Medium))
+    self.force_debug_checkbox.setMinimumHeight(32)
 
     self.force_debug_checkbox.stateChanged.connect(self.toggle_force_debug)
     bottom_button_area.addWidget(self.force_debug_checkbox)
@@ -1041,13 +1031,11 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self._current_stylesheet = LIGHT_STYLESHEET
         self.themeToggleButton.setText(DARK_DASHBOARD_BUTTON_TEXT)
         self.themeToggleButton.setAccessibleName(DARK_DASHBOARD_BUTTON_TEXT)
-        self.force_debug_checkbox.setProperty('class', 'light')
         is_dark = False
     else:
         self._current_stylesheet = DARK_STYLESHEET
         self.themeToggleButton.setText(LIGHT_DASHBOARD_BUTTON_TEXT)
         self.themeToggleButton.setAccessibleName(LIGHT_DASHBOARD_BUTTON_TEXT)
-        self.force_debug_checkbox.setProperty('class', 'dark')
         is_dark = True
     
     # Update button colors for the new theme
@@ -1075,10 +1063,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     elif hasattr(self.container_combo, 'apply_default_theme'):
         self.container_combo.apply_default_theme()
     
-    # Force style update
-    self.force_debug_checkbox.style().unpolish(self.force_debug_checkbox)
-    self.force_debug_checkbox.style().polish(self.force_debug_checkbox)
-
     # Update resources display for theme consistency
     self.update_resources_display()
 
@@ -1305,16 +1289,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.copyAddrButton.setText("Copy")
         self.copyEthButton.setText("Copy")
 
-  def change_text_color(self):
-    if self._current_stylesheet == DARK_STYLESHEET:
-      self.force_debug_checkbox.setStyleSheet(DETAILED_CHECKBOX_STYLE.format(debug_checkbox_color=DARK_COLORS["debug_checkbox_color"]))
-    else:
-      self.force_debug_checkbox.setStyleSheet(DETAILED_CHECKBOX_STYLE.format(debug_checkbox_color=LIGHT_COLORS["debug_checkbox_color"]))
-
   def apply_stylesheet(self):
-    is_dark = self._current_stylesheet == DARK_STYLESHEET
-    self.change_text_color()
-
     # Apply larger font size for info box labels on macOS
     if platform.system().lower() == 'darwin':
       # Additional macOS-specific styles

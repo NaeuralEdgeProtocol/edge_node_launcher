@@ -690,6 +690,24 @@ def run_scenarios(args):
         record_step(log, args.output, {"step": "captured light theme visual evidence", "visual": light_visual})
         if not light_visual["sidebar"]["passed"]:
             raise AssertionError("; ".join(light_visual["sidebar"]["issues"]))
+
+        original_light_sidebar_scroll = scroll_sidebar_to(launcher, "bottom")
+        app.processEvents()
+        light_sidebar_bottom_visual = capture_visual_evidence(
+            launcher,
+            args.screenshot_dir,
+            "light_sidebar_bottom",
+        )
+        record_step(
+            log,
+            args.output,
+            {"step": "captured light lower-sidebar visual evidence", "visual": light_sidebar_bottom_visual},
+        )
+        if not light_sidebar_bottom_visual["sidebar"]["passed"]:
+            raise AssertionError("; ".join(light_sidebar_bottom_visual["sidebar"]["issues"]))
+        scroll_sidebar_to(launcher, original_light_sidebar_scroll)
+        app.processEvents()
+
         record_step(
             log,
             args.output,

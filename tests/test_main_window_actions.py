@@ -510,6 +510,11 @@ def test_main_window_theme_and_force_debug_buttons(qtbot, monkeypatch):
 
     assert launcher.themeToggleButton.objectName() == "themeToggleButton"
     assert launcher.force_debug_checkbox.objectName() == "forceDebugCheckbox"
+    assert launcher.force_debug_checkbox.property("role") == "settingsToggle"
+    assert launcher.force_debug_checkbox.accessibleName() == "Force Debug Mode"
+    assert launcher.force_debug_checkbox.font().family() != "Courier New"
+    assert launcher.force_debug_checkbox.minimumHeight() >= 32
+    assert launcher.force_debug_checkbox.styleSheet() == ""
 
     initial_theme = launcher._current_stylesheet
     qtbot.mouseClick(launcher.themeToggleButton, Qt.LeftButton)

@@ -433,78 +433,6 @@ LIGHT_COLORS = {
 DARK_THEME = {**COMMON_STYLES, **DARK_COLORS}
 LIGHT_THEME = {**COMMON_STYLES, **LIGHT_COLORS}
 
-# Checkbox style template
-CHECKBOX_STYLE_TEMPLATE = """
-    QCheckBox {{
-        color: {text_color};
-    }}
-"""
-
-# Debug checkbox style template
-DEBUG_CHECKBOX_STYLE_TEMPLATE = """
-    QCheckBox {{
-        color: {debug_checkbox_color};
-        font-weight: bold;
-    }}
-"""
-
-# Detailed checkbox styling with theme-specific customization
-DETAILED_CHECKBOX_STYLE = """
-    QCheckBox {{
-        margin-top: 4px;
-        spacing: 8px;
-        padding: 4px;
-        color: {debug_checkbox_color};
-        font-weight: bold;
-    }}
-    
-    QCheckBox:hover {{
-        background-color: transparent;
-    }}
-    
-    QCheckBox::indicator {{
-        width: 18px;
-        height: 18px;
-        border-radius: 15px;
-        border: 1px solid #666;
-    }}
-    
-    QCheckBox::indicator:unchecked {{
-        background-color: transparent;
-    }}
-    
-    QCheckBox::indicator:checked {{
-        background-color: #4CAF50;
-        border-color: #4CAF50;
-        image: url(:/icons/check.png);
-    }}
-    
-    QCheckBox::indicator:checked:hover {{
-        background-color: #45a049;
-        border-color: #45a049;
-    }}
-    
-    /* Dark theme specific */
-    .dark QCheckBox {{
-        color: {debug_checkbox_color};
-    }}
-    
-    .dark QCheckBox::indicator:unchecked {{
-        border-color: #888;
-        background-color: #333;
-    }}
-    
-    /* Light theme specific */
-    .light QCheckBox {{
-        color: {debug_checkbox_color};
-    }}
-    
-    .light QCheckBox::indicator:unchecked {{
-        border-color: #666;
-        background-color: #ffffff;
-    }}
-"""
-
 # Common stylesheet template with placeholders for theme-specific values
 COMMON_STYLESHEET_TEMPLATE = """
   QLabel {{
@@ -705,6 +633,39 @@ COMMON_STYLESHEET_TEMPLATE = """
   }}
   QPushButton[actionRole="utility"]:hover {{
     background-color: {utility_action_hover};
+  }}
+  QCheckBox[role="settingsToggle"] {{
+    color: {utility_action_text};
+    background-color: transparent;
+    border-radius: 6px;
+    font-family: "Segoe UI";
+    font-size: 9pt;
+    font-weight: 500;
+    spacing: 8px;
+    padding: 6px 8px;
+    margin: 4px 6px 0px 6px;
+    min-height: 28px;
+  }}
+  QCheckBox[role="settingsToggle"]:hover {{
+    background-color: {utility_action_hover};
+  }}
+  QCheckBox[role="settingsToggle"]::indicator {{
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 1px solid {utility_action_border};
+    background-color: {secondary_action_bg};
+  }}
+  QCheckBox[role="settingsToggle"]::indicator:unchecked:hover {{
+    border-color: {combo_hover_border};
+  }}
+  QCheckBox[role="settingsToggle"]::indicator:checked {{
+    background-color: {primary_action_bg};
+    border-color: {primary_action_bg};
+  }}
+  QCheckBox[role="settingsToggle"]::indicator:checked:hover {{
+    background-color: {primary_action_hover};
+    border-color: {primary_action_hover};
   }}
   QPushButton[type="confirm"] {{
     background-color: {confirm_button_bg};
