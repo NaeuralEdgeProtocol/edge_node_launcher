@@ -1,6 +1,6 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QShowEvent
-from PyQt5.QtWidgets import QApplication, QDialog, QDialogButtonBox
+from PyQt5.QtWidgets import QApplication, QDialog, QDialogButtonBox, QWidget
 
 from models.NodeHistory import NodeHistory
 from models.NodeInfo import NodeInfo
@@ -8,6 +8,7 @@ from widgets.LoadingDialog import LoadingDialog
 from widgets.app_widgets.config_editor import ConfigEditorWidget
 from widgets.app_widgets.container_list import ContainerListWidget
 from widgets.app_widgets.log_console import LogConsoleWidget
+from widgets.app_widgets.metric_plot_grid import MetricPlotWidget, create_metrics_graph_grid
 from widgets.app_widgets.metrics_widget import MetricsWidget
 from widgets.app_widgets.node_info import NodeInfoWidget
 
@@ -145,6 +146,36 @@ def test_metrics_widget_refresh_button_emits_signal(qtbot):
 
     with qtbot.waitSignal(widget.refresh_requested):
         qtbot.mouseClick(widget.btn_refresh, Qt.LeftButton)
+
+
+def test_metric_plot_grid_builder_preserves_dashboard_contract(qtbot):
+    graph_view, plots, axis_items = create_metrics_graph_grid()
+    qtbot.addWidget(graph_view)
+    layout = graph_view.layout()
+
+    assert graph_view.objectName() == "metricsGraphGrid"
+    assert layout.count() == 4
+    assert layout.spacing() == 10
+    assert set(plots) == {"cpu_plot", "memory_plot", "gpu_plot", "gpu_memory_plot"}
+    assert set(axis_items) == set(plots)
+
+    expected = {
+        "cpuPlotContainer": ("cpu_plot", 0, 0),
+        "memoryPlotContainer": ("memory_plot", 0, 1),
+        "gpuPlotContainer": ("gpu_plot", 1, 0),
+        "gpuMemoryPlotContainer": ("gpu_memory_plot", 1, 1),
+    }
+    for container_name, (plot_attr, row, column) in expected.items():
+        container = graph_view.findChild(QWidget, container_name)
+        plot = plots[plot_attr]
+
+        assert container is not None
+        assert container.property("class") == "plot-container"
+        assert isinstance(plot, MetricPlotWidget)
+        assert plot.parent() is container
+        assert plot._r1_bottom_axis is axis_items[plot_attr]
+        assert plot.getAxis("bottom") is axis_items[plot_attr]
+        assert layout.itemAtPosition(row, column).widget() is container
 
 
 def test_metrics_widget_updates_from_current_history_model_contract(qtbot):

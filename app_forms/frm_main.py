@@ -17,7 +17,6 @@ from PyQt5.QtWidgets import (
   QVBoxLayout,
   QPushButton,
   QLabel,
-  QGridLayout,
   QFrame,
   QTextEdit,
   QDialog,
@@ -43,7 +42,6 @@ from PyQt5.QtWidgets import (
   QToolButton,
   QTextBrowser,
   QListWidget,
-  QGridLayout,
   QStackedWidget,
   QFormLayout,
   QListWidgetItem,
@@ -55,7 +53,6 @@ from PyQt5.QtCore import (
     QProcess, QPropertyAnimation, QModelIndex, QSortFilterProxyModel
 )
 from PyQt5.QtGui import QFont, QIcon, QPixmap, QPainter
-import pyqtgraph as pg
 from PyQt5.QtSvg import QSvgRenderer
 
 from models.NodeInfo import NodeInfo
@@ -63,6 +60,7 @@ from models.NodeHistory import NodeHistory
 from widgets.ToastWidget import ToastWidget, NotificationType
 from widgets.dialogs.AddNodeDialog import AddNodeDialog
 from widgets.dialogs.RenameNodeDialog import RenameNodeDialog
+from widgets.app_widgets.metric_plot_grid import create_metrics_graph_grid
 from utils.const import *
 from utils.docker import _DockerUtilsMixin
 from utils.docker_commands import DockerCommandHandler
@@ -78,7 +76,7 @@ from utils.window_geometry import calculate_initial_window_geometry, calculate_r
 from utils.icon import ICON_BASE64
 
 from app_forms.frm_utils import (
-  get_icon_from_base64, DateAxisItem, LoadingIndicator
+  get_icon_from_base64, LoadingIndicator
 )
 
 from ver import __VER__ as __version__
@@ -96,30 +94,6 @@ from ver import __VER__ as CURRENT_VERSION
 
 
 DASHBOARD_SPLITTER_DEFAULT_SIZES = [700, 180]
-
-
-class MetricPlotWidget(pg.PlotWidget):
-  def __init__(self, *args, **kwargs):
-    super().__init__(*args, **kwargs)
-    self._ignore_late_paints = False
-
-  def disable_late_paints(self) -> None:
-    self._ignore_late_paints = True
-    self.setUpdatesEnabled(False)
-    viewport = self.viewport() if hasattr(self, "viewport") else None
-    if viewport is not None and not sip.isdeleted(viewport):
-      viewport.setUpdatesEnabled(False)
-      viewport.hide()
-    self.hide()
-
-  def paintEvent(self, event):
-    if self._ignore_late_paints or not self.updatesEnabled() or not self.isVisible():
-      if hasattr(event, "accept"):
-        event.accept()
-      return
-
-    return super().paintEvent(event)
-
 
 def get_platform_and_os_info():
   platform_info = platform.platform()
@@ -623,49 +597,12 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       self.add_log(f"Applied icon to application and window", debug=True)
     return
 
-  def _create_plot_container(self, object_name: str, plot_widget: QWidget) -> QWidget:
-    """Create one styled plot container for the metrics grid."""
-    container = QWidget()
-    container.setObjectName(object_name)
-    container.setProperty('class', 'plot-container')
-
-    layout = QVBoxLayout(container)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(0)
-    layout.addWidget(plot_widget)
-
-    return container
-
   def _create_metrics_graph_grid(self) -> QWidget:
     """Build the four-panel metrics graph grid and retain public plot attributes."""
-    graph_view = QWidget()
-    graph_view.setObjectName("metricsGraphGrid")
-
-    graph_layout = QGridLayout()
-    graph_layout.setSpacing(10)
-    graph_layout.setContentsMargins(0, 0, 0, 0)
-
-    plot_specs = (
-      ("cpu_plot", "cpuPlotContainer", 0, 0),
-      ("memory_plot", "memoryPlotContainer", 0, 1),
-      ("gpu_plot", "gpuPlotContainer", 1, 0),
-      ("gpu_memory_plot", "gpuMemoryPlotContainer", 1, 1),
-    )
-
-    self._metric_axis_items = {}
-    for plot_attr, container_name, row, column in plot_specs:
-      bottom_axis = DateAxisItem(orientation="bottom")
-      plot_widget = MetricPlotWidget(axisItems={"bottom": bottom_axis})
-      plot_widget._r1_bottom_axis = bottom_axis
-      self._metric_axis_items[plot_attr] = bottom_axis
+    graph_view, plots, axis_items = create_metrics_graph_grid()
+    self._metric_axis_items = axis_items
+    for plot_attr, plot_widget in plots.items():
       setattr(self, plot_attr, plot_widget)
-      graph_layout.addWidget(
-        self._create_plot_container(container_name, plot_widget),
-        row,
-        column,
-      )
-
-    graph_view.setLayout(graph_layout)
     return graph_view
 
   def _create_activity_log_view(self) -> QTextEdit:
