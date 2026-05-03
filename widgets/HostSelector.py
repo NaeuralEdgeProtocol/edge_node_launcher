@@ -8,9 +8,8 @@ from PyQt5.QtWidgets import (
     QCheckBox
 )
 from PyQt5.QtCore import pyqtSignal, QThread, Qt, QTimer
-from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtGui import QFont
 import subprocess
-import os
 
 from models.AnsibleHosts import AnsibleHostsManager
 
@@ -107,11 +106,10 @@ class StatusIndicator(QLabel):
 
     def set_status(self, is_online):
         """Set the status indicator color based on online status."""
-        print(f"StatusIndicator.set_status called with is_online={is_online}")
-        
         # Set the property first
         self.setProperty("is_online", is_online)
         self.setAccessibleName("Host status online" if is_online else "Host status offline")
+        self.setToolTip("Host status online" if is_online else "Host status offline")
         
         # Then update the style
         color = "#4CAF50" if is_online else "#FF5252"  # Green if online, red if offline
@@ -135,22 +133,31 @@ class HostSelector(QWidget):
     mode_changed = pyqtSignal(bool)  # Emitted when mode is changed (True for multi-host)
     host_status_updated = pyqtSignal(str, bool)  # Emitted when host status is updated (host_name, is_online)
 
-    def __init__(self, parent=None):
+    def __init__(
+        self,
+        parent=None,
+        hosts_manager=None,
+        auto_refresh: bool = True,
+        status_interval_ms: int = 10000,
+    ):
         super().__init__(parent)
         self.setObjectName("hostSelectorWidget")
         self.setAccessibleName("Host selector")
-        self.hosts_manager = AnsibleHostsManager()
+        self.hosts_manager = hosts_manager or AnsibleHostsManager()
         self.status_threads = {}  # Keep track of status check threads
         self.status_indicators = {}  # Keep track of status indicators
         self._is_pro_mode = False  # Track pro mode state
-        self.initUI()
-        
-        # Set up timer for periodic status checks
+        self.initUI(auto_refresh=auto_refresh)
+        self._init_status_timer(status_interval_ms)
+
+    def _init_status_timer(self, status_interval_ms: int):
+        """Set up periodic host-status checks."""
         self.status_timer = QTimer(self)
         self.status_timer.timeout.connect(self._check_current_host_status)
-        self.status_timer.start(10000)  # Check every 10 seconds
+        if status_interval_ms > 0:
+            self.status_timer.start(status_interval_ms)
 
-    def initUI(self):
+    def initUI(self, auto_refresh: bool = True):
         layout = QVBoxLayout()
         
         # Mode selector
@@ -223,8 +230,9 @@ class HostSelector(QWidget):
         self.refresh_button.setVisible(False)
         self.current_status.setVisible(False)
         
-        # Load hosts
-        self.refresh_hosts()
+        # Load hosts unless a test or visual harness will do it explicitly.
+        if auto_refresh:
+            self.refresh_hosts()
 
     def refresh_hosts(self):
         """Refresh the list of available hosts."""
@@ -253,7 +261,6 @@ class HostSelector(QWidget):
             
         # Check if we're in simple mode - if so, skip SSH checks
         if hasattr(self, '_is_pro_mode') and not self._is_pro_mode:
-            print(f"Simple mode: skipping SSH check for host {host_name}")
             # Emit a fake "online" status to avoid blocking the UI
             self.host_status_updated.emit(host_name, True)
             return
