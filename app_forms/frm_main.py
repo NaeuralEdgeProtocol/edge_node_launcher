@@ -1390,8 +1390,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.add_log("Docker pull in progress, skipping plot data", debug=True)
         return
         
-    # Get the currently selected container
-    container_name = self.container_combo.currentText()
+    # Use combo item data for Docker identity; currentText may be a display alias.
+    container_name = self._selected_container_name()
     if not container_name:
         self.add_log("No container selected, cannot plot data", debug=True)
         return
@@ -1410,7 +1410,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     def on_success(history: NodeHistory) -> None:
         # Make sure we're still on the same container
-        current_selected = self.container_combo.currentText()
+        current_selected = self._selected_container_name()
         if container_name != current_selected:
             self.add_log(f"Container changed during data plotting from {container_name} to {current_selected}, ignoring results", debug=True)
             return
@@ -1429,7 +1429,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     def on_error(error):
         # Make sure we're still on the same container
-        if container_name != self.container_combo.currentText():
+        if container_name != self._selected_container_name():
             self.add_log(f"Container changed during data plotting, ignoring error", debug=True)
             return
             
@@ -1981,8 +1981,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     This method updates the UI with the latest uptime, epoch, and epoch availability data.
     It only updates if the data has changed.
     """
-    # Get the currently selected container
-    container_name = self.container_combo.currentText()
+    # Use combo item data for container identity; currentText may be a display alias.
+    container_name = self._selected_container_name()
     if not container_name:
         self.add_log("No container selected, cannot refresh uptime", debug=True)
         return
@@ -2035,8 +2035,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
   def copy_address(self):
     """Copy the node address to clipboard for the currently selected container."""
-    # Get the currently selected container
-    container_name = self.container_combo.currentText()
+    # Use combo item data for config identity; currentText may be a display alias.
+    container_name = self._selected_container_name()
     if not container_name:
         self.toast.show_notification(NotificationType.ERROR, "No container selected")
         return
@@ -2059,8 +2059,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
   def copy_eth_address(self):
     """Copy the ETH address to clipboard for the currently selected container."""
-    # Get the currently selected container
-    container_name = self.container_combo.currentText()
+    # Use combo item data for config identity; currentText may be a display alias.
+    container_name = self._selected_container_name()
     if not container_name:
         self.toast.show_notification(NotificationType.ERROR, "No container selected")
         return
@@ -2811,32 +2811,33 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         return
         
     try:
-        self.add_log(f"Selected container: {container_name}", debug=True)
+        display_name = container_name
+        actual_container_name = self._selected_container_name()
+        if not actual_container_name:
+            self.add_log("No container id found for selected item", debug=True)
+            return
+
+        self.add_log(f"Selected container: {display_name} ({actual_container_name})", debug=True)
         
         # Ensure loading indicator is stopped when selecting a new container
         if hasattr(self, 'loading_indicator'):
             self.loading_indicator.stop()
         
-        # Get the current index and actual container name from the data
-        current_index = self.container_combo.currentIndex()
-        if current_index >= 0:
-            actual_container_name = self.container_combo.itemData(current_index)
-            if actual_container_name:
-                # Update both docker handler and mixin container name
-                self.docker_handler.set_container_name(actual_container_name)
-                self.docker_container_name = actual_container_name
-                self.add_log(f"Updated container name to: {actual_container_name}", debug=True)
+        # Update both docker handler and mixin container name with the Docker id, not the alias.
+        self.docker_handler.set_container_name(actual_container_name)
+        self.docker_container_name = actual_container_name
+        self.add_log(f"Updated container name to: {actual_container_name}", debug=True)
         
         # Check if container exists in Docker
-        container_exists = self.container_exists_in_docker(container_name)
+        container_exists = self.container_exists_in_docker(actual_container_name)
         
         # Get container config
-        config_container = self.config_manager.get_container(container_name)
+        config_container = self.config_manager.get_container(actual_container_name)
         
         # If container doesn't exist in Docker but exists in config, show a message
         if not container_exists:
             if config_container:
-                self.add_log(f"Container {container_name} exists in config but not in Docker. It will be recreated when launched.", debug=True)
+                self.add_log(f"Container {actual_container_name} exists in config but not in Docker. It will be recreated when launched.", debug=True)
                 
                 # Display saved addresses if available
                 if config_container.node_address:
@@ -2847,7 +2848,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                       str_display = f"Address: {self.node_addr}"
                     self.addressDisplay.setText(str_display)
                     self.copyAddrButton.setVisible(True)
-                    self.add_log(f"Displaying saved node address for {container_name}", debug=True)
+                    self.add_log(f"Displaying saved node address for {actual_container_name}", debug=True)
                 
                 if config_container.eth_address:
                     self.node_eth_address = config_container.eth_address
@@ -2857,12 +2858,12 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                       str_eth_display = f"ETH Address: {self.node_eth_address}"
                     self.ethAddressDisplay.setText(str_eth_display)
                     self.copyEthButton.setVisible(True)
-                    self.add_log(f"Displaying saved ETH address for {container_name}", debug=True)
+                    self.add_log(f"Displaying saved ETH address for {actual_container_name}", debug=True)
                 
                 if config_container.node_alias:
                     self.node_name = config_container.node_alias
                     self.nameDisplay.setText('Name: ' + config_container.node_alias)
-                    self.add_log(f"Displaying saved node alias for {container_name}", debug=True)
+                    self.add_log(f"Displaying saved node alias for {actual_container_name}", debug=True)
                 
                 return
         
@@ -2875,7 +2876,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             self.refresh_node_info()  # Updates address displays with cached data
             self.plot_data()  # Updates graphs and metrics
             self.maybe_refresh_uptime()  # Updates uptime, epoch, and version info
-            self.add_log(f"Updated UI with running container data for: {container_name}", debug=True)
+            self.add_log(f"Updated UI with running container data for: {actual_container_name}", debug=True)
         else:
             # Display saved addresses from config if available
             if config_container:
@@ -2887,7 +2888,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                       str_display = f"Address: {self.node_addr}"
                     self.addressDisplay.setText(str_display)
                     self.copyAddrButton.setVisible(True)
-                    self.add_log(f"Displaying saved node address for {container_name}", debug=True)
+                    self.add_log(f"Displaying saved node address for {actual_container_name}", debug=True)
                 
                 if config_container.eth_address:
                     self.node_eth_address = config_container.eth_address
@@ -2897,9 +2898,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                       str_eth_display = f"ETH Address: {self.node_eth_address}"
                     self.ethAddressDisplay.setText(str_eth_display)
                     self.copyEthButton.setVisible(True)
-                    self.add_log(f"Displaying saved ETH address for {container_name}", debug=True)
+                    self.add_log(f"Displaying saved ETH address for {actual_container_name}", debug=True)
                 
-                self.add_log(f"Container {container_name} is not running, displaying saved data", debug=True)
+                self.add_log(f"Container {actual_container_name} is not running, displaying saved data", debug=True)
             
     except Exception as e:
         self._clear_info_display()

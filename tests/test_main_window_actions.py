@@ -1,4 +1,5 @@
 import webbrowser
+from types import SimpleNamespace
 
 from PyQt5 import sip
 from PyQt5.QtCore import Qt
@@ -8,6 +9,9 @@ import app_forms.frm_main as frm_main
 from models.NodeInfo import NodeInfo
 from utils.config_manager import ContainerConfig
 from widgets.ToastWidget import NotificationType
+
+
+REAL_PLOT_DATA = frm_main.EdgeNodeLauncher.plot_data
 
 
 class FakeToast:
@@ -92,6 +96,13 @@ class FakeDockerHandler:
         self.stopped_containers = []
         self.launched_containers = []
         self.pull_requests = 0
+        self.history_container_requests = []
+        self.history = SimpleNamespace(
+            uptime="1s",
+            current_epoch=1,
+            current_epoch_avail=0.5,
+            version="test-version",
+        )
 
     def set_container_name(self, container_name):
         self.container_name = container_name
@@ -125,6 +136,10 @@ class FakeDockerHandler:
 
     def pull_image(self, callback, error_callback, output_callback=None):
         self.pull_requests += 1
+
+    def get_node_history(self, callback, error_callback):
+        self.history_container_requests.append(self.container_name)
+        callback(self.history)
 
 
 def _build_launcher(monkeypatch, qtbot, running=False):
@@ -342,6 +357,49 @@ def test_docker_pull_completion_without_launch_target_clears_lifecycle(qtbot, mo
 
     assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
     assert getattr(launcher, "_EdgeNodeLauncher__docker_pull_in_progress") is False
+
+
+def test_plot_data_targets_selected_container_id_not_display_alias(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launcher.plot_data = REAL_PLOT_DATA.__get__(launcher, frm_main.EdgeNodeLauncher)
+    launcher.plot_graphs = lambda: None
+    launcher.maybe_refresh_uptime = lambda assume_running=None: None
+
+    assert launcher.container_combo.currentText() == "alpha"
+    assert launcher._selected_container_name() == "r1node"
+
+    launcher.plot_data(assume_running=True)
+
+    assert fake_handler.history_container_requests == ["r1node"]
+    assert fake_handler.container_names[-1] == "r1node"
+
+
+def test_container_selection_checks_docker_with_container_id_not_display_alias(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    checked_containers = []
+    launcher.container_exists_in_docker = lambda name: checked_containers.append(name) or False
+
+    launcher._on_container_selected("alpha")
+
+    assert checked_containers == ["r1node"]
+    assert fake_handler.container_name == "r1node"
+
+
+def test_copy_address_fallback_uses_container_id_not_display_alias(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launcher.node_addr = None
+    launcher.node_eth_address = None
+
+    launcher.copy_address()
+    assert QApplication.clipboard().text() == "0xnodeaddress"
+
+    launcher.copy_eth_address()
+    assert QApplication.clipboard().text() == "0xethaddress"
+
+    assert launcher.toast.notifications[-2:] == [
+        (NotificationType.SUCCESS, frm_main.NOTIFICATION_ADDRESS_COPIED.format(address="0xnodeaddress")),
+        (NotificationType.SUCCESS, frm_main.NOTIFICATION_ADDRESS_COPIED.format(address="0xethaddress")),
+    ]
 
 
 def test_stale_node_info_failures_do_not_restart_other_nodes(qtbot, monkeypatch):
