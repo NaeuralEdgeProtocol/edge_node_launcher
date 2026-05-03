@@ -796,6 +796,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     # Info box
     info_box = QGroupBox()
     info_box.setObjectName("infoBox")
+    info_box.setProperty("role", "statusPanel")
     info_box.setContentsMargins(5, 0, 5, 0)  # Add left and right margins directly to the widget
     info_box_layout = QVBoxLayout()
     info_box_layout.setContentsMargins(5, 6, 5, 8)  # Left, Top, Right, Bottom margins inside the box
@@ -879,6 +880,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     # Resources box
     resources_box = QGroupBox()
     resources_box.setObjectName("resourcesBox")
+    resources_box.setProperty("role", "resourcePanel")
     resources_box.setContentsMargins(5, 0, 5, 0)  # Add left and right margins directly to the widget
     resources_box_layout = QVBoxLayout()
     resources_box_layout.setContentsMargins(5, 6, 5, 8)  # Left, Top, Right, Bottom margins inside the box

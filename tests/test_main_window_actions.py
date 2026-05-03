@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from PyQt5 import sip
 from PyQt5.QtCore import QRect, Qt
-from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QLineEdit, QPushButton, QScrollArea, QSplitter, QTextEdit, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QApplication, QDialog, QGroupBox, QLabel, QLineEdit, QPushButton, QScrollArea, QSplitter, QTextEdit, QVBoxLayout, QWidget
 
 import app_forms.frm_main as frm_main
 from models.NodeInfo import NodeInfo
@@ -858,6 +858,20 @@ def test_refresh_action_lives_with_status_section(qtbot, monkeypatch):
     assert top_button_area is not None
     assert status_label is not None
     assert top_button_area.indexOf(status_label) < top_button_area.indexOf(launcher.refreshButton)
+
+
+def test_status_panels_have_semantic_roles(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+    info_box = launcher.findChild(QGroupBox, "infoBox")
+    resources_box = launcher.findChild(QGroupBox, "resourcesBox")
+
+    assert info_box is not None
+    assert resources_box is not None
+    assert info_box.property("role") == "statusPanel"
+    assert resources_box.property("role") == "resourcePanel"
+    assert info_box.findChild(QPushButton, "copyAddrButton") is launcher.copyAddrButton
+    assert info_box.findChild(QPushButton, "copyEthButton") is launcher.copyEthButton
+    assert resources_box.findChild(QLabel, "resourcesBoxText") is not None
 
 
 def test_main_window_sidebar_controls_are_scrollable(qtbot, monkeypatch):
