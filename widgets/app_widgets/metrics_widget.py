@@ -1,8 +1,61 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QGroupBox
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QGroupBox, QSizePolicy
 from PyQt5.QtCore import pyqtSignal
 import pyqtgraph as pg
 from models.NodeHistory import NodeHistory
 from datetime import datetime
+from widgets.app_widgets.metric_plot_grid import configure_metric_plot
+
+
+_METRICS_WIDGET_STYLE_COLORS = {
+    False: {
+        "surface": "#FFFFFF",
+        "border": "#CBD5E1",
+        "text": "#1F2937",
+        "primary": "#1B47F7",
+        "primary_hover": "#4458FF",
+        "primary_text": "#FFFFFF",
+    },
+    True: {
+        "surface": "#122033",
+        "border": "#3E5876",
+        "text": "#E8EEF8",
+        "primary": "#1B47F7",
+        "primary_hover": "#4458FF",
+        "primary_text": "#FFFFFF",
+    },
+}
+
+_METRICS_WIDGET_STYLE_TEMPLATE = """
+QWidget#metricsWidget {{
+    background: transparent;
+}}
+QGroupBox#metricsGroup {{
+    background-color: {surface};
+    color: {text};
+    border: 1px solid {border};
+    border-radius: 8px;
+    margin-top: 12px;
+    font-weight: 600;
+}}
+QGroupBox#metricsGroup::title {{
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0px 4px;
+}}
+QPushButton#metricsRefreshButton {{
+    background-color: {primary};
+    color: {primary_text};
+    border: 1px solid {primary};
+    border-radius: 8px;
+    padding: 8px 12px;
+    min-height: 34px;
+    font-weight: 600;
+}}
+QPushButton#metricsRefreshButton:hover {{
+    background-color: {primary_hover};
+    border-color: {primary_hover};
+}}
+"""
 
 class MetricsWidget(QWidget):
     """
@@ -15,12 +68,15 @@ class MetricsWidget(QWidget):
         super().__init__(parent)
         self.setObjectName("metricsWidget")
         self.setAccessibleName("Node metrics")
+        self._is_dark_theme = False
         
         # Initialize UI components
         self.btn_refresh = QPushButton("Refresh Metrics")
         self.btn_refresh.setObjectName("metricsRefreshButton")
         self.btn_refresh.setAccessibleName("Refresh metrics")
+        self.btn_refresh.setProperty("actionRole", "primary")
         self.btn_refresh.setToolTip("Refresh metrics")
+        self.btn_refresh.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         
         # Create plot widgets
         self.plot_cpu = pg.PlotWidget()
@@ -40,6 +96,7 @@ class MetricsWidget(QWidget):
         
         # Configure plots
         self._configure_plots()
+        self.apply_theme(False)
         
         # Setup UI layout
         self.init_ui()
@@ -49,10 +106,10 @@ class MetricsWidget(QWidget):
     
     def _configure_plots(self):
         """Configure plot widgets appearance and behavior"""
-        # Set background to transparent
         for plot in [self.plot_cpu, self.plot_memory, self.plot_gpu, self.plot_gpu_memory]:
-            plot.setBackground(None)
-            plot.showGrid(x=True, y=True, alpha=0.3)
+            configure_metric_plot(plot)
+            plot.setMinimumHeight(170)
+            plot.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
         # Set titles and labels
         self.plot_cpu.setTitle("CPU Usage")
@@ -68,34 +125,42 @@ class MetricsWidget(QWidget):
         """Initialize the UI components and layout"""
         # Main layout
         layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
         
         # Create metrics group box
         self.metrics_group = QGroupBox("Node Metrics")
         self.metrics_group.setObjectName("metricsGroup")
         self.metrics_group.setAccessibleName("Node metrics")
+        self.metrics_group.setProperty("role", "metricsPanel")
+        self.metrics_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         metrics_layout = QVBoxLayout()
+        metrics_layout.setContentsMargins(12, 16, 12, 12)
+        metrics_layout.setSpacing(10)
         
         # Add plot widgets to layout - organize in a grid
         row1_layout = QHBoxLayout()
+        row1_layout.setSpacing(10)
         row1_layout.addWidget(self.plot_cpu)
         row1_layout.addWidget(self.plot_memory)
         
         row2_layout = QHBoxLayout()
+        row2_layout.setSpacing(10)
         row2_layout.addWidget(self.plot_gpu)
         row2_layout.addWidget(self.plot_gpu_memory)
         
         metrics_layout.addLayout(row1_layout)
         metrics_layout.addLayout(row2_layout)
+
+        button_layout = QHBoxLayout()
+        button_layout.setContentsMargins(0, 0, 0, 0)
+        button_layout.addStretch()
+        button_layout.addWidget(self.btn_refresh)
+        metrics_layout.addLayout(button_layout)
         
         # Set metrics group layout
         self.metrics_group.setLayout(metrics_layout)
         layout.addWidget(self.metrics_group)
-        
-        # Add refresh button
-        button_layout = QHBoxLayout()
-        button_layout.addStretch()
-        button_layout.addWidget(self.btn_refresh)
-        layout.addLayout(button_layout)
         
         # Set layout
         self.setLayout(layout)
@@ -103,6 +168,12 @@ class MetricsWidget(QWidget):
     def connect_signals(self):
         """Connect widget signals to slots"""
         self.btn_refresh.clicked.connect(self.refresh_requested.emit)
+
+    def apply_theme(self, is_dark):
+        """Apply compact component styling for standalone or embedded use."""
+        self._is_dark_theme = bool(is_dark)
+        colors = _METRICS_WIDGET_STYLE_COLORS[self._is_dark_theme]
+        self.setStyleSheet(_METRICS_WIDGET_STYLE_TEMPLATE.format(**colors))
     
     def update_metrics(self, history: NodeHistory = None, limit: int = 100):
         """

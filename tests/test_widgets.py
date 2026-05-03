@@ -385,8 +385,10 @@ def test_metrics_widget_refresh_button_emits_signal(qtbot):
     assert widget.accessibleName() == "Node metrics"
     assert widget.metrics_group.objectName() == "metricsGroup"
     assert widget.metrics_group.accessibleName() == "Node metrics"
+    assert widget.metrics_group.property("role") == "metricsPanel"
     assert widget.btn_refresh.accessibleName() == "Refresh metrics"
     assert widget.btn_refresh.toolTip() == "Refresh metrics"
+    assert widget.btn_refresh.property("actionRole") == "primary"
     assert widget.plot_cpu.objectName() == "metricsCpuPlot"
     assert widget.plot_cpu.accessibleName() == "CPU usage plot"
     assert widget.plot_memory.objectName() == "metricsMemoryPlot"
@@ -395,9 +397,32 @@ def test_metrics_widget_refresh_button_emits_signal(qtbot):
     assert widget.plot_gpu.accessibleName() == "GPU usage plot"
     assert widget.plot_gpu_memory.objectName() == "metricsGpuMemoryPlot"
     assert widget.plot_gpu_memory.accessibleName() == "GPU memory usage plot"
+    assert "QGroupBox#metricsGroup" in widget.styleSheet()
+
+    for plot in (widget.plot_cpu, widget.plot_memory, widget.plot_gpu, widget.plot_gpu_memory):
+        assert plot.backgroundBrush().style() == Qt.NoBrush
+        assert plot.getAxis("left").pen().color().name() == METRIC_AXIS_COLOR
+        assert plot.getAxis("bottom").pen().color().name() == METRIC_AXIS_COLOR
+        assert not plot.getPlotItem().menuEnabled()
+        assert plot.getPlotItem().ctrl.xGridCheck.isChecked()
+        assert plot.getPlotItem().ctrl.yGridCheck.isChecked()
+        assert plot.getPlotItem().ctrl.gridAlphaSlider.value() == int(METRIC_GRID_ALPHA * 255)
 
     with qtbot.waitSignal(widget.refresh_requested):
         qtbot.mouseClick(widget.btn_refresh, Qt.LeftButton)
+
+
+def test_metrics_widget_theme_styles_are_switchable(qtbot):
+    widget = MetricsWidget()
+    qtbot.addWidget(widget)
+
+    widget.apply_theme(True)
+    assert "#122033" in widget.styleSheet()
+    assert "#E8EEF8" in widget.styleSheet()
+
+    widget.apply_theme(False)
+    assert "#FFFFFF" in widget.styleSheet()
+    assert "#1F2937" in widget.styleSheet()
 
 
 def test_metric_plot_grid_builder_preserves_dashboard_contract(qtbot):
