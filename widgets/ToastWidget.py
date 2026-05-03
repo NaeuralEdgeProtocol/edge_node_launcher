@@ -19,25 +19,29 @@ class ToastWidget(QWidget):
             "bg_color": "#28A745",
             "icon": "OK",
             "title": NOTIFICATION_TITLE_STRINGS_ENUM['success'],
-            "icon_color": "#FFFFFF"
+            "icon_color": "#FFFFFF",
+            "text_color": "#FFFFFF",
         },
         NotificationType.ERROR: {
             "bg_color": "#DC3545",
             "icon": "X",
             "title": NOTIFICATION_TITLE_STRINGS_ENUM['error'],
-            "icon_color": "#FFFFFF"
+            "icon_color": "#FFFFFF",
+            "text_color": "#FFFFFF",
         },
         NotificationType.WARNING: {
             "bg_color": "#FFC107",
             "icon": "!",
             "title": NOTIFICATION_TITLE_STRINGS_ENUM['warning'],
-            "icon_color": "#1F2937"
+            "icon_color": "#1F2937",
+            "text_color": "#1F2937",
         },
         NotificationType.INFO: {
             "bg_color": "#17A2B8",
             "icon": "i",
             "title": NOTIFICATION_TITLE_STRINGS_ENUM['info'],
-            "icon_color": "#FFFFFF"
+            "icon_color": "#FFFFFF",
+            "text_color": "#FFFFFF",
         }
     }
 
@@ -90,7 +94,7 @@ class ToastWidget(QWidget):
             QWidget {{
                 background-color: {style['bg_color']};
                 border-radius: 8px;
-                color: white;
+                color: {style['text_color']};
             }}
             QLabel {{
                 padding: 4px;
@@ -103,7 +107,7 @@ class ToastWidget(QWidget):
             }}
             #title {{
                 font-weight: bold;
-                color: #FFFFFF;
+                color: {style['text_color']};
             }}
         """)
 

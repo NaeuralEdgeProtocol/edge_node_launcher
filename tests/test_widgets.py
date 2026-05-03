@@ -8,7 +8,7 @@ from widgets.LoadingDialog import LoadingDialog
 from widgets.app_widgets.config_editor import ConfigEditorWidget
 from widgets.app_widgets.container_list import ContainerListWidget
 from widgets.app_widgets.log_console import LogConsoleWidget
-from widgets.app_widgets.metric_plot_grid import MetricPlotWidget, create_metrics_graph_grid
+from widgets.app_widgets.metric_plot_grid import METRIC_EMPTY_STATE_TEXT, MetricPlotWidget, create_metrics_graph_grid
 from widgets.app_widgets.metrics_widget import MetricsWidget
 from widgets.app_widgets.node_info import NodeInfoWidget
 
@@ -160,21 +160,35 @@ def test_metric_plot_grid_builder_preserves_dashboard_contract(qtbot):
     assert set(axis_items) == set(plots)
 
     expected = {
-        "cpuPlotContainer": ("cpu_plot", 0, 0),
-        "memoryPlotContainer": ("memory_plot", 0, 1),
-        "gpuPlotContainer": ("gpu_plot", 1, 0),
-        "gpuMemoryPlotContainer": ("gpu_memory_plot", 1, 1),
+        "cpuPlotContainer": ("cpu_plot", "cpuPlotTitle", "cpuPlotEmptyState", 0, 0),
+        "memoryPlotContainer": ("memory_plot", "memoryPlotTitle", "memoryPlotEmptyState", 0, 1),
+        "gpuPlotContainer": ("gpu_plot", "gpuPlotTitle", "gpuPlotEmptyState", 1, 0),
+        "gpuMemoryPlotContainer": (
+            "gpu_memory_plot",
+            "gpuMemoryPlotTitle",
+            "gpuMemoryPlotEmptyState",
+            1,
+            1,
+        ),
     }
-    for container_name, (plot_attr, row, column) in expected.items():
+    for container_name, (plot_attr, title_name, empty_name, row, column) in expected.items():
         container = graph_view.findChild(QWidget, container_name)
         plot = plots[plot_attr]
 
         assert container is not None
+        title_label = container.findChild(QWidget, title_name)
+        empty_label = container.findChild(QWidget, empty_name)
+
         assert container.property("class") == "plot-container"
         assert isinstance(plot, MetricPlotWidget)
         assert plot.parent() is container
         assert plot._r1_bottom_axis is axis_items[plot_attr]
         assert plot.getAxis("bottom") is axis_items[plot_attr]
+        assert title_label is not None
+        assert title_label.property("role") == "metricPlotTitle"
+        assert empty_label is plot._r1_empty_label
+        assert empty_label.property("role") == "metricPlotEmptyState"
+        assert empty_label.text() == METRIC_EMPTY_STATE_TEXT
         assert layout.itemAtPosition(row, column).widget() is container
 
 

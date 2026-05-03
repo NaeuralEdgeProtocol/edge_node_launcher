@@ -688,6 +688,14 @@ def test_plot_graphs_clears_stale_gpu_plots_when_history_has_no_gpu(qtbot, monke
     launcher.plot_graphs(_history_with_optional_gpu(gpu_load=[30.0, 40.0], gpu_occupied_memory=[1024.0, 2048.0]))
     assert len(launcher.gpu_plot.listDataItems()) == 1
     assert len(launcher.gpu_memory_plot.listDataItems()) == 1
+    assert launcher.cpu_plot.getPlotItem().titleLabel.text == ""
+    assert launcher.memory_plot.getPlotItem().titleLabel.text == ""
+    assert launcher.gpu_plot.getPlotItem().titleLabel.text == ""
+    assert launcher.gpu_memory_plot.getPlotItem().titleLabel.text == ""
+    assert not launcher.cpu_plot._r1_empty_label.isVisible()
+    assert not launcher.memory_plot._r1_empty_label.isVisible()
+    assert not launcher.gpu_plot._r1_empty_label.isVisible()
+    assert not launcher.gpu_memory_plot._r1_empty_label.isVisible()
 
     launcher.plot_graphs(_history_with_optional_gpu())
 
@@ -695,6 +703,10 @@ def test_plot_graphs_clears_stale_gpu_plots_when_history_has_no_gpu(qtbot, monke
     assert len(launcher.memory_plot.listDataItems()) == 1
     assert len(launcher.gpu_plot.listDataItems()) == 0
     assert len(launcher.gpu_memory_plot.listDataItems()) == 0
+    assert not launcher.cpu_plot._r1_empty_label.isVisible()
+    assert not launcher.memory_plot._r1_empty_label.isVisible()
+    assert launcher.gpu_plot._r1_empty_label.isVisible()
+    assert launcher.gpu_memory_plot._r1_empty_label.isVisible()
 
 
 def test_plot_graphs_reuses_existing_axis_items(qtbot, monkeypatch):
@@ -1243,11 +1255,31 @@ def test_main_window_graph_plots_stay_inside_styled_containers(qtbot, monkeypatc
         container = launcher.findChild(QWidget, container_name)
 
         assert container is not None
+        title_label = container.findChild(QWidget, container_name.replace("Container", "Title"))
+        empty_label = plot._r1_empty_label
+
         assert container.property("class") == "plot-container"
         assert plot.parent() is container
-        assert container.layout().count() == 1
-        assert container.layout().contentsMargins().left() == 0
+        assert container.layout().count() == 3
+        assert container.layout().contentsMargins().left() == 10
+        assert title_label is not None
+        assert title_label.property("role") == "metricPlotTitle"
+        assert empty_label is not None
+        assert empty_label.text() == frm_main.METRIC_EMPTY_STATE_TEXT
         assert layout.itemAtPosition(row, column).widget() is container
+
+
+def test_main_window_metric_empty_states_remain_visible_without_history(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+    launcher.plot_graphs = REAL_PLOT_GRAPHS.__get__(launcher, frm_main.EdgeNodeLauncher)
+
+    launcher.plot_graphs(history=None)
+
+    for plot_attr in ("cpu_plot", "memory_plot", "gpu_plot", "gpu_memory_plot"):
+        plot = getattr(launcher, plot_attr)
+
+        assert plot._r1_empty_label.isVisible()
+        assert plot._r1_empty_label.text() == frm_main.METRIC_EMPTY_STATE_TEXT
 
 
 def test_main_window_log_view_has_stable_identity_and_dimensions(qtbot, monkeypatch):

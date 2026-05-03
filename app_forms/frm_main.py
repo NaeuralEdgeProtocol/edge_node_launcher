@@ -60,7 +60,7 @@ from models.NodeHistory import NodeHistory
 from widgets.ToastWidget import ToastWidget, NotificationType
 from widgets.dialogs.AddNodeDialog import AddNodeDialog
 from widgets.dialogs.RenameNodeDialog import RenameNodeDialog
-from widgets.app_widgets.metric_plot_grid import create_metrics_graph_grid
+from widgets.app_widgets.metric_plot_grid import METRIC_EMPTY_STATE_TEXT, create_metrics_graph_grid
 from utils.const import *
 from utils.docker import _DockerUtilsMixin
 from utils.docker_commands import DockerCommandHandler
@@ -1587,11 +1587,16 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.add_log(f"Failed to start metrics request for {container_name}: {str(e)}", debug=True, color="red")
         on_error(str(e))
 
-  def _clear_metric_plots(self) -> None:
+  def _clear_metric_plots(self, empty_message: Optional[str] = METRIC_EMPTY_STATE_TEXT) -> None:
     for plot_attr in ("cpu_plot", "memory_plot", "gpu_plot", "gpu_memory_plot"):
       plot_widget = getattr(self, plot_attr, None)
       if plot_widget is not None:
         plot_widget.clear()
+        plot_widget.setTitle("")
+        if empty_message and hasattr(plot_widget, "set_empty_state"):
+          plot_widget.set_empty_state(empty_message)
+        elif hasattr(plot_widget, "clear_empty_state"):
+          plot_widget.clear_empty_state()
 
   def _configure_metric_axis(self, plot_widget, timestamps, parent: str) -> None:
     date_axis = plot_widget.getAxis('bottom')
@@ -1637,12 +1642,14 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     # Get colors based on theme
     colors = DARK_COLORS if self._current_stylesheet == DARK_STYLESHEET else LIGHT_COLORS
 
-    self._clear_metric_plots()
+    self._clear_metric_plots(empty_message=None)
     
     # Helper function to update a plot
     def update_plot(plot_widget, timestamps, data, name, color):
         plot_widget.clear()
         if data and len(data) > 0:
+            if hasattr(plot_widget, "clear_empty_state"):
+                plot_widget.clear_empty_state()
             # Ensure data length matches timestamps
             if len(data) > len(timestamps):
                 data = data[-len(timestamps):]
@@ -1666,28 +1673,30 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             
             # Plot with numeric timestamps
             plot_widget.plot(numeric_timestamps, data, pen=color, name=name)
+        elif hasattr(plot_widget, "set_empty_state"):
+            plot_widget.set_empty_state(METRIC_EMPTY_STATE_TEXT)
     
     # CPU Plot
     self._configure_metric_axis(self.cpu_plot, timestamps, parent="cpu")
-    self.cpu_plot.setTitle(CPU_LOAD_TITLE)
     update_plot(self.cpu_plot, timestamps, history.cpu_load, 'CPU Load', colors["graph_cpu_color"])
     
     # Memory Plot
     self._configure_metric_axis(self.memory_plot, timestamps, parent="mem")
-    self.memory_plot.setTitle(MEMORY_USAGE_TITLE)
     update_plot(self.memory_plot, timestamps, history.occupied_memory, 'Occupied Memory', colors["graph_memory_color"])
     
     # GPU Plot if available
     if history and history.gpu_load:
       self._configure_metric_axis(self.gpu_plot, timestamps, parent="gpu")
-      self.gpu_plot.setTitle(GPU_LOAD_TITLE)
       update_plot(self.gpu_plot, timestamps, history.gpu_load, 'GPU Load', colors["graph_gpu_color"])
+    elif hasattr(self.gpu_plot, "set_empty_state"):
+      self.gpu_plot.set_empty_state(METRIC_EMPTY_STATE_TEXT)
 
     # GPU Memory if available
     if history and history.gpu_occupied_memory:
       self._configure_metric_axis(self.gpu_memory_plot, timestamps, parent="gpu_mem")
-      self.gpu_memory_plot.setTitle(GPU_MEMORY_LOAD_TITLE)
       update_plot(self.gpu_memory_plot, timestamps, history.gpu_occupied_memory, 'Occupied GPU Memory', colors["graph_gpu_memory_color"])
+    elif hasattr(self.gpu_memory_plot, "set_empty_state"):
+      self.gpu_memory_plot.set_empty_state(METRIC_EMPTY_STATE_TEXT)
       
     self.add_log(f"Updated graphs for container {container_name} with {len(timestamps)} data points", debug=True)
 

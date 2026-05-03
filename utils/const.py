@@ -537,7 +537,20 @@ COMMON_STYLESHEET_TEMPLATE = """
     background-color: {graph_bg};
     border: 1px solid {graph_border};
     border-radius: {border_radius};
-    padding: 8px;
+    padding: 0px;
+  }}
+  QLabel[role="metricPlotTitle"] {{
+    color: {graph_text};
+    background-color: transparent;
+    font-size: 13px;
+    font-weight: bold;
+    padding: 0px;
+  }}
+  QLabel[role="metricPlotEmptyState"] {{
+    color: {graph_text};
+    background-color: transparent;
+    font-size: 12px;
+    padding: 0px 0px 4px 0px;
   }}
   PlotWidget > * {{
     background-color: transparent;

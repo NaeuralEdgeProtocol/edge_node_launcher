@@ -215,3 +215,21 @@ def test_toast_visual_snapshot_records_visible_notification(qtbot):
 def test_toast_notification_icons_are_ascii_safe():
     for style in ToastWidget.STYLES.values():
         assert style["icon"].isascii()
+
+
+def test_warning_toast_uses_dark_foreground_for_yellow_background(qtbot):
+    parent = QDialog()
+    parent.resize(500, 300)
+    toast = ToastWidget(parent)
+    qtbot.addWidget(parent)
+    parent.show()
+    qtbot.waitUntil(parent.isVisible)
+
+    toast.show_notification(NotificationType.WARNING, "Readable warning", duration=5000)
+    qtbot.waitUntil(toast.isVisible)
+
+    stylesheet = toast.styleSheet()
+    assert "#FFC107" in stylesheet
+    assert "color: #1F2937;" in stylesheet
+    assert "color: white;" not in stylesheet
+    assert "color: #FFFFFF;" not in stylesheet
