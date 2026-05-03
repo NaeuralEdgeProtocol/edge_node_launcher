@@ -4,3 +4,4 @@ pyqtgraph
 requests
 pyyaml
 psutil
+humanize

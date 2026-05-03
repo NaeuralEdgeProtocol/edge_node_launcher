@@ -31,33 +31,33 @@ object name near construction.
 
 | Area | Object name | Control | Action | Current coverage |
 | --- | --- | --- | --- | --- |
-| Authorized address row | `authorizedAddressCopyAddressButton` | button | Copies an authorized address. | Static inventory |
-| Authorized address row | `authorizedAddressCopyAliasButton` | button | Copies an authorized address alias. | Static inventory |
-| Authorized address row | `authorizedAddressDeleteButton` | button | Removes the address row. | Static inventory |
-| Authorized addresses | `authorizedAddressAddButton` | button | Adds a blank authorized address row. | Static inventory |
-| Authorized addresses | `authorizedAddressSaveButton` | button | Validates and saves authorized addresses. | Static inventory |
-| Authorized addresses | `authorizedAddressCloseButton` | button | Closes without saving. | Static inventory |
-| Docker check | `dockerCheckDownloadButton` | button | Opens Docker download page. | Static inventory |
-| Docker check | `dockerCheckRetryButton` | button | Retries Docker availability check. | Static inventory |
-| Docker check | `dockerCheckQuitButton` | button | Quits the Docker-check flow. | Static inventory |
-| Image pull | `imagePullCancelButton` | button | Cancels image-pull progress dialog. | Static inventory |
-| Config editor dialog | `configEditorSaveButton` | button | Saves edited config text. | Static inventory |
-| Config editor dialog | `configEditorCancelButton` | button | Closes config editor without saving. | Static inventory |
+| Authorized address row | `authorizedAddressCopyAddressButton` | button | Copies an authorized address. | Static inventory, dialog click |
+| Authorized address row | `authorizedAddressCopyAliasButton` | button | Copies an authorized address alias. | Static inventory, dialog click |
+| Authorized address row | `authorizedAddressDeleteButton` | button | Removes the address row. | Static inventory, dialog click |
+| Authorized addresses | `authorizedAddressAddButton` | button | Adds a blank authorized address row. | Static inventory, dialog click |
+| Authorized addresses | `authorizedAddressSaveButton` | button | Validates and saves authorized addresses. | Static inventory, dialog click |
+| Authorized addresses | `authorizedAddressCloseButton` | button | Closes without saving. | Static inventory, dialog click |
+| Docker check | `dockerCheckDownloadButton` | button | Opens Docker download page. | Static inventory, dialog click with browser mocked |
+| Docker check | `dockerCheckRetryButton` | button | Retries Docker availability check. | Static inventory, dialog click |
+| Docker check | `dockerCheckQuitButton` | button | Quits the Docker-check flow. | Static inventory, dialog click |
+| Image pull | `imagePullCancelButton` | button | Cancels image-pull progress dialog. | Static inventory, dialog click |
+| Config editor dialog | `configEditorSaveButton` | button | Saves edited config text. | Static inventory, dialog action ID |
+| Config editor dialog | `configEditorCancelButton` | button | Closes config editor without saving. | Static inventory, dialog action ID |
 
 ## Extracted Widgets
 
 | Area | Object name | Control | Action | Current coverage |
 | --- | --- | --- | --- | --- |
-| Host selector | `hostSelectorModeCheckbox` | checkbox | Enables multi-host mode. | Static inventory |
-| Host selector | `hostSelectorRefreshButton` | button | Refreshes available hosts. | Static inventory |
-| Config editor | `configEditorEditButton` | button | Opens config editor dialog. | Static inventory |
+| Host selector | `hostSelectorModeCheckbox` | checkbox | Enables multi-host mode. | Static inventory, widget click |
+| Host selector | `hostSelectorRefreshButton` | button | Refreshes available hosts. | Static inventory, widget click |
+| Config editor | `configEditorEditButton` | button | Opens config editor dialog. | Static inventory, widget click |
 | Container list | `containerListToggleButton` | button | Emits start or stop request for selected container. | Static inventory, widget click |
 | Container list | `containerListAddNodeButton` | button | Emits add-container request. | Static inventory, widget click |
 | Log console | `logConsoleClearButton` | button | Clears visible log text. | Static inventory, widget click |
-| Metrics | `metricsRefreshButton` | button | Emits metrics refresh request. | Static inventory |
-| Node info | `nodeInfoCopyAddressButton` | button | Emits copy request for node address. | Static inventory |
-| Node info | `nodeInfoCopyEthButton` | button | Emits copy request for ETH address. | Static inventory |
-| Node info | `nodeInfoRefreshButton` | button | Emits node-info refresh request. | Static inventory |
+| Metrics | `metricsRefreshButton` | button | Emits metrics refresh request. | Static inventory, widget click |
+| Node info | `nodeInfoCopyAddressButton` | button | Emits copy request for node address. | Static inventory, widget click |
+| Node info | `nodeInfoCopyEthButton` | button | Emits copy request for ETH address. | Static inventory, widget click |
+| Node info | `nodeInfoRefreshButton` | button | Emits node-info refresh request. | Static inventory, widget click |
 
 ## Coverage Rules
 

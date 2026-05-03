@@ -11,6 +11,7 @@ dependencies = [
     "requests",
     "pyyaml",
     "psutil",
+    "humanize",
 ]
 
 [dependency-groups]
