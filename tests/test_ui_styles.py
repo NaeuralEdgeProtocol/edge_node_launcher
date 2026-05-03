@@ -13,3 +13,11 @@ def test_status_panels_are_styled_by_semantic_role():
         assert "border-radius: 8px;" in stylesheet
         assert "#infoBox {" not in stylesheet
         assert "#resourcesBox {" not in stylesheet
+
+
+def test_sidebar_action_buttons_are_styled_by_hierarchy_role():
+    for stylesheet in (DARK_STYLESHEET, LIGHT_STYLESHEET):
+        assert 'QPushButton[actionRole="primary"]' in stylesheet
+        assert 'QPushButton[actionRole="secondary"]' in stylesheet
+        assert 'QPushButton[actionRole="utility"]' in stylesheet
+        assert "action_button_border_radius" not in stylesheet

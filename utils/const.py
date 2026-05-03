@@ -217,6 +217,7 @@ COMMON_STYLES = {
     "button_font_size": "16px",
     "button_margin": "4px 5px",
     "button_border_radius": "15px",
+    "action_button_border_radius": "8px",
     "panel_border_radius": "8px",
     "combo_border_radius": "15px",
     "combo_padding": "4px",
@@ -243,6 +244,18 @@ DARK_COLORS = {
     "button_bg": "#0071EA",
     "button_border": "transparent",
     "button_hover": "#0679F3",
+    "primary_action_bg": "#1B47F7",
+    "primary_action_hover": "#4458FF",
+    "primary_action_text": "#FFFFFF",
+    "primary_action_border": "transparent",
+    "secondary_action_bg": "#243447",
+    "secondary_action_hover": "#2E465E",
+    "secondary_action_text": "#E8EEF8",
+    "secondary_action_border": "#40607A",
+    "utility_action_bg": "transparent",
+    "utility_action_hover": "#263241",
+    "utility_action_text": "#C7D4E8",
+    "utility_action_border": "#395069",
     "progress_border": "#1E90FF",
     "progress_chunk": "#1E90FF",
     "widget_bg": "#000C29",
@@ -328,6 +341,18 @@ LIGHT_COLORS = {
     "button_bg": "#0071EA",
     "button_border": "transparent",
     "button_hover": "#0679F3",
+    "primary_action_bg": "#1B47F7",
+    "primary_action_hover": "#4458FF",
+    "primary_action_text": "#FFFFFF",
+    "primary_action_border": "transparent",
+    "secondary_action_bg": "#F7F9FC",
+    "secondary_action_hover": "#EEF4FF",
+    "secondary_action_text": "#1F2937",
+    "secondary_action_border": "#CBD5E1",
+    "utility_action_bg": "transparent",
+    "utility_action_hover": "#F1F5F9",
+    "utility_action_text": "#334155",
+    "utility_action_border": "#CBD5E1",
     "progress_border": "#D3D3D3",
     "progress_chunk": "#D3D3D3",
     "widget_bg": "#E6E6EA",
@@ -597,6 +622,45 @@ COMMON_STYLESHEET_TEMPLATE = """
   QPushButton:hover {{
     background-color: {button_hover};
   }}
+  QPushButton[actionRole="primary"] {{
+    background-color: {primary_action_bg};
+    color: {primary_action_text};
+    border: 1px solid {primary_action_border};
+    border-radius: {action_button_border_radius};
+    padding: 8px 12px;
+    min-height: 38px;
+    font-size: {button_font_size};
+    font-weight: bold;
+  }}
+  QPushButton[actionRole="primary"]:hover {{
+    background-color: {primary_action_hover};
+  }}
+  QPushButton[actionRole="secondary"] {{
+    background-color: {secondary_action_bg};
+    color: {secondary_action_text};
+    border: 1px solid {secondary_action_border};
+    border-radius: {action_button_border_radius};
+    padding: 7px 12px;
+    min-height: 34px;
+    font-size: {button_font_size};
+    font-weight: {button_font_weight};
+  }}
+  QPushButton[actionRole="secondary"]:hover {{
+    background-color: {secondary_action_hover};
+  }}
+  QPushButton[actionRole="utility"] {{
+    background-color: {utility_action_bg};
+    color: {utility_action_text};
+    border: 1px solid {utility_action_border};
+    border-radius: {action_button_border_radius};
+    padding: 7px 12px;
+    min-height: 32px;
+    font-size: {button_font_size};
+    font-weight: {button_font_weight};
+  }}
+  QPushButton[actionRole="utility"]:hover {{
+    background-color: {utility_action_hover};
+  }}
   QPushButton[type="confirm"] {{
     background-color: {confirm_button_bg};
     border: 1px solid {confirm_button_border};
@@ -630,17 +694,7 @@ COMMON_STYLESHEET_TEMPLATE = """
     min-height: 40px;
   }}
   #addNodeButton {{
-    background-color: {add_node_button_bg};
-    color: {text_color};
-    border: 1px solid {add_node_button_border};
-    padding: 5px 10px;
-    border-radius: {border_radius};
     min-height: 32px;
-    max-height: 32px;
-  }}
-  #addNodeButton:hover {{
-    background-color: {add_node_button_hover};
-    color: {add_node_button_hover_text};
   }}
   #toggleContainerButton {{
     min-height: 40px;

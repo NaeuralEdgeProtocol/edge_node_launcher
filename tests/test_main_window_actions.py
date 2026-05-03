@@ -875,6 +875,25 @@ def test_docker_download_action_lives_with_network_actions(qtbot, monkeypatch):
     )
 
 
+def test_main_window_sidebar_actions_have_hierarchy_roles(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+
+    assert launcher.toggleButton.property("actionRole") == "primary"
+
+    for button in (
+        launcher.add_node_button,
+        launcher.renameNodeButton,
+        launcher.docker_download_button,
+        launcher.dapp_button,
+        launcher.explorer_button,
+        launcher.refreshButton,
+    ):
+        assert button.property("actionRole") == "secondary"
+
+    assert launcher.themeToggleButton.property("actionRole") == "utility"
+    assert "border-radius: 8px;" in launcher.toggleButton.styleSheet()
+
+
 def test_status_panels_have_semantic_roles(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
     info_box = launcher.findChild(QGroupBox, "infoBox")
