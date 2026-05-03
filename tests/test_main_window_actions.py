@@ -309,6 +309,56 @@ def test_main_window_start_button_dispatches_to_stop_when_running(qtbot, monkeyp
     assert calls == ["stop"]
 
 
+def test_start_button_double_click_does_not_start_second_lifecycle(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launch_requests = []
+    launcher._perform_container_launch = lambda container_name, volume_name: launch_requests.append((container_name, volume_name))
+
+    qtbot.mouseClick(launcher.toggleButton, Qt.LeftButton)
+    qtbot.mouseClick(launcher.toggleButton, Qt.LeftButton)
+
+    assert launch_requests == [("r1node", "r1vol")]
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") == {
+        "operation": "start",
+        "container_name": "r1node",
+    }
+
+
+def test_stop_button_double_click_does_not_start_second_lifecycle(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    stop_requests = []
+
+    def defer_stop(container_name, callback, error_callback):
+        stop_requests.append(container_name)
+
+    fake_handler.stop_container_threaded = defer_stop
+
+    qtbot.mouseClick(launcher.toggleButton, Qt.LeftButton)
+    qtbot.mouseClick(launcher.toggleButton, Qt.LeftButton)
+
+    assert stop_requests == ["r1node"]
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") == {
+        "operation": "stop",
+        "container_name": "r1node",
+    }
+
+
+def test_start_after_container_exited_can_supersede_stop_lifecycle(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launch_requests = []
+    launcher._perform_container_launch = lambda container_name, volume_name: launch_requests.append((container_name, volume_name))
+    launcher._begin_lifecycle_operation("stop", "r1node")
+
+    qtbot.mouseClick(launcher.toggleButton, Qt.LeftButton)
+
+    assert fake_handler.container_names[-1] == "r1node"
+    assert launch_requests == [("r1node", "r1vol")]
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") == {
+        "operation": "start",
+        "container_name": "r1node",
+    }
+
+
 def test_main_window_theme_and_force_debug_buttons(qtbot, monkeypatch):
     launcher, fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
     launcher.plot_graphs = lambda: None

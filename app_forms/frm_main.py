@@ -1351,7 +1351,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     try:
         # Get the current container name
         container_name = self.docker_handler.container_name
-        self._begin_lifecycle_operation("stop", container_name)
+        if not self._try_begin_lifecycle_operation("stop", container_name):
+            return
         
         # Get node alias from config if available for better user feedback
         node_display_name = container_name
@@ -1481,7 +1482,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     try:
         # Get the current container name
         container_name = self.docker_handler.container_name
-        self._begin_lifecycle_operation("start", container_name)
+        if not self._try_begin_lifecycle_operation("start", container_name):
+            return
         
         # Get volume name from config or generate one
         volume_name = None
@@ -1796,6 +1798,31 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.__lifecycle_state.begin_operation(operation, container_name)
     self._sync_lifecycle_state_snapshot()
     self.add_log(f"Lifecycle operation started: {operation} on {container_name}", debug=True)
+
+  def _try_begin_lifecycle_operation(self, operation: str, container_name: str) -> bool:
+    active = self._active_lifecycle_operation()
+    if active is not None:
+      can_supersede_completed_stop = (
+        operation == "start"
+        and active.get("operation") == "stop"
+        and active.get("container_name") == container_name
+        and not self.is_container_running()
+      )
+      if can_supersede_completed_stop:
+        self.add_log(
+          f"Starting {container_name} after Docker reports the stop operation completed",
+          debug=True,
+        )
+        self._end_lifecycle_operation(container_name)
+      else:
+        self.add_log(
+          f"Ignoring {operation} on {container_name}; lifecycle operation {active.get('operation')} is already active on {active.get('container_name')}",
+          color="yellow",
+        )
+        return False
+
+    self._begin_lifecycle_operation(operation, container_name)
+    return True
 
   def _end_lifecycle_operation(self, container_name: str = None) -> None:
     """Clear an active lifecycle operation when its owning flow completes."""
