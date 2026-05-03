@@ -245,21 +245,35 @@ def test_node_info_widget_baseline_clear_and_uptime_format(qtbot):
     assert widget.accessibleName() == "Node information"
     assert widget.info_group.objectName() == "nodeInfoGroup"
     assert widget.info_group.accessibleName() == "Node information"
+    assert widget.info_group.property("role") == "nodeInfoPanel"
     assert widget.findChild(QLabel, "nodeInfoStatusLabel").accessibleName() == "Status label"
+    assert widget.findChild(QLabel, "nodeInfoStatusLabel").property("role") == "nodeInfoFieldLabel"
     assert widget.findChild(QLabel, "nodeInfoNameLabel").accessibleName() == "Node name label"
     assert widget.findChild(QLabel, "nodeInfoUptimeLabel").accessibleName() == "Uptime label"
     assert widget.findChild(QLabel, "nodeInfoAddressLabel").accessibleName() == "Node address label"
     assert widget.findChild(QLabel, "nodeInfoEthAddressLabel").accessibleName() == "ETH address label"
     assert widget.lbl_node_address.objectName() == "nodeInfoAddressValue"
     assert widget.lbl_node_address.accessibleName() == "Node address"
+    assert widget.lbl_node_address.property("role") == "nodeInfoAddress"
+    assert not widget.lbl_node_address.wordWrap()
+    assert widget.lbl_node_address.sizePolicy().horizontalPolicy() == QSizePolicy.Ignored
+    assert widget.lbl_node_address.toolTip() == "N/A"
     assert widget.lbl_eth_address.objectName() == "nodeInfoEthAddressValue"
     assert widget.lbl_eth_address.accessibleName() == "ETH address"
+    assert widget.lbl_eth_address.property("role") == "nodeInfoAddress"
+    assert not widget.lbl_eth_address.wordWrap()
+    assert widget.lbl_eth_address.sizePolicy().horizontalPolicy() == QSizePolicy.Ignored
     assert widget.lbl_node_status.objectName() == "nodeInfoStatusValue"
     assert widget.lbl_node_status.accessibleName() == "Node status"
+    assert widget.lbl_node_status.property("role") == "nodeInfoValue"
+    assert widget.lbl_node_status.property("status") == "unknown"
     assert widget.lbl_uptime.objectName() == "nodeInfoUptimeValue"
     assert widget.lbl_uptime.accessibleName() == "Node uptime"
+    assert widget.lbl_uptime.property("role") == "nodeInfoValue"
     assert widget.lbl_node_name.objectName() == "nodeInfoNameValue"
     assert widget.lbl_node_name.accessibleName() == "Node name"
+    assert widget.lbl_node_name.property("role") == "nodeInfoValue"
+    assert "QGroupBox#nodeInfoGroup" in widget.styleSheet()
     assert widget._format_uptime(65) == "1m 5s"
     assert widget._format_uptime(3661) == "1h 1m 1s"
     assert widget._format_uptime(90061) == "1d 1h 1m"
@@ -269,6 +283,7 @@ def test_node_info_widget_baseline_clear_and_uptime_format(qtbot):
     assert widget.lbl_node_address.text() == "N/A"
     assert widget.lbl_eth_address.text() == "N/A"
     assert widget.lbl_node_status.text() == "Unknown"
+    assert widget.lbl_node_status.property("status") == "unknown"
 
 
 def test_node_info_widget_action_buttons_emit_signals(qtbot):
@@ -278,12 +293,15 @@ def test_node_info_widget_action_buttons_emit_signals(qtbot):
     assert widget.btn_copy_address.objectName() == "nodeInfoCopyAddressButton"
     assert widget.btn_copy_address.accessibleName() == "Copy node address"
     assert widget.btn_copy_address.toolTip() == "Copy node address"
+    assert widget.btn_copy_address.property("actionRole") == "utility"
     assert widget.btn_copy_eth.objectName() == "nodeInfoCopyEthButton"
     assert widget.btn_copy_eth.accessibleName() == "Copy ETH address"
     assert widget.btn_copy_eth.toolTip() == "Copy ETH address"
+    assert widget.btn_copy_eth.property("actionRole") == "utility"
     assert widget.btn_refresh.objectName() == "nodeInfoRefreshButton"
     assert widget.btn_refresh.accessibleName() == "Refresh node information"
     assert widget.btn_refresh.toolTip() == "Refresh node information"
+    assert widget.btn_refresh.property("actionRole") == "primary"
 
     with qtbot.waitSignal(widget.copy_address_requested) as blocker:
         qtbot.mouseClick(widget.btn_copy_address, Qt.LeftButton)
@@ -313,10 +331,26 @@ def test_node_info_widget_updates_from_current_model_contract(qtbot):
     )
 
     assert widget.lbl_node_address.text() == "0xnode"
+    assert widget.lbl_node_address.toolTip() == "0xnode"
     assert widget.lbl_eth_address.text() == "0xeth"
+    assert widget.lbl_eth_address.toolTip() == "0xeth"
     assert widget.lbl_node_name.text() == "edge-one"
     assert widget.lbl_node_status.text() == "Available"
+    assert widget.lbl_node_status.property("status") == "available"
     assert widget.lbl_uptime.text() == "N/A"
+
+
+def test_node_info_widget_theme_styles_are_switchable(qtbot):
+    widget = NodeInfoWidget()
+    qtbot.addWidget(widget)
+
+    widget.apply_theme(True)
+    assert "#122033" in widget.styleSheet()
+    assert "#E8EEF8" in widget.styleSheet()
+
+    widget.apply_theme(False)
+    assert "#FFFFFF" in widget.styleSheet()
+    assert "#1F2937" in widget.styleSheet()
 
 
 def test_metrics_widget_refresh_button_emits_signal(qtbot):
