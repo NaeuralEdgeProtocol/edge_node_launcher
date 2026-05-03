@@ -13,20 +13,38 @@ class NodeInfoWidget(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("nodeInfoWidget")
+        self.setAccessibleName("Node information")
         
         # Initialize UI components
         self.lbl_node_address = QLabel("N/A")
+        self.lbl_node_address.setObjectName("nodeInfoAddressValue")
+        self.lbl_node_address.setAccessibleName("Node address")
         self.lbl_eth_address = QLabel("N/A")
+        self.lbl_eth_address.setObjectName("nodeInfoEthAddressValue")
+        self.lbl_eth_address.setAccessibleName("ETH address")
         self.lbl_node_status = QLabel("Unknown")
+        self.lbl_node_status.setObjectName("nodeInfoStatusValue")
+        self.lbl_node_status.setAccessibleName("Node status")
         self.lbl_uptime = QLabel("N/A")
+        self.lbl_uptime.setObjectName("nodeInfoUptimeValue")
+        self.lbl_uptime.setAccessibleName("Node uptime")
         self.lbl_node_name = QLabel("N/A")
+        self.lbl_node_name.setObjectName("nodeInfoNameValue")
+        self.lbl_node_name.setAccessibleName("Node name")
         
         self.btn_copy_address = QPushButton("Copy")
         self.btn_copy_address.setObjectName("nodeInfoCopyAddressButton")
+        self.btn_copy_address.setAccessibleName("Copy node address")
+        self.btn_copy_address.setToolTip("Copy node address")
         self.btn_copy_eth = QPushButton("Copy")
         self.btn_copy_eth.setObjectName("nodeInfoCopyEthButton")
+        self.btn_copy_eth.setAccessibleName("Copy ETH address")
+        self.btn_copy_eth.setToolTip("Copy ETH address")
         self.btn_refresh = QPushButton("Refresh")
         self.btn_refresh.setObjectName("nodeInfoRefreshButton")
+        self.btn_refresh.setAccessibleName("Refresh node information")
+        self.btn_refresh.setToolTip("Refresh node information")
         
         # Setup UI layout
         self.init_ui()
@@ -40,38 +58,40 @@ class NodeInfoWidget(QWidget):
         layout = QVBoxLayout()
         
         # Create info group box
-        info_group = QGroupBox("Node Information")
+        self.info_group = QGroupBox("Node Information")
+        self.info_group.setObjectName("nodeInfoGroup")
+        self.info_group.setAccessibleName("Node information")
         info_layout = QGridLayout()
         
         # Add node status row
-        info_layout.addWidget(QLabel("Status:"), 0, 0)
+        info_layout.addWidget(self._field_label("Status:", "nodeInfoStatusLabel", "Status label"), 0, 0)
         info_layout.addWidget(self.lbl_node_status, 0, 1)
         
         # Add node name row
-        info_layout.addWidget(QLabel("Node Name:"), 1, 0)
+        info_layout.addWidget(self._field_label("Node Name:", "nodeInfoNameLabel", "Node name label"), 1, 0)
         info_layout.addWidget(self.lbl_node_name, 1, 1)
         
         # Add uptime row
-        info_layout.addWidget(QLabel("Uptime:"), 2, 0)
+        info_layout.addWidget(self._field_label("Uptime:", "nodeInfoUptimeLabel", "Uptime label"), 2, 0)
         info_layout.addWidget(self.lbl_uptime, 2, 1)
         
         # Add Node address row with copy button
-        info_layout.addWidget(QLabel("Node Address:"), 3, 0)
+        info_layout.addWidget(self._field_label("Node Address:", "nodeInfoAddressLabel", "Node address label"), 3, 0)
         addr_layout = QHBoxLayout()
         addr_layout.addWidget(self.lbl_node_address, 1)
         addr_layout.addWidget(self.btn_copy_address, 0)
         info_layout.addLayout(addr_layout, 3, 1)
         
         # Add ETH address row with copy button
-        info_layout.addWidget(QLabel("ETH Address:"), 4, 0)
+        info_layout.addWidget(self._field_label("ETH Address:", "nodeInfoEthAddressLabel", "ETH address label"), 4, 0)
         eth_layout = QHBoxLayout()
         eth_layout.addWidget(self.lbl_eth_address, 1)
         eth_layout.addWidget(self.btn_copy_eth, 0)
         info_layout.addLayout(eth_layout, 4, 1)
         
         # Set info group layout
-        info_group.setLayout(info_layout)
-        layout.addWidget(info_group)
+        self.info_group.setLayout(info_layout)
+        layout.addWidget(self.info_group)
         
         # Add refresh button
         button_layout = QHBoxLayout()
@@ -88,6 +108,12 @@ class NodeInfoWidget(QWidget):
         self.lbl_node_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.lbl_uptime.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.lbl_node_name.setTextInteractionFlags(Qt.TextSelectableByMouse)
+
+    def _field_label(self, text: str, object_name: str, accessible_name: str) -> QLabel:
+        label = QLabel(text)
+        label.setObjectName(object_name)
+        label.setAccessibleName(accessible_name)
+        return label
     
     def connect_signals(self):
         """Connect widget signals to slots"""

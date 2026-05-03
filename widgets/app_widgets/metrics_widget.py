@@ -13,16 +13,28 @@ class MetricsWidget(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("metricsWidget")
+        self.setAccessibleName("Node metrics")
         
         # Initialize UI components
         self.btn_refresh = QPushButton("Refresh Metrics")
         self.btn_refresh.setObjectName("metricsRefreshButton")
+        self.btn_refresh.setAccessibleName("Refresh metrics")
+        self.btn_refresh.setToolTip("Refresh metrics")
         
         # Create plot widgets
         self.plot_cpu = pg.PlotWidget()
+        self.plot_cpu.setObjectName("metricsCpuPlot")
+        self.plot_cpu.setAccessibleName("CPU usage plot")
         self.plot_memory = pg.PlotWidget()
+        self.plot_memory.setObjectName("metricsMemoryPlot")
+        self.plot_memory.setAccessibleName("Memory usage plot")
         self.plot_gpu = pg.PlotWidget()
+        self.plot_gpu.setObjectName("metricsGpuPlot")
+        self.plot_gpu.setAccessibleName("GPU usage plot")
         self.plot_gpu_memory = pg.PlotWidget()
+        self.plot_gpu_memory.setObjectName("metricsGpuMemoryPlot")
+        self.plot_gpu_memory.setAccessibleName("GPU memory usage plot")
         self.plot_disk = self.plot_gpu
         self.plot_network = self.plot_gpu_memory
         
@@ -58,7 +70,9 @@ class MetricsWidget(QWidget):
         layout = QVBoxLayout()
         
         # Create metrics group box
-        metrics_group = QGroupBox("Node Metrics")
+        self.metrics_group = QGroupBox("Node Metrics")
+        self.metrics_group.setObjectName("metricsGroup")
+        self.metrics_group.setAccessibleName("Node metrics")
         metrics_layout = QVBoxLayout()
         
         # Add plot widgets to layout - organize in a grid
@@ -74,8 +88,8 @@ class MetricsWidget(QWidget):
         metrics_layout.addLayout(row2_layout)
         
         # Set metrics group layout
-        metrics_group.setLayout(metrics_layout)
-        layout.addWidget(metrics_group)
+        self.metrics_group.setLayout(metrics_layout)
+        layout.addWidget(self.metrics_group)
         
         # Add refresh button
         button_layout = QHBoxLayout()

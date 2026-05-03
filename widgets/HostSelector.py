@@ -111,6 +111,7 @@ class StatusIndicator(QLabel):
         
         # Set the property first
         self.setProperty("is_online", is_online)
+        self.setAccessibleName("Host status online" if is_online else "Host status offline")
         
         # Then update the style
         color = "#4CAF50" if is_online else "#FF5252"  # Green if online, red if offline
@@ -136,6 +137,8 @@ class HostSelector(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("hostSelectorWidget")
+        self.setAccessibleName("Host selector")
         self.hosts_manager = AnsibleHostsManager()
         self.status_threads = {}  # Keep track of status check threads
         self.status_indicators = {}  # Keep track of status indicators
@@ -154,6 +157,8 @@ class HostSelector(QWidget):
         mode_layout = QHBoxLayout()
         self.mode_checkbox = QCheckBox("Multi-host Mode")
         self.mode_checkbox.setObjectName("hostSelectorModeCheckbox")
+        self.mode_checkbox.setAccessibleName("Multi-host mode")
+        self.mode_checkbox.setToolTip("Enable multi-host mode")
         self.mode_checkbox.setFont(QFont("Courier New", 10, QFont.Bold))
         self.mode_checkbox.stateChanged.connect(self._on_mode_changed)
         mode_layout.addWidget(self.mode_checkbox)
@@ -164,6 +169,8 @@ class HostSelector(QWidget):
         
         # Label in its own row
         self.host_label = QLabel("Select Host:")
+        self.host_label.setObjectName("hostSelectorHostLabel")
+        self.host_label.setAccessibleName("Host selector label")
         self.host_label.setFont(QFont("Courier New", 10))
         host_layout.addWidget(self.host_label)
         
@@ -172,22 +179,30 @@ class HostSelector(QWidget):
         
         # Create a widget to hold the combobox and status indicator
         combo_container = QWidget()
+        combo_container.setObjectName("hostSelectorComboContainer")
+        combo_container.setAccessibleName("Host selector controls")
         combo_layout = QHBoxLayout(combo_container)
         combo_layout.setContentsMargins(0, 0, 0, 0)
         combo_layout.setSpacing(4)
         
         self.host_combo = QComboBox()
+        self.host_combo.setObjectName("hostSelectorCombo")
+        self.host_combo.setAccessibleName("Host selector")
+        self.host_combo.setToolTip("Select a host")
         self.host_combo.setFont(QFont("Courier New", 10))
         self.host_combo.setMinimumWidth(200)
         
         # Add status indicator next to the combobox
         self.current_status = StatusIndicator()
+        self.current_status.setObjectName("hostSelectorStatusIndicator")
         
         combo_layout.addWidget(self.host_combo)
         combo_layout.addWidget(self.current_status)
         
         self.refresh_button = QPushButton("Refresh")
         self.refresh_button.setObjectName("hostSelectorRefreshButton")
+        self.refresh_button.setAccessibleName("Refresh hosts")
+        self.refresh_button.setToolTip("Refresh hosts")
         self.refresh_button.setFont(QFont("Courier New", 10))
         
         controls_layout.addWidget(combo_container)
@@ -504,8 +519,6 @@ class HostSelector(QWidget):
         self.mode_checkbox.setStyleSheet(checkbox_style)
         self.host_combo.setStyleSheet(combobox_style)
         self.refresh_button.setStyleSheet(button_style)
-        self.host_label.setStyleSheet(f"color: {text_color};")
-
         self.host_label.setStyleSheet(f"color: {text_color};")
 
     def is_multi_host_mode(self) -> bool:

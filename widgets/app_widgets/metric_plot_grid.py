@@ -8,14 +8,24 @@ from utils.const import CPU_LOAD_TITLE, GPU_LOAD_TITLE, GPU_MEMORY_LOAD_TITLE, M
 
 
 METRIC_PLOT_SPECS = (
-    ("cpu_plot", "cpuPlotContainer", "cpuPlotTitle", "cpuPlotEmptyState", CPU_LOAD_TITLE, 0, 0),
-    ("memory_plot", "memoryPlotContainer", "memoryPlotTitle", "memoryPlotEmptyState", MEMORY_USAGE_TITLE, 0, 1),
-    ("gpu_plot", "gpuPlotContainer", "gpuPlotTitle", "gpuPlotEmptyState", GPU_LOAD_TITLE, 1, 0),
+    ("cpu_plot", "cpuPlotContainer", "cpuPlotTitle", "cpuPlotEmptyState", "cpuMetricPlot", CPU_LOAD_TITLE, 0, 0),
+    (
+        "memory_plot",
+        "memoryPlotContainer",
+        "memoryPlotTitle",
+        "memoryPlotEmptyState",
+        "memoryMetricPlot",
+        MEMORY_USAGE_TITLE,
+        0,
+        1,
+    ),
+    ("gpu_plot", "gpuPlotContainer", "gpuPlotTitle", "gpuPlotEmptyState", "gpuMetricPlot", GPU_LOAD_TITLE, 1, 0),
     (
         "gpu_memory_plot",
         "gpuMemoryPlotContainer",
         "gpuMemoryPlotTitle",
         "gpuMemoryPlotEmptyState",
+        "gpuMemoryMetricPlot",
         GPU_MEMORY_LOAD_TITLE,
         1,
         1,
@@ -62,23 +72,29 @@ def create_plot_container(
     object_name: str,
     title_object_name: str,
     empty_object_name: str,
+    plot_object_name: str,
     title: str,
     plot_widget: MetricPlotWidget,
 ) -> QWidget:
     container = QWidget()
     container.setObjectName(object_name)
+    container.setAccessibleName(title)
     container.setProperty("class", "plot-container")
 
     title_label = QLabel(title)
     title_label.setObjectName(title_object_name)
+    title_label.setAccessibleName(f"{title} title")
     title_label.setProperty("role", "metricPlotTitle")
     title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
     empty_label = QLabel(METRIC_EMPTY_STATE_TEXT)
     empty_label.setObjectName(empty_object_name)
+    empty_label.setAccessibleName(f"{title} empty state")
     empty_label.setProperty("role", "metricPlotEmptyState")
     empty_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
     empty_label.setWordWrap(True)
+    plot_widget.setObjectName(plot_object_name)
+    plot_widget.setAccessibleName(f"{title} plot")
     plot_widget._r1_empty_label = empty_label
 
     layout = QVBoxLayout(container)
@@ -94,6 +110,7 @@ def create_plot_container(
 def create_metrics_graph_grid():
     graph_view = QWidget()
     graph_view.setObjectName("metricsGraphGrid")
+    graph_view.setAccessibleName("Metrics graph grid")
 
     graph_layout = QGridLayout()
     graph_layout.setSpacing(10)
@@ -101,14 +118,14 @@ def create_metrics_graph_grid():
 
     plots = {}
     axis_items = {}
-    for plot_attr, container_name, title_name, empty_name, title, row, column in METRIC_PLOT_SPECS:
+    for plot_attr, container_name, title_name, empty_name, plot_name, title, row, column in METRIC_PLOT_SPECS:
         bottom_axis = DateAxisItem(orientation="bottom")
         plot_widget = MetricPlotWidget(axisItems={"bottom": bottom_axis})
         plot_widget._r1_bottom_axis = bottom_axis
         plots[plot_attr] = plot_widget
         axis_items[plot_attr] = bottom_axis
         graph_layout.addWidget(
-            create_plot_container(container_name, title_name, empty_name, title, plot_widget),
+            create_plot_container(container_name, title_name, empty_name, plot_name, title, plot_widget),
             row,
             column,
         )

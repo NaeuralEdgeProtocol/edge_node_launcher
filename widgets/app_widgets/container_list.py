@@ -13,13 +13,22 @@ class ContainerListWidget(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("containerListWidget")
+        self.setAccessibleName("Container list")
         
         # Initialize UI components
         self.containers_combo = CenteredComboBox()
+        self.containers_combo.setObjectName("containerListCombo")
+        self.containers_combo.setAccessibleName("Container selector")
+        self.containers_combo.setToolTip("Select a node container")
         self.btn_toggle = QPushButton("Start Container")
         self.btn_toggle.setObjectName("containerListToggleButton")
+        self.btn_toggle.setToolTip("Start selected container")
         self.btn_add_node = QPushButton("Add Node")
         self.btn_add_node.setObjectName("containerListAddNodeButton")
+        self.btn_add_node.setAccessibleName("Add node")
+        self.btn_add_node.setToolTip("Add a node container")
+        self.update_toggle_button(is_running=False)
         
         # Setup UI layout
         self.init_ui()
@@ -109,7 +118,14 @@ class ContainerListWidget(QWidget):
         Args:
             is_running: Whether the container is running
         """
-        self.btn_toggle.setText("Stop Container" if is_running else "Start Container")
+        if is_running:
+            self.btn_toggle.setText("Stop Container")
+            self.btn_toggle.setAccessibleName("Stop selected container")
+            self.btn_toggle.setToolTip("Stop selected container")
+        else:
+            self.btn_toggle.setText("Start Container")
+            self.btn_toggle.setAccessibleName("Start selected container")
+            self.btn_toggle.setToolTip("Start selected container")
     
     def get_current_container(self):
         """

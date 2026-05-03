@@ -1,6 +1,15 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QShowEvent
-from PyQt5.QtWidgets import QApplication, QDialog, QDialogButtonBox, QLabel, QProgressBar, QWidget
+from PyQt5.QtWidgets import (
+    QApplication,
+    QDialog,
+    QDialogButtonBox,
+    QLabel,
+    QProgressBar,
+    QTabWidget,
+    QTextEdit,
+    QWidget,
+)
 
 from models.NodeHistory import NodeHistory
 from models.NodeInfo import NodeInfo
@@ -20,7 +29,16 @@ def test_container_list_updates_selection_and_emits_toggle(qtbot):
     qtbot.addWidget(widget)
 
     assert widget.btn_toggle.objectName() == "containerListToggleButton"
+    assert widget.objectName() == "containerListWidget"
+    assert widget.accessibleName() == "Container list"
+    assert widget.containers_combo.objectName() == "containerListCombo"
+    assert widget.containers_combo.accessibleName() == "Container selector"
+    assert widget.containers_combo.toolTip() == "Select a node container"
+    assert widget.btn_toggle.accessibleName() == "Start selected container"
+    assert widget.btn_toggle.toolTip() == "Start selected container"
     assert widget.btn_add_node.objectName() == "containerListAddNodeButton"
+    assert widget.btn_add_node.accessibleName() == "Add node"
+    assert widget.btn_add_node.toolTip() == "Add a node container"
 
     widget.update_containers(
         [
@@ -33,6 +51,8 @@ def test_container_list_updates_selection_and_emits_toggle(qtbot):
 
     assert widget.get_current_container() == "r1node2"
     assert widget.btn_toggle.text() == "Stop Container"
+    assert widget.btn_toggle.accessibleName() == "Stop selected container"
+    assert widget.btn_toggle.toolTip() == "Stop selected container"
 
     with qtbot.waitSignal(widget.container_toggle_requested) as blocker:
         qtbot.mouseClick(widget.btn_toggle, Qt.LeftButton)
@@ -53,6 +73,14 @@ def test_log_console_adds_and_clears_text(qtbot):
     qtbot.addWidget(widget)
 
     assert widget.btn_clear.objectName() == "logConsoleClearButton"
+    assert widget.objectName() == "logConsoleWidget"
+    assert widget.accessibleName() == "Log console"
+    assert widget.log_group.objectName() == "logConsoleGroup"
+    assert widget.log_group.accessibleName() == "Console log"
+    assert widget.text_console.objectName() == "logConsoleText"
+    assert widget.text_console.accessibleName() == "Console log output"
+    assert widget.btn_clear.accessibleName() == "Clear console log"
+    assert widget.btn_clear.toolTip() == "Clear console log"
 
     widget.add_log("hello", color="green")
 
@@ -157,6 +185,25 @@ def test_node_info_widget_baseline_clear_and_uptime_format(qtbot):
     widget = NodeInfoWidget()
     qtbot.addWidget(widget)
 
+    assert widget.objectName() == "nodeInfoWidget"
+    assert widget.accessibleName() == "Node information"
+    assert widget.info_group.objectName() == "nodeInfoGroup"
+    assert widget.info_group.accessibleName() == "Node information"
+    assert widget.findChild(QLabel, "nodeInfoStatusLabel").accessibleName() == "Status label"
+    assert widget.findChild(QLabel, "nodeInfoNameLabel").accessibleName() == "Node name label"
+    assert widget.findChild(QLabel, "nodeInfoUptimeLabel").accessibleName() == "Uptime label"
+    assert widget.findChild(QLabel, "nodeInfoAddressLabel").accessibleName() == "Node address label"
+    assert widget.findChild(QLabel, "nodeInfoEthAddressLabel").accessibleName() == "ETH address label"
+    assert widget.lbl_node_address.objectName() == "nodeInfoAddressValue"
+    assert widget.lbl_node_address.accessibleName() == "Node address"
+    assert widget.lbl_eth_address.objectName() == "nodeInfoEthAddressValue"
+    assert widget.lbl_eth_address.accessibleName() == "ETH address"
+    assert widget.lbl_node_status.objectName() == "nodeInfoStatusValue"
+    assert widget.lbl_node_status.accessibleName() == "Node status"
+    assert widget.lbl_uptime.objectName() == "nodeInfoUptimeValue"
+    assert widget.lbl_uptime.accessibleName() == "Node uptime"
+    assert widget.lbl_node_name.objectName() == "nodeInfoNameValue"
+    assert widget.lbl_node_name.accessibleName() == "Node name"
     assert widget._format_uptime(65) == "1m 5s"
     assert widget._format_uptime(3661) == "1h 1m 1s"
     assert widget._format_uptime(90061) == "1d 1h 1m"
@@ -173,8 +220,14 @@ def test_node_info_widget_action_buttons_emit_signals(qtbot):
     qtbot.addWidget(widget)
 
     assert widget.btn_copy_address.objectName() == "nodeInfoCopyAddressButton"
+    assert widget.btn_copy_address.accessibleName() == "Copy node address"
+    assert widget.btn_copy_address.toolTip() == "Copy node address"
     assert widget.btn_copy_eth.objectName() == "nodeInfoCopyEthButton"
+    assert widget.btn_copy_eth.accessibleName() == "Copy ETH address"
+    assert widget.btn_copy_eth.toolTip() == "Copy ETH address"
     assert widget.btn_refresh.objectName() == "nodeInfoRefreshButton"
+    assert widget.btn_refresh.accessibleName() == "Refresh node information"
+    assert widget.btn_refresh.toolTip() == "Refresh node information"
 
     with qtbot.waitSignal(widget.copy_address_requested) as blocker:
         qtbot.mouseClick(widget.btn_copy_address, Qt.LeftButton)
@@ -215,6 +268,20 @@ def test_metrics_widget_refresh_button_emits_signal(qtbot):
     qtbot.addWidget(widget)
 
     assert widget.btn_refresh.objectName() == "metricsRefreshButton"
+    assert widget.objectName() == "metricsWidget"
+    assert widget.accessibleName() == "Node metrics"
+    assert widget.metrics_group.objectName() == "metricsGroup"
+    assert widget.metrics_group.accessibleName() == "Node metrics"
+    assert widget.btn_refresh.accessibleName() == "Refresh metrics"
+    assert widget.btn_refresh.toolTip() == "Refresh metrics"
+    assert widget.plot_cpu.objectName() == "metricsCpuPlot"
+    assert widget.plot_cpu.accessibleName() == "CPU usage plot"
+    assert widget.plot_memory.objectName() == "metricsMemoryPlot"
+    assert widget.plot_memory.accessibleName() == "Memory usage plot"
+    assert widget.plot_gpu.objectName() == "metricsGpuPlot"
+    assert widget.plot_gpu.accessibleName() == "GPU usage plot"
+    assert widget.plot_gpu_memory.objectName() == "metricsGpuMemoryPlot"
+    assert widget.plot_gpu_memory.accessibleName() == "GPU memory usage plot"
 
     with qtbot.waitSignal(widget.refresh_requested):
         qtbot.mouseClick(widget.btn_refresh, Qt.LeftButton)
@@ -226,24 +293,26 @@ def test_metric_plot_grid_builder_preserves_dashboard_contract(qtbot):
     layout = graph_view.layout()
 
     assert graph_view.objectName() == "metricsGraphGrid"
+    assert graph_view.accessibleName() == "Metrics graph grid"
     assert layout.count() == 4
     assert layout.spacing() == 10
     assert set(plots) == {"cpu_plot", "memory_plot", "gpu_plot", "gpu_memory_plot"}
     assert set(axis_items) == set(plots)
 
     expected = {
-        "cpuPlotContainer": ("cpu_plot", "cpuPlotTitle", "cpuPlotEmptyState", 0, 0),
-        "memoryPlotContainer": ("memory_plot", "memoryPlotTitle", "memoryPlotEmptyState", 0, 1),
-        "gpuPlotContainer": ("gpu_plot", "gpuPlotTitle", "gpuPlotEmptyState", 1, 0),
+        "cpuPlotContainer": ("cpu_plot", "cpuPlotTitle", "cpuPlotEmptyState", "cpuMetricPlot", 0, 0),
+        "memoryPlotContainer": ("memory_plot", "memoryPlotTitle", "memoryPlotEmptyState", "memoryMetricPlot", 0, 1),
+        "gpuPlotContainer": ("gpu_plot", "gpuPlotTitle", "gpuPlotEmptyState", "gpuMetricPlot", 1, 0),
         "gpuMemoryPlotContainer": (
             "gpu_memory_plot",
             "gpuMemoryPlotTitle",
             "gpuMemoryPlotEmptyState",
+            "gpuMemoryMetricPlot",
             1,
             1,
         ),
     }
-    for container_name, (plot_attr, title_name, empty_name, row, column) in expected.items():
+    for container_name, (plot_attr, title_name, empty_name, plot_name, row, column) in expected.items():
         container = graph_view.findChild(QWidget, container_name)
         plot = plots[plot_attr]
 
@@ -251,14 +320,19 @@ def test_metric_plot_grid_builder_preserves_dashboard_contract(qtbot):
         title_label = container.findChild(QWidget, title_name)
         empty_label = container.findChild(QWidget, empty_name)
 
+        assert container.accessibleName() == title_label.text()
         assert container.property("class") == "plot-container"
         assert isinstance(plot, MetricPlotWidget)
+        assert plot.objectName() == plot_name
+        assert plot.accessibleName() == f"{title_label.text()} plot"
         assert plot.parent() is container
         assert plot._r1_bottom_axis is axis_items[plot_attr]
         assert plot.getAxis("bottom") is axis_items[plot_attr]
         assert title_label is not None
+        assert title_label.accessibleName() == f"{title_label.text()} title"
         assert title_label.property("role") == "metricPlotTitle"
         assert empty_label is plot._r1_empty_label
+        assert empty_label.accessibleName() == f"{title_label.text()} empty state"
         assert empty_label.property("role") == "metricPlotEmptyState"
         assert empty_label.text() == METRIC_EMPTY_STATE_TEXT
         assert layout.itemAtPosition(row, column).widget() is container
@@ -309,12 +383,31 @@ def test_config_editor_button_opens_dialog_with_named_actions(qtbot, monkeypatch
     monkeypatch.setattr(QDialog, "exec_", capture_exec)
 
     assert widget.btn_edit_config.objectName() == "configEditorEditButton"
+    assert widget.objectName() == "configEditorWidget"
+    assert widget.accessibleName() == "Configuration editor"
+    assert widget.btn_edit_config.accessibleName() == "Edit configuration"
+    assert widget.btn_edit_config.toolTip() == "Edit configuration"
 
     qtbot.mouseClick(widget.btn_edit_config, Qt.LeftButton)
 
     assert len(opened_dialogs) == 1
-    button_box = opened_dialogs[0].findChild(QDialogButtonBox, "configEditorDialogButtons")
+    dialog = opened_dialogs[0]
+    button_box = dialog.findChild(QDialogButtonBox, "configEditorDialogButtons")
 
+    assert dialog.objectName() == "configEditorDialog"
+    assert dialog.accessibleName() == "Edit Configuration Files"
+    assert dialog.findChild(QTabWidget, "configEditorTabs").accessibleName() == "Configuration tabs"
+    assert dialog.findChild(QWidget, "startupConfigTab").accessibleName() == "Startup configuration tab"
+    assert dialog.findChild(QWidget, "appConfigTab").accessibleName() == "App configuration tab"
+    assert dialog.findChild(QLabel, "startupConfigLabel").accessibleName() == "Startup configuration label"
+    assert dialog.findChild(QLabel, "appConfigLabel").accessibleName() == "App configuration label"
+    assert dialog.findChild(QTextEdit, "startupConfigText").accessibleName() == "Startup configuration text"
+    assert dialog.findChild(QTextEdit, "appConfigText").accessibleName() == "App configuration text"
     assert button_box is not None
+    assert button_box.accessibleName() == "Configuration editor actions"
     assert button_box.button(QDialogButtonBox.Ok).objectName() == "configEditorSaveButton"
+    assert button_box.button(QDialogButtonBox.Ok).accessibleName() == "Save configuration"
+    assert button_box.button(QDialogButtonBox.Ok).toolTip() == "Save configuration"
     assert button_box.button(QDialogButtonBox.Cancel).objectName() == "configEditorCancelButton"
+    assert button_box.button(QDialogButtonBox.Cancel).accessibleName() == "Cancel configuration editing"
+    assert button_box.button(QDialogButtonBox.Cancel).toolTip() == "Cancel configuration editing"

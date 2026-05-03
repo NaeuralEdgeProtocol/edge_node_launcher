@@ -9,11 +9,17 @@ class LogConsoleWidget(QWidget):
     """
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("logConsoleWidget")
+        self.setAccessibleName("Log console")
         
         # Initialize UI components
         self.text_console = QTextEdit()
+        self.text_console.setObjectName("logConsoleText")
+        self.text_console.setAccessibleName("Console log output")
         self.btn_clear = QPushButton("Clear Log")
         self.btn_clear.setObjectName("logConsoleClearButton")
+        self.btn_clear.setAccessibleName("Clear console log")
+        self.btn_clear.setToolTip("Clear console log")
         
         # Configure console
         self.text_console.setReadOnly(True)
@@ -31,15 +37,17 @@ class LogConsoleWidget(QWidget):
         layout = QVBoxLayout()
         
         # Create log group box
-        log_group = QGroupBox("Console Log")
+        self.log_group = QGroupBox("Console Log")
+        self.log_group.setObjectName("logConsoleGroup")
+        self.log_group.setAccessibleName("Console log")
         log_layout = QVBoxLayout()
         
         # Add console to layout
         log_layout.addWidget(self.text_console)
         
         # Set log group layout
-        log_group.setLayout(log_layout)
-        layout.addWidget(log_group)
+        self.log_group.setLayout(log_layout)
+        layout.addWidget(self.log_group)
         
         # Add button layout
         button_layout = QHBoxLayout()

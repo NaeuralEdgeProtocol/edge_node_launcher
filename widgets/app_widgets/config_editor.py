@@ -11,10 +11,14 @@ class ConfigEditorWidget(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("configEditorWidget")
+        self.setAccessibleName("Configuration editor")
         
         # Initialize UI components
         self.btn_edit_config = QPushButton("Edit Configuration")
         self.btn_edit_config.setObjectName("configEditorEditButton")
+        self.btn_edit_config.setAccessibleName("Edit configuration")
+        self.btn_edit_config.setToolTip("Edit configuration")
         
         # Setup UI layout
         self.init_ui()
@@ -51,16 +55,26 @@ class ConfigEditorWidget(QWidget):
         # Create dialog
         dialog = QDialog(self)
         dialog.setWindowTitle("Edit Configuration Files")
+        dialog.setObjectName("configEditorDialog")
+        dialog.setAccessibleName("Edit Configuration Files")
         dialog.setMinimumSize(600, 400)
         
         # Create tab widget
         tab_widget = QTabWidget()
+        tab_widget.setObjectName("configEditorTabs")
+        tab_widget.setAccessibleName("Configuration tabs")
         
         # Create startup config tab
         startup_tab = QWidget()
+        startup_tab.setObjectName("startupConfigTab")
+        startup_tab.setAccessibleName("Startup configuration tab")
         startup_layout = QVBoxLayout()
         startup_label = QLabel("Startup Configuration:")
+        startup_label.setObjectName("startupConfigLabel")
+        startup_label.setAccessibleName("Startup configuration label")
         startup_text_edit = QTextEdit()
+        startup_text_edit.setObjectName("startupConfigText")
+        startup_text_edit.setAccessibleName("Startup configuration text")
         if startup_config:
             startup_text_edit.setText(startup_config)
         startup_layout.addWidget(startup_label)
@@ -69,9 +83,15 @@ class ConfigEditorWidget(QWidget):
         
         # Create app config tab
         app_tab = QWidget()
+        app_tab.setObjectName("appConfigTab")
+        app_tab.setAccessibleName("App configuration tab")
         app_layout = QVBoxLayout()
         app_label = QLabel("App Configuration:")
+        app_label.setObjectName("appConfigLabel")
+        app_label.setAccessibleName("App configuration label")
         app_text_edit = QTextEdit()
+        app_text_edit.setObjectName("appConfigText")
+        app_text_edit.setAccessibleName("App configuration text")
         if app_config:
             app_text_edit.setText(app_config)
         app_layout.addWidget(app_label)
@@ -85,8 +105,13 @@ class ConfigEditorWidget(QWidget):
         # Add buttons
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         button_box.setObjectName("configEditorDialogButtons")
+        button_box.setAccessibleName("Configuration editor actions")
         button_box.button(QDialogButtonBox.Ok).setObjectName("configEditorSaveButton")
+        button_box.button(QDialogButtonBox.Ok).setAccessibleName("Save configuration")
+        button_box.button(QDialogButtonBox.Ok).setToolTip("Save configuration")
         button_box.button(QDialogButtonBox.Cancel).setObjectName("configEditorCancelButton")
+        button_box.button(QDialogButtonBox.Cancel).setAccessibleName("Cancel configuration editing")
+        button_box.button(QDialogButtonBox.Cancel).setToolTip("Cancel configuration editing")
         button_box.accepted.connect(lambda: self._save_config(startup_text_edit, app_text_edit, dialog))
         button_box.rejected.connect(dialog.reject)
         
