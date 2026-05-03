@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 import webbrowser
 
-from PyQt5.QtWidgets import QApplication, QComboBox, QDialog, QLabel, QLineEdit, QProgressBar, QPushButton
+from PyQt5.QtWidgets import QApplication, QComboBox, QDialog, QLabel, QLineEdit, QProgressBar, QPushButton, QWidget
 
 import tools.run_smoke_e2e as smoke
 from widgets.ToastWidget import NotificationType, ToastWidget
@@ -192,6 +192,25 @@ def test_capture_dialog_visual_evidence_omits_screenshot_without_dir(qtbot):
     assert evidence["label"] == "no_screenshot"
     assert evidence["dialog"]["title"] == "No Screenshot"
     assert "screenshot" not in evidence
+
+
+def test_save_widget_region_screenshot_crops_composed_parent_region(qtbot, tmp_path):
+    parent = QDialog()
+    parent.resize(120, 90)
+    child = QWidget(parent)
+    child.setObjectName("sidebarScrollArea")
+    child.setGeometry(10, 20, 45, 30)
+    qtbot.addWidget(parent)
+    parent.show()
+    qtbot.waitUntil(parent.isVisible)
+
+    screenshot = smoke.save_widget_region_screenshot(parent, child, str(tmp_path), "sidebar.png")
+
+    from PyQt5.QtGui import QImage
+
+    image = QImage(screenshot)
+    assert image.width() == 45
+    assert image.height() == 30
 
 
 def test_combo_popup_visual_evidence_records_items_and_hides_popup(qtbot):

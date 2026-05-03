@@ -221,6 +221,26 @@ def save_widget_screenshot(widget, screenshot_dir, filename):
     return str(target_path)
 
 
+def save_widget_region_screenshot(source_widget, target_widget, screenshot_dir, filename):
+    """Save target_widget's composed region by cropping source_widget's grab."""
+    if not screenshot_dir:
+        return ""
+
+    from PyQt5.QtCore import QPoint, QRect
+
+    target_dir = Path(screenshot_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_path = target_dir / filename
+    source_pixmap = source_widget.grab()
+    target_top_left = target_widget.mapTo(source_widget, QPoint(0, 0))
+    target_rect = QRect(target_top_left, target_widget.size()).intersected(source_widget.rect())
+    if target_rect.isEmpty():
+        raise RuntimeError(f"Could not crop {target_widget.objectName() or target_widget} from source widget")
+    if not source_pixmap.copy(target_rect).save(str(target_path)):
+        raise RuntimeError(f"Could not save screenshot to {target_path}")
+    return str(target_path)
+
+
 def capture_visual_evidence(launcher, screenshot_dir, label):
     from PyQt5.QtWidgets import QScrollArea
 
@@ -237,7 +257,8 @@ def capture_visual_evidence(launcher, screenshot_dir, label):
         )
         sidebar_scroll = launcher.findChild(QScrollArea, "sidebarScrollArea")
         if sidebar_scroll is not None:
-            evidence["sidebar_screenshot"] = save_widget_screenshot(
+            evidence["sidebar_screenshot"] = save_widget_region_screenshot(
+                launcher,
                 sidebar_scroll,
                 screenshot_dir,
                 f"{label}_sidebar.png",
