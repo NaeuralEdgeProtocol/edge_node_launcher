@@ -145,6 +145,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     
     # Track Docker pull state to prevent concurrent pulls
     self.__docker_pull_in_progress = False
+    self.__pending_launch_context = None
+    self.__active_lifecycle_operation = None
     
     self.__version__ = __version__
     self.__last_timesteps = []
@@ -1103,6 +1105,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     try:
         # Get the current container name
         container_name = self.docker_handler.container_name
+        self._begin_lifecycle_operation("stop", container_name)
         
         # Get node alias from config if available for better user feedback
         node_display_name = container_name
@@ -1139,6 +1142,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             if return_code != 0:
                 # Handle error case
                 error_msg = f"Failed to stop container: {stderr}"
+                self._end_lifecycle_operation(container_name)
                 self.add_log(error_msg, color="red")
                 self.toast.show_notification(NotificationType.ERROR, error_msg)
                 return
@@ -1182,6 +1186,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                 self.toast.show_notification(NotificationType.SUCCESS, f"Node '{node_display_name}' stopped successfully")
             else:
                 self.toast.show_notification(NotificationType.SUCCESS, "Edge Node stopped successfully")
+            self._end_lifecycle_operation(container_name)
         
         # Define error callback for threaded operation
         def on_stop_error(error_msg):
@@ -1201,6 +1206,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                 
             self.add_log(f"Error stopping container: {error_msg}", color="red")
             self.toast.show_notification(NotificationType.ERROR, f"Error stopping container: {error_msg}")
+            self._end_lifecycle_operation(container_name)
         
         # Pass the container name explicitly to ensure we're stopping the right one
         self.docker_handler.stop_container_threaded(container_name, on_stop_success, on_stop_error)
@@ -1222,12 +1228,15 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             
         self.add_log(f"Error stopping container: {str(e)}", color="red")
         self.toast.show_notification(NotificationType.ERROR, f"Error stopping container: {str(e)}")
+        if 'container_name' in locals():
+            self._end_lifecycle_operation(container_name)
 
   def _start_container(self):
     """Start the Docker container."""
     try:
         # Get the current container name
         container_name = self.docker_handler.container_name
+        self._begin_lifecycle_operation("start", container_name)
         
         # Get volume name from config or generate one
         volume_name = None
@@ -1282,6 +1291,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             
         self.add_log(f"Error launching container: {str(e)}", color="red")
         self.toast.show_notification(NotificationType.ERROR, f"Error launching container: {str(e)}")
+        if 'container_name' in locals():
+            self._end_lifecycle_operation(container_name)
 
   def plot_data(self):
     """Plot container metrics data."""
@@ -1492,8 +1503,12 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       
       # Check if we need to restart the container after consecutive failures
       if self.node_info_failure_count >= NODE_INFO_FAILURE_THRESHOLD:
-        self.add_log(f"Node info failed {NODE_INFO_FAILURE_THRESHOLD} times for {container_name}, restarting container", color="red")
-        self._restart_container_after_failures(container_name)
+        if self._should_restart_after_node_info_failure(container_name):
+          self.add_log(f"Node info failed {NODE_INFO_FAILURE_THRESHOLD} times for {container_name}, restarting container", color="red")
+          self._restart_container_after_failures(container_name)
+        else:
+          self.add_log(f"Node info failed {NODE_INFO_FAILURE_THRESHOLD} times for {container_name}, but auto-restart was skipped", color="yellow")
+          self.node_info_failure_count = 0
         return
       
       # Handle error by falling back to cached data or showing error messages
@@ -1501,6 +1516,81 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     # Get node info from the container
     self.docker_handler.get_node_info(on_success, on_error)
+
+  def _selected_container_name(self) -> Optional[str]:
+    """Return the selected Docker container name, not the display alias."""
+    current_index = self.container_combo.currentIndex()
+    if current_index < 0:
+      return None
+    return self.container_combo.itemData(current_index)
+
+  def _select_container_by_name(self, container_name: str) -> bool:
+    """Select a configured container by Docker name."""
+    for index in range(self.container_combo.count()):
+      if self.container_combo.itemData(index) == container_name:
+        if self.container_combo.currentIndex() != index:
+          self.container_combo.setCurrentIndex(index)
+        return True
+    return False
+
+  def _begin_lifecycle_operation(self, operation: str, container_name: str) -> None:
+    """Mark that a user-visible lifecycle operation is in progress."""
+    self.__active_lifecycle_operation = {
+      "operation": operation,
+      "container_name": container_name,
+    }
+    self.add_log(f"Lifecycle operation started: {operation} on {container_name}", debug=True)
+
+  def _end_lifecycle_operation(self, container_name: str = None) -> None:
+    """Clear an active lifecycle operation when its owning flow completes."""
+    if self.__active_lifecycle_operation is None:
+      return
+
+    active_container = self.__active_lifecycle_operation.get("container_name")
+    if container_name is not None and active_container != container_name:
+      return
+
+    operation = self.__active_lifecycle_operation.get("operation")
+    self.add_log(f"Lifecycle operation finished: {operation} on {active_container}", debug=True)
+    self.__active_lifecycle_operation = None
+
+  def _should_restart_after_node_info_failure(self, container_name: str) -> bool:
+    """Guard automatic restarts so stale callbacks cannot affect another node."""
+    if self.__active_lifecycle_operation is not None:
+      active = self.__active_lifecycle_operation
+      self.add_log(
+        f"Skipping auto-restart for {container_name}; lifecycle operation {active.get('operation')} is active on {active.get('container_name')}",
+        debug=True,
+        color="yellow",
+      )
+      return False
+
+    selected_container = self._selected_container_name()
+    if selected_container != container_name:
+      self.add_log(
+        f"Skipping auto-restart for stale node info failure on {container_name}; selected container is {selected_container}",
+        debug=True,
+        color="yellow",
+      )
+      return False
+
+    if self.__docker_pull_in_progress or self.__pending_launch_context is not None:
+      self.add_log(
+        f"Skipping auto-restart for {container_name}; a launch or Docker pull is already in progress",
+        debug=True,
+        color="yellow",
+      )
+      return False
+
+    if self.user_stopped_container:
+      self.add_log(
+        f"Skipping auto-restart for {container_name}; user intentionally stopped the container",
+        debug=True,
+        color="yellow",
+      )
+      return False
+
+    return True
 
   def _restart_container_after_failures(self, container_name: str):
     """Restart container after consecutive get_node_info failures.
@@ -1511,6 +1601,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     try:
       # Reset failure counter before restarting
       self.node_info_failure_count = 0
+      self._begin_lifecycle_operation("auto_restart", container_name)
       
       # Show notification to user
       self.toast.show_notification(
@@ -1542,6 +1633,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.post_launch_setup()
         self.refresh_node_info()
         self.plot_data()
+        self._end_lifecycle_operation(container_name)
       
       # Define restart error callback
       def on_restart_error(error_msg):
@@ -1550,6 +1642,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
           NotificationType.ERROR, 
           f"Failed to update and restart container {container_name}: {error_msg}"
         )
+        self._end_lifecycle_operation(container_name)
       
       # Stop, pull, and restart the container
       self.add_log(f"Stopping container {container_name} for restart with image update", debug=True)
@@ -1573,6 +1666,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       error_msg = f"Error during automatic restart: {str(e)}"
       self.add_log(error_msg, color="red")
       self.toast.show_notification(NotificationType.ERROR, error_msg)
+      self._end_lifecycle_operation(container_name)
 
   def _restart_pull_and_launch(self, container_name: str, volume_name: str, on_success, on_error):
     """Pull latest image and launch container during restart process.
@@ -1622,6 +1716,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         on_error: Error callback  
     """
     try:
+      self.docker_handler.set_container_name(container_name)
+
       def on_launch_success(result):
         stdout, stderr, return_code = result
         if return_code == 0:
@@ -2340,6 +2436,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     container_config = self.config_manager.get_container(container_name)
     volume_name = container_config.volume if container_config and container_config.volume else get_volume_name(container_name)
 
+    self._begin_lifecycle_operation("rename_restart", container_name)
     self.docker_handler.set_container_name(container_name)
     self.user_stopped_container = False
     self._clear_info_display()
@@ -2353,6 +2450,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             self.loading_indicator.stop()
             self.add_log(error_msg, color="red")
             self.toast.show_notification(NotificationType.ERROR, error_msg)
+            self._end_lifecycle_operation(container_name)
             return
 
         self.add_log(f"Renamed node container {container_name} stopped; launching again...", color="blue")
@@ -2362,6 +2460,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.loading_indicator.stop()
         self.add_log(f"Error restarting renamed node: {error_msg}", color="red")
         self.toast.show_notification(NotificationType.ERROR, f"Error restarting renamed node: {error_msg}")
+        self._end_lifecycle_operation(container_name)
 
     self.docker_handler.stop_container_threaded(container_name, on_stop_success, on_stop_error)
 
@@ -2794,6 +2893,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
        select it in the UI, and start it immediately."""
     try:
       from datetime import datetime
+      self._begin_lifecycle_operation("add_node", container_name)
 
       # Show the loading dialog - now with blue background
       node_display_name = display_name if display_name else None
@@ -2819,6 +2919,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     except Exception as e:
       self.add_log(f"Failed to create new node: {str(e)}", color="red")
+      self._end_lifecycle_operation(container_name)
       # Close the loading dialog if it's still open
       startup_dialog_visible = hasattr(self, 'startup_dialog') and self.startup_dialog is not None and self.startup_dialog.isVisible()
       if startup_dialog_visible:
@@ -2876,6 +2977,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     except Exception as e:
       self.add_log(f"Failed to create new node: {str(e)}", color="red")
+      self._end_lifecycle_operation(container_name)
     finally:
       # Close the loading dialog if it's still open
       startup_dialog_visible = hasattr(self, 'startup_dialog') and self.startup_dialog is not None and self.startup_dialog.isVisible()
@@ -2892,6 +2994,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                     or generated based on container name.
     """
     container_name = self.docker_handler.container_name
+    self._begin_lifecycle_operation("launch", container_name)
     
     # If volume_name is not provided, try to get it from config
     if volume_name is None:
@@ -3014,6 +3117,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         # Check if Docker pull is already in progress
         if self.__docker_pull_in_progress:
             self.add_log(f"Docker pull already in progress, skipping launch of {container_name}", color="yellow")
+            self._end_lifecycle_operation(container_name)
             
             # Close any loading dialogs that might have been opened
             if hasattr(self, 'launcher_dialog') and self.launcher_dialog is not None:
@@ -3030,6 +3134,10 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         
         # Always pull the latest Docker image before launching
         self.__docker_pull_in_progress = True
+        self.__pending_launch_context = {
+            "container_name": container_name,
+            "volume_name": volume_name,
+        }
         
         # Stop the loading indicator since we're switching to pull dialog
         self.loading_indicator.stop()
@@ -3095,6 +3203,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                 error_msg = f"Failed to launch container: {stderr}"
                 self.add_log(error_msg, color="red")
                 self.toast.show_notification(NotificationType.ERROR, error_msg)
+                self._end_lifecycle_operation(container_name)
                 return
             
             # Update loading dialogs with progress    
@@ -3156,6 +3265,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                 self.toast.show_notification(NotificationType.SUCCESS, f"Node '{node_display_name}' launched successfully")
             else:
                 self.toast.show_notification(NotificationType.SUCCESS, "Edge Node launched successfully")
+            self._end_lifecycle_operation(container_name)
         
         # Define error callback for threaded operation
         def on_launch_error(error_msg):
@@ -3214,6 +3324,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             error_msg = f"Failed to launch container: {error_msg}"
             self.add_log(error_msg, color="red")
             self.toast.show_notification(NotificationType.ERROR, error_msg)
+            self._end_lifecycle_operation(container_name)
         
         # Launch the container in a thread
         self.docker_handler.launch_container_threaded(volume_name, on_launch_success, on_launch_error)
@@ -3239,6 +3350,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         error_msg = f"Failed to launch container: {str(e)}"
         self.add_log(error_msg, color="red")
         self.toast.show_notification(NotificationType.ERROR, error_msg)
+        self._end_lifecycle_operation(container_name)
 
   def _on_docker_pull_complete(self, success, message):
     """Handle Docker pull completion.
@@ -3247,8 +3359,11 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         success: Whether the pull was successful
         message: Success or error message
     """
+    launch_context = self.__pending_launch_context
+
     # Reset the pull state first
     self.__docker_pull_in_progress = False
+    self.__pending_launch_context = None
     
     # Log the result
     if success:
@@ -3268,58 +3383,49 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     # Process events to ensure UI updates
     QApplication.processEvents()
     
-    # If pull was successful, continue with the currently selected container launch
+    # If pull was successful, continue with the launch target captured before the pull.
     if success:
-        # Get the currently selected container to continue the launch
-        current_index = self.container_combo.currentIndex()
-        if current_index >= 0:
-            container_name = self.container_combo.itemData(current_index)
-            if container_name:
-                # Get volume name from config or generate one
-                container_config = self.config_manager.get_container(container_name) 
-                if container_config and container_config.volume:
-                    volume_name = container_config.volume
-                else:
-                    from utils.docker_utils import get_volume_name
-                    volume_name = get_volume_name(container_name)
-                
-                # Show the launcher dialog for the container launch
-                # Get node alias from config if available for better user feedback
-                node_alias = None
-                if container_config and container_config.node_alias:
-                    node_alias = container_config.node_alias
-                    message = f"Please wait while node '{node_alias}' is being launched..."
-                else:
-                    message = "Please wait while Edge Node is being launched..."
-                    
-                # Show loading dialog for launching operation
-                self.launcher_dialog = LoadingDialog(
-                    self, 
-                    title="Launching Node", 
-                    message=message,
-                    size=50
-                )
-                self.launcher_dialog.show()
-                
-                # Update message to indicate starting the launch process
-                self.launcher_dialog.update_progress("Preparing to launch Docker container...")
-                
-                # Process events to ensure dialog is visible and responsive
-                QApplication.processEvents()
-                
-                # Continue with container launch after pull - use a short timer to ensure UI is updated first
-                QTimer.singleShot(100, lambda: self._perform_container_launch_after_pull(container_name, volume_name))
+        if launch_context:
+            container_name = launch_context["container_name"]
+            volume_name = launch_context["volume_name"]
+            self.docker_handler.set_container_name(container_name)
+            self._select_container_by_name(container_name)
+            container_config = self.config_manager.get_container(container_name)
+
+            if container_config and container_config.node_alias:
+                message = f"Please wait while node '{container_config.node_alias}' is being launched..."
             else:
-                self.add_log("No container selected after Docker pull completion", color="yellow")
+                message = "Please wait while Edge Node is being launched..."
+
+            self.launcher_dialog = LoadingDialog(
+                self,
+                title="Launching Node",
+                message=message,
+                size=50
+            )
+            self.launcher_dialog.show()
+
+            # Update message to indicate starting the launch process
+            self.launcher_dialog.update_progress("Preparing to launch Docker container...")
+
+            # Process events to ensure dialog is visible and responsive
+            QApplication.processEvents()
+
+            # Continue with container launch after pull - use a short timer to ensure UI is updated first
+            QTimer.singleShot(100, lambda: self._perform_container_launch_after_pull(container_name, volume_name))
         else:
-            self.add_log("No container selected after Docker pull completion", color="yellow")
+            self.add_log("Docker pull completed without a pending launch target", color="yellow")
     else:
         # Show error notification
+        if launch_context:
+            self._end_lifecycle_operation(launch_context["container_name"])
         self.toast.show_notification(NotificationType.ERROR, f"Failed to pull Docker image: {message}")
 
   def _perform_container_launch_after_pull(self, container_name, volume_name):
     """Perform the container launch operation after Docker pull is complete."""
     try:
+        self.docker_handler.set_container_name(container_name)
+
         # Start loading indicator
         self.loading_indicator.start()
         
@@ -3335,6 +3441,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                 error_msg = f"Failed to launch container: {stderr}"
                 self.add_log(error_msg, color="red")
                 self.toast.show_notification(NotificationType.ERROR, error_msg)
+                self._end_lifecycle_operation(container_name)
                 return
             
             # Update loading dialogs with progress    
@@ -3396,6 +3503,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                 self.toast.show_notification(NotificationType.SUCCESS, f"Node '{node_display_name}' launched successfully")
             else:
                 self.toast.show_notification(NotificationType.SUCCESS, "Edge Node launched successfully")
+            self._end_lifecycle_operation(container_name)
         
         # Define error callback for threaded operation
         def on_launch_error(error_msg):
@@ -3454,6 +3562,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             error_msg = f"Failed to launch container: {error_msg}"
             self.add_log(error_msg, color="red")
             self.toast.show_notification(NotificationType.ERROR, error_msg)
+            self._end_lifecycle_operation(container_name)
         
         # Launch the container in a thread (without pulling again)
         self.docker_handler.launch_container_threaded(volume_name, on_launch_success, on_launch_error)
@@ -3479,6 +3588,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         error_msg = f"Failed to launch container: {str(e)}"
         self.add_log(error_msg, color="red")
         self.toast.show_notification(NotificationType.ERROR, error_msg)
+        self._end_lifecycle_operation(container_name)
   
   def refresh_container_list(self):
     """Refresh the container list in the combo box."""

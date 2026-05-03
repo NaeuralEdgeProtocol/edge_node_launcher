@@ -89,6 +89,7 @@ class FakeDockerHandler:
         self.node_name_updates = []
         self.node_info_requests = 0
         self.stopped_containers = []
+        self.launched_containers = []
 
     def set_container_name(self, container_name):
         self.container_name = container_name
@@ -114,6 +115,11 @@ class FakeDockerHandler:
     def stop_container_threaded(self, container_name, callback, error_callback):
         self.stopped_containers.append(container_name)
         callback(("", "", 0))
+
+    def launch_container_threaded(self, volume_name=None, callback=None, error_callback=None):
+        self.launched_containers.append((self.container_name, volume_name))
+        if callback:
+            callback(("", "", 0))
 
 
 def _build_launcher(monkeypatch, qtbot, running=False):
@@ -294,6 +300,67 @@ def test_main_window_rename_save_restarts_without_legacy_stop_modal(qtbot, monke
     assert fake_handler.stopped_containers == ["r1node"]
     assert launch_calls == ["r1vol"]
     assert fake_config.get_container("r1node").node_alias == "renamed"
+
+
+def test_docker_pull_completion_uses_captured_launch_target(qtbot, monkeypatch):
+    launcher, fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    fake_config.add_container(
+        ContainerConfig(
+            name="r1node2",
+            volume="r1vol2",
+            node_alias="beta",
+        )
+    )
+    launcher.refresh_container_list()
+    assert launcher._select_container_by_name("r1node2")
+
+    setattr(
+        launcher,
+        "_EdgeNodeLauncher__pending_launch_context",
+        {"container_name": "r1node", "volume_name": "r1vol"},
+    )
+    launcher._begin_lifecycle_operation("launch", "r1node")
+    monkeypatch.setattr(frm_main.QTimer, "singleShot", lambda _delay, callback: callback())
+
+    launcher._on_docker_pull_complete(True, "pulled")
+
+    assert fake_handler.launched_containers == [("r1node", "r1vol")]
+    assert launcher._selected_container_name() == "r1node"
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+
+
+def test_stale_node_info_failures_do_not_restart_other_nodes(qtbot, monkeypatch):
+    launcher, fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    fake_config.add_container(
+        ContainerConfig(
+            name="r1node2",
+            volume="r1vol2",
+            node_alias="beta",
+        )
+    )
+    launcher.refresh_container_list()
+    assert launcher._select_container_by_name("r1node2")
+
+    assert not launcher._should_restart_after_node_info_failure("r1node")
+
+    assert launcher._select_container_by_name("r1node")
+    launcher._begin_lifecycle_operation("add_node", "r1node2")
+    assert not launcher._should_restart_after_node_info_failure("r1node")
+    launcher._end_lifecycle_operation("r1node2")
+
+    setattr(
+        launcher,
+        "_EdgeNodeLauncher__pending_launch_context",
+        {"container_name": "r1node2", "volume_name": "r1vol2"},
+    )
+    assert not launcher._should_restart_after_node_info_failure("r1node")
+
+    setattr(launcher, "_EdgeNodeLauncher__pending_launch_context", None)
+    launcher.user_stopped_container = True
+    assert not launcher._should_restart_after_node_info_failure("r1node")
+
+    launcher.user_stopped_container = False
+    assert launcher._should_restart_after_node_info_failure("r1node")
 
 
 def test_main_window_add_node_dialog_create_action_is_clickable(qtbot, monkeypatch):
