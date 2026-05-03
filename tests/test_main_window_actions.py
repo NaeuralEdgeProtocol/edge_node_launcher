@@ -850,6 +850,16 @@ def test_rename_action_lives_with_node_controls(qtbot, monkeypatch):
     assert bottom_button_area.indexOf(launcher.renameNodeButton) == -1
 
 
+def test_refresh_action_lives_with_status_section(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+    top_button_area = launcher.findChild(QVBoxLayout, "topButtonArea")
+    status_label = launcher.findChild(QLabel, "statusSectionLabel")
+
+    assert top_button_area is not None
+    assert status_label is not None
+    assert top_button_area.indexOf(status_label) < top_button_area.indexOf(launcher.refreshButton)
+
+
 def test_main_window_sidebar_controls_are_scrollable(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
     sidebar_scroll = launcher.findChild(QScrollArea, "sidebarScrollArea")

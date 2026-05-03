@@ -781,6 +781,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     
     # Add some spacing between the explorer button and refresh button
     top_button_area.addSpacing(7)
+    top_button_area.addWidget(self.create_sidebar_section_label("Status", "statusSectionLabel"))
     
     # Refresh button
     self.refreshButton = QPushButton("Refresh Node Info")
@@ -791,7 +792,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     
     # Add some spacing between the refresh button and info box
     top_button_area.addSpacing(7)
-    top_button_area.addWidget(self.create_sidebar_section_label("Status", "statusSectionLabel"))
     
     # Info box
     info_box = QGroupBox()
