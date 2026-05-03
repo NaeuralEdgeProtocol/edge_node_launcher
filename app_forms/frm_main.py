@@ -148,6 +148,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.__docker_pull_in_progress = False
     self.__pending_launch_context = None
     self.__active_lifecycle_operation = None
+    self.__shutting_down = False
     
     self.__version__ = __version__
     self.__last_timesteps = []
@@ -973,9 +974,24 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       self.add_log(f"Error closing {dialog_attr}: {str(e)}", debug=True)
       return False
 
+  def _is_shutting_down(self) -> bool:
+    return getattr(self, "_EdgeNodeLauncher__shutting_down", False)
+
+  def _skip_lifecycle_callback_if_shutting_down(self, callback_name: str, container_name: str = None) -> bool:
+    """Return True when a late async callback should not mutate UI state."""
+    if not self._is_shutting_down():
+      return False
+
+    target = f" for {container_name}" if container_name else ""
+    self.add_log(f"Ignoring {callback_name}{target}; shutdown is in progress", debug=True)
+    if container_name:
+      self._end_lifecycle_operation(container_name)
+    return True
+
   def closeEvent(self, event):
     """Handle application close event with proper cleanup."""
     try:
+        self.__shutting_down = True
         self.add_log("Starting application shutdown sequence...", debug=True)
         
         # Stop any running timers first
@@ -1021,6 +1037,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   def force_application_exit(self):
     """Force the application to exit immediately - used during updates."""
     try:
+        self.__shutting_down = True
         self.add_log("FORCE EXIT: Initiating immediate application shutdown for update", color="yellow")
         
         # Stop only GUI timers
@@ -3002,6 +3019,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   def _perform_add_new_node(self, container_name, volume_name, display_name):
     """Perform the actual node creation after the dialog is shown."""
     try:
+      if self._skip_lifecycle_callback_if_shutting_down("add-node continuation", container_name):
+        return
+
       from datetime import datetime
 
       # Mark that user is intentionally starting a new container (clear stop flag)
@@ -3066,6 +3086,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                     or generated based on container name.
     """
     container_name = self.docker_handler.container_name
+    if self._skip_lifecycle_callback_if_shutting_down("launch request", container_name):
+      return
+
     self._begin_lifecycle_operation("launch", container_name)
     
     # If volume_name is not provided, try to get it from config
@@ -3165,6 +3188,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   def _perform_container_launch(self, container_name, volume_name):
     """Perform the actual container launch operation after the dialog is shown."""
     try:
+        if self._skip_lifecycle_callback_if_shutting_down("launch continuation", container_name):
+            return
+
         # Clear info displays
         self._clear_info_display()
         self.loading_indicator.start()
@@ -3233,6 +3259,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         
         # Define callbacks for Docker pull
         def on_pull_success(result):
+            if self._skip_lifecycle_callback_if_shutting_down("Docker pull success", container_name):
+                return
+
             stdout, stderr, return_code = result
             # No need to process lines here as they're processed in real-time by on_pull_output
             
@@ -3247,11 +3276,17 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                     self.docker_pull_dialog.set_pull_complete(False, error_msg)
         
         def on_pull_error(error_msg):
+            if self._skip_lifecycle_callback_if_shutting_down("Docker pull error", container_name):
+                return
+
             self.add_log(f"Error pulling Docker image: {error_msg}", color="red")
             if hasattr(self, 'docker_pull_dialog') and self.docker_pull_dialog is not None :
                 self.docker_pull_dialog.set_pull_complete(False, error_msg)
         
         def on_pull_output(line):
+            if self._is_shutting_down():
+                return
+
             # Process each line of output in real-time to update the dialog
             if hasattr(self, 'docker_pull_dialog') and self.docker_pull_dialog is not None :
                 self.docker_pull_dialog.update_pull_progress(line)
@@ -3269,6 +3304,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         
         # Define success callback for threaded operation
         def on_launch_success(result):
+            if self._skip_lifecycle_callback_if_shutting_down("launch success", container_name):
+                return
+
             stdout, stderr, return_code = result
             if return_code != 0:
                 # Handle error case
@@ -3341,6 +3379,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         
         # Define error callback for threaded operation
         def on_launch_error(error_msg):
+            if self._skip_lifecycle_callback_if_shutting_down("launch error", container_name):
+                return
+
             # Stop loading indicator on error
             self.loading_indicator.stop()
             
@@ -3432,6 +3473,12 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         message: Success or error message
     """
     launch_context = self.__pending_launch_context
+    if self._is_shutting_down():
+        if launch_context:
+            self._skip_lifecycle_callback_if_shutting_down("Docker pull completion", launch_context["container_name"])
+        self.__docker_pull_in_progress = False
+        self.__pending_launch_context = None
+        return
 
     # Reset the pull state first
     self.__docker_pull_in_progress = False
@@ -3496,6 +3543,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   def _perform_container_launch_after_pull(self, container_name, volume_name):
     """Perform the container launch operation after Docker pull is complete."""
     try:
+        if self._skip_lifecycle_callback_if_shutting_down("post-pull launch continuation", container_name):
+            return
+
         self.docker_handler.set_container_name(container_name)
 
         # Start loading indicator
@@ -3507,6 +3557,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         
         # Define success callback for threaded operation
         def on_launch_success(result):
+            if self._skip_lifecycle_callback_if_shutting_down("launch success", container_name):
+                return
+
             stdout, stderr, return_code = result
             if return_code != 0:
                 # Handle error case
@@ -3579,6 +3632,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         
         # Define error callback for threaded operation
         def on_launch_error(error_msg):
+            if self._skip_lifecycle_callback_if_shutting_down("launch error", container_name):
+                return
+
             # Stop loading indicator on error
             self.loading_indicator.stop()
             

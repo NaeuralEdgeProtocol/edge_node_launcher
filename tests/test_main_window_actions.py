@@ -385,6 +385,35 @@ def test_close_event_clears_deleted_dialog_reference(qtbot, monkeypatch):
     assert not any("Error closing launcher_dialog" in line for line in launcher.log_buffer)
 
 
+def test_late_launch_success_does_not_update_ui_during_shutdown(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    callbacks = {}
+    ui_updates = []
+
+    def defer_launch(volume_name=None, callback=None, error_callback=None):
+        fake_handler.launched_containers.append((fake_handler.container_name, volume_name))
+        callbacks["success"] = callback
+
+    fake_handler.launch_container_threaded = defer_launch
+    launcher.post_launch_setup = lambda: ui_updates.append("post_launch_setup")
+    launcher.refresh_node_info = lambda: ui_updates.append("refresh_node_info")
+    launcher.plot_data = lambda: ui_updates.append("plot_data")
+    launcher.update_toggle_button_text = lambda: ui_updates.append("update_toggle_button_text")
+    launcher._begin_lifecycle_operation("launch", "r1node")
+
+    launcher._perform_container_launch_after_pull("r1node", "r1vol")
+    setattr(launcher, "_EdgeNodeLauncher__shutting_down", True)
+    callbacks["success"](("", "", 0))
+
+    assert fake_handler.launched_containers == [("r1node", "r1vol")]
+    assert ui_updates == []
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+    log_text = "\n".join(launcher.log_buffer)
+    if launcher.logView is not None:
+        log_text += launcher.logView.toPlainText()
+    assert "Ignoring launch success for r1node" in log_text
+
+
 def test_main_window_add_node_dialog_create_action_is_clickable(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
     created_nodes = []
