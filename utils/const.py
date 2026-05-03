@@ -607,6 +607,37 @@ COMMON_STYLESHEET_TEMPLATE = """
     padding: 10px 8px 2px 8px;
     margin: 8px 6px 0px 6px;
   }}
+  QScrollArea#sidebarScrollArea {{
+    background-color: transparent;
+    border: none;
+  }}
+  QScrollArea#sidebarScrollArea QWidget#sidebarPanel {{
+    background-color: transparent;
+  }}
+  QScrollArea#sidebarScrollArea QScrollBar:vertical {{
+    background-color: transparent;
+    border: none;
+    width: 10px;
+    margin: 4px 2px 4px 0px;
+  }}
+  QScrollArea#sidebarScrollArea QScrollBar::handle:vertical {{
+    background-color: {section_label_border};
+    border-radius: 4px;
+    min-height: 32px;
+  }}
+  QScrollArea#sidebarScrollArea QScrollBar::handle:vertical:hover {{
+    background-color: {combo_hover_border};
+  }}
+  QScrollArea#sidebarScrollArea QScrollBar::add-line:vertical,
+  QScrollArea#sidebarScrollArea QScrollBar::sub-line:vertical {{
+    height: 0px;
+    border: none;
+    background: transparent;
+  }}
+  QScrollArea#sidebarScrollArea QScrollBar::add-page:vertical,
+  QScrollArea#sidebarScrollArea QScrollBar::sub-page:vertical {{
+    background: transparent;
+  }}
   QPushButton {{
     background-color: {button_bg}; 
     color: {text_color}; 
@@ -725,7 +756,6 @@ COMMON_STYLESHEET_TEMPLATE = """
   }}
   QGroupBox[role="resourcePanel"] QLabel {{
     padding: 2px 4px;
-    max-width: 270px;
   }}
   QGroupBox[role="statusPanel"] QPushButton {{
     background-color: {button_copy_address_bg};
@@ -741,9 +771,6 @@ COMMON_STYLESHEET_TEMPLATE = """
     color: {info_box_text};
     background-color: transparent;
     font-weight: {info_box_font_weight};
-  }}
-  QLabel#resourcesBoxText {{
-    max-width: 270px;
   }}
   #myComboPopup {{
     background-color: #2e2e2e; 

@@ -95,6 +95,154 @@ def window_snapshot(launcher):
     }
 
 
+def rect_snapshot(rect):
+    return {
+        "x": rect.x(),
+        "y": rect.y(),
+        "w": rect.width(),
+        "h": rect.height(),
+        "left": rect.x(),
+        "top": rect.y(),
+        "right": rect.x() + rect.width() - 1,
+        "bottom": rect.y() + rect.height() - 1,
+    }
+
+
+def widget_global_rect(widget):
+    top_left = widget.mapToGlobal(widget.rect().topLeft())
+    return {
+        "x": top_left.x(),
+        "y": top_left.y(),
+        "w": widget.rect().width(),
+        "h": widget.rect().height(),
+        "left": top_left.x(),
+        "top": top_left.y(),
+        "right": top_left.x() + widget.rect().width() - 1,
+        "bottom": top_left.y() + widget.rect().height() - 1,
+    }
+
+
+def safe_area_status(control_rect, safe_right):
+    overlaps_scrollbar = control_rect["right"] > safe_right
+    return {
+        "safe_right": safe_right,
+        "inside_safe_area": not overlaps_scrollbar,
+        "overlaps_scrollbar": overlaps_scrollbar,
+    }
+
+
+def sidebar_visual_snapshot(launcher):
+    from PyQt5.QtWidgets import QScrollArea, QWidget
+
+    sidebar_scroll = launcher.findChild(QScrollArea, "sidebarScrollArea")
+    if sidebar_scroll is None:
+        return {"found": False, "issues": ["sidebarScrollArea was not found"], "passed": False}
+
+    viewport = sidebar_scroll.viewport()
+    scrollbar = sidebar_scroll.verticalScrollBar()
+    sidebar_widget = sidebar_scroll.widget()
+    viewport_rect = widget_global_rect(viewport)
+    scrollbar_rect = widget_global_rect(scrollbar) if scrollbar.isVisible() else None
+    safe_right = (scrollbar_rect["left"] - 2) if scrollbar_rect else (viewport_rect["right"] - 2)
+    issues = []
+
+    if sidebar_widget is not None and sidebar_widget.width() > viewport.width():
+        issues.append(
+            f"sidebar content width {sidebar_widget.width()} exceeds viewport width {viewport.width()}"
+        )
+    content_fits_viewport = sidebar_widget is not None and sidebar_widget.width() <= viewport.width()
+
+    controls = []
+    control_names = (
+        "addNodeButton",
+        "renameNodeButton",
+        "startNodeButton",
+        "downloadDockerButton",
+        "openDappButton",
+        "openExplorerButton",
+        "refreshNodeInfoButton",
+        "themeToggleButton",
+        "forceDebugCheckbox",
+    )
+    for object_name in control_names:
+        control = launcher.findChild(QWidget, object_name)
+        if control is None:
+            issues.append(f"{object_name} was not found")
+            continue
+
+        control_rect = widget_global_rect(control)
+        status = safe_area_status(control_rect, safe_right)
+        intersects_viewport = (
+            control_rect["bottom"] >= viewport_rect["top"]
+            and control_rect["top"] <= viewport_rect["bottom"]
+        )
+        if control.isVisible() and intersects_viewport and not status["inside_safe_area"]:
+            issues.append(f"{object_name} overlaps the sidebar scrollbar safe area")
+
+        controls.append(
+            {
+                "object_name": object_name,
+                "text": control.text() if hasattr(control, "text") else "",
+                "visible": control.isVisible(),
+                "intersects_viewport": intersects_viewport,
+                "rect": control_rect,
+                **status,
+            }
+        )
+
+    return {
+        "found": True,
+        "scroll_area": widget_global_rect(sidebar_scroll),
+        "viewport": viewport_rect,
+        "content": widget_global_rect(sidebar_widget) if sidebar_widget is not None else None,
+        "content_fits_viewport": content_fits_viewport,
+        "vertical_scrollbar_visible": scrollbar.isVisible(),
+        "vertical_scrollbar": scrollbar_rect,
+        "vertical_scrollbar_value": scrollbar.value(),
+        "horizontal_scrollbar_policy": int(sidebar_scroll.horizontalScrollBarPolicy()),
+        "safe_right": safe_right,
+        "controls": controls,
+        "issues": issues,
+        "passed": not issues,
+    }
+
+
+def save_widget_screenshot(widget, screenshot_dir, filename):
+    if not screenshot_dir:
+        return ""
+    target_dir = Path(screenshot_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_path = target_dir / filename
+    pixmap = widget.grab()
+    if not pixmap.save(str(target_path)):
+        raise RuntimeError(f"Could not save screenshot to {target_path}")
+    return str(target_path)
+
+
+def capture_visual_evidence(launcher, screenshot_dir, label):
+    from PyQt5.QtWidgets import QScrollArea
+
+    evidence = {
+        "label": label,
+        "window": window_snapshot(launcher),
+        "sidebar": sidebar_visual_snapshot(launcher),
+    }
+    if screenshot_dir:
+        evidence["full_window_screenshot"] = save_widget_screenshot(
+            launcher,
+            screenshot_dir,
+            f"{label}_full_window.png",
+        )
+        sidebar_scroll = launcher.findChild(QScrollArea, "sidebarScrollArea")
+        if sidebar_scroll is not None:
+            evidence["sidebar_screenshot"] = save_widget_screenshot(
+                sidebar_scroll,
+                screenshot_dir,
+                f"{label}_sidebar.png",
+            )
+    return evidence
+
+
 def click_button(app, button, label):
     from PyQt5.QtCore import Qt
     from PyQt5.QtTest import QTest
@@ -188,6 +336,7 @@ def run_scenarios(args):
         "destructive": False,
         "containers": [SMOKE_CONTAINER],
         "volumes": [SMOKE_VOLUME],
+        "screenshot_dir": args.screenshot_dir,
         "steps": [],
     }
     write_log(log, args.output)
@@ -231,6 +380,27 @@ def run_scenarios(args):
 
     try:
         record_step(log, args.output, {"step": "window shown", "window": window_snapshot(launcher)})
+        startup_visual = capture_visual_evidence(launcher, args.screenshot_dir, "startup")
+        record_step(log, args.output, {"step": "captured startup visual evidence", "visual": startup_visual})
+        if not startup_visual["sidebar"]["passed"]:
+            raise AssertionError("; ".join(startup_visual["sidebar"]["issues"]))
+
+        original_minimum_size = launcher.minimumSize()
+        launcher.setMinimumSize(800, 520)
+        launcher.resize(900, 560)
+        app.processEvents()
+        compact_visual = capture_visual_evidence(launcher, args.screenshot_dir, "compact_height")
+        record_step(
+            log,
+            args.output,
+            {"step": "captured compact sidebar visual evidence", "visual": compact_visual},
+        )
+        if not compact_visual["sidebar"]["passed"]:
+            raise AssertionError("; ".join(compact_visual["sidebar"]["issues"]))
+
+        launcher.setMinimumSize(original_minimum_size)
+        launcher.resize(1600, 900)
+        app.processEvents()
 
         record_step(log, args.output, {"step": click_button(app, launcher.themeToggleButton, "toggle light theme")})
         wait_until(app, lambda: launcher.themeToggleButton.text() == frm_main.DARK_DASHBOARD_BUTTON_TEXT, args.timeout, "light theme")
@@ -292,6 +462,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run visible non-destructive launcher smoke scenarios.")
     parser.add_argument("--timeout", type=int, default=10)
     parser.add_argument("--output", default="")
+    parser.add_argument("--screenshot-dir", default="")
     args = parser.parse_args()
     log = run_scenarios(args)
     if log.get("result") != "passed":

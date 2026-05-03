@@ -61,6 +61,45 @@ def test_smoke_window_snapshot_serializes_geometry():
     }
 
 
+def test_rect_snapshot_includes_edges():
+    class FakeRect:
+        def x(self):
+            return 10
+
+        def y(self):
+            return 20
+
+        def width(self):
+            return 30
+
+        def height(self):
+            return 40
+
+    assert smoke.rect_snapshot(FakeRect()) == {
+        "x": 10,
+        "y": 20,
+        "w": 30,
+        "h": 40,
+        "left": 10,
+        "top": 20,
+        "right": 39,
+        "bottom": 59,
+    }
+
+
+def test_safe_area_status_flags_scrollbar_overlap():
+    assert smoke.safe_area_status({"right": 98}, safe_right=100) == {
+        "safe_right": 100,
+        "inside_safe_area": True,
+        "overlaps_scrollbar": False,
+    }
+    assert smoke.safe_area_status({"right": 101}, safe_right=100) == {
+        "safe_right": 100,
+        "inside_safe_area": False,
+        "overlaps_scrollbar": True,
+    }
+
+
 def test_smoke_browser_recorder_captures_and_restores_open(monkeypatch):
     original_open = webbrowser.open
     log = {}

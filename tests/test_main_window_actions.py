@@ -1462,3 +1462,39 @@ def test_main_window_sidebar_controls_are_scrollable(qtbot, monkeypatch):
     assert sidebar_scroll.widget().property("role") == "navigationSidebar"
     assert sidebar_scroll.widget().findChild(QPushButton, "addNodeButton") is launcher.add_node_button
     assert sidebar_scroll.widget().findChild(QPushButton, "renameNodeButton") is launcher.renameNodeButton
+
+
+def test_main_window_sidebar_controls_do_not_overlap_scrollbar(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+    launcher.setMinimumSize(800, 520)
+    launcher.resize(900, 560)
+    qtbot.wait(50)
+
+    sidebar_scroll = launcher.findChild(QScrollArea, "sidebarScrollArea")
+    assert sidebar_scroll is not None
+
+    viewport = sidebar_scroll.viewport()
+    scrollbar = sidebar_scroll.verticalScrollBar()
+    viewport_right = viewport.mapToGlobal(viewport.rect().topRight()).x()
+    safe_right = viewport_right - 2
+    if scrollbar.isVisible():
+        safe_right = scrollbar.mapToGlobal(scrollbar.rect().topLeft()).x() - 2
+
+    assert sidebar_scroll.widget().width() <= viewport.width()
+
+    controls = (
+        launcher.add_node_button,
+        launcher.renameNodeButton,
+        launcher.toggleButton,
+        launcher.docker_download_button,
+        launcher.dapp_button,
+        launcher.explorer_button,
+        launcher.refreshButton,
+        launcher.themeToggleButton,
+        launcher.force_debug_checkbox,
+    )
+    for control in controls:
+        if not control.isVisible():
+            continue
+        control_right = control.mapToGlobal(control.rect().topRight()).x()
+        assert control_right <= safe_right, control.objectName()

@@ -46,7 +46,8 @@ from PyQt5.QtWidgets import (
   QGridLayout,
   QStackedWidget,
   QFormLayout,
-  QListWidgetItem
+  QListWidgetItem,
+  QSizePolicy
 )
 from PyQt5 import sip
 from PyQt5.QtCore import (
@@ -740,6 +741,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     sidebar_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
     sidebar_scroll.setFrameShape(QFrame.NoFrame)
     sidebar_scroll.setFixedWidth(300)
+    sidebar_scroll.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
     sidebar_scroll.setWidget(sidebar_widget)
     return sidebar_scroll
 
@@ -749,23 +751,32 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     button.setProperty("actionRole", action_role)
     button.setToolTip(tooltip)
     button.setAccessibleName(text)
+    button.setMinimumWidth(0)
+    button.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
     button.clicked.connect(handler)
     return button
+
+  def _configure_sidebar_status_label(self, label: QLabel) -> QLabel:
+    label.setWordWrap(True)
+    label.setMinimumWidth(0)
+    label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+    return label
 
   def _create_sidebar_panel(self) -> QWidget:
     """Create the left navigation and status sidebar."""
     menu_widget = QWidget()
     menu_widget.setObjectName("sidebarPanel")
     menu_widget.setProperty("role", "navigationSidebar")
-    menu_widget.setFixedWidth(300)
+    menu_widget.setMinimumWidth(0)
+    menu_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
 
     menu_layout = QVBoxLayout(menu_widget)
     menu_layout.setAlignment(Qt.AlignTop)
-    menu_layout.setContentsMargins(0, 2, 0, 2)
+    menu_layout.setContentsMargins(0, 2, 8, 2)
 
     top_button_area = QVBoxLayout()
     top_button_area.setObjectName("topButtonArea")
-    top_button_area.setContentsMargins(5, 0, 5, 4)
+    top_button_area.setContentsMargins(5, 0, 8, 4)
     top_button_area.addWidget(self.create_sidebar_section_label("Node", "nodeControlsSectionLabel"))
 
     container_selector_layout = QVBoxLayout()
@@ -881,6 +892,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.addressDisplay = QLabel('')
     self.addressDisplay.setFont(QFont("Courier New"))
     self.addressDisplay.setObjectName("infoBoxText")
+    self._configure_sidebar_status_label(self.addressDisplay)
     addr_layout.addWidget(self.addressDisplay)
 
     self.copyAddrButton = QPushButton()
@@ -897,6 +909,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.ethAddressDisplay = QLabel('')
     self.ethAddressDisplay.setObjectName("infoBoxText")
     self.ethAddressDisplay.setFont(QFont("Courier New"))
+    self._configure_sidebar_status_label(self.ethAddressDisplay)
     eth_addr_layout.addWidget(self.ethAddressDisplay)
 
     self.copyEthButton = QPushButton()
@@ -912,26 +925,31 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.nameDisplay = QLabel('')
     self.nameDisplay.setFont(QFont("Courier New"))
     self.nameDisplay.setObjectName("infoBoxText")
+    self._configure_sidebar_status_label(self.nameDisplay)
     info_box_layout.addWidget(self.nameDisplay)
 
     self.node_uptime = QLabel(UPTIME_LABEL)
     self.node_uptime.setObjectName("infoBoxText")
     self.node_uptime.setFont(QFont("Courier New"))
+    self._configure_sidebar_status_label(self.node_uptime)
     info_box_layout.addWidget(self.node_uptime)
 
     self.node_epoch = QLabel(EPOCH_LABEL)
     self.node_epoch.setObjectName("infoBoxText")
     self.node_epoch.setFont(QFont("Courier New"))
+    self._configure_sidebar_status_label(self.node_epoch)
     info_box_layout.addWidget(self.node_epoch)
 
     self.node_epoch_avail = QLabel(EPOCH_AVAIL_LABEL)
     self.node_epoch_avail.setObjectName("infoBoxText")
     self.node_epoch_avail.setFont(QFont("Courier New"))
+    self._configure_sidebar_status_label(self.node_epoch_avail)
     info_box_layout.addWidget(self.node_epoch_avail)
 
     self.node_version = QLabel()
     self.node_version.setObjectName("infoBoxText")
     self.node_version.setFont(QFont("Courier New"))
+    self._configure_sidebar_status_label(self.node_version)
     info_box_layout.addWidget(self.node_version)
 
     info_box.setLayout(info_box_layout)
@@ -949,24 +967,21 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.memoryDisplay = QLabel(MEMORY_LABEL + ' ' + MEMORY_NOT_AVAILABLE)
     self.memoryDisplay.setFont(QFont("Courier New"))
     self.memoryDisplay.setObjectName("resourcesBoxText")
-    self.memoryDisplay.setWordWrap(True)
-    self.memoryDisplay.setMaximumWidth(270)
+    self._configure_sidebar_status_label(self.memoryDisplay)
     self.memoryDisplay.setAlignment(Qt.AlignLeft | Qt.AlignTop)
     resources_box_layout.addWidget(self.memoryDisplay)
 
     self.vcpusDisplay = QLabel(VCPUS_LABEL + ' ' + VCPUS_NOT_AVAILABLE)
     self.vcpusDisplay.setFont(QFont("Courier New"))
     self.vcpusDisplay.setObjectName("resourcesBoxText")
-    self.vcpusDisplay.setWordWrap(True)
-    self.vcpusDisplay.setMaximumWidth(270)
+    self._configure_sidebar_status_label(self.vcpusDisplay)
     self.vcpusDisplay.setAlignment(Qt.AlignLeft | Qt.AlignTop)
     resources_box_layout.addWidget(self.vcpusDisplay)
 
     self.storageDisplay = QLabel(STORAGE_LABEL + ' ' + STORAGE_NOT_AVAILABLE)
     self.storageDisplay.setFont(QFont("Courier New"))
     self.storageDisplay.setObjectName("resourcesBoxText")
-    self.storageDisplay.setWordWrap(True)
-    self.storageDisplay.setMaximumWidth(270)
+    self._configure_sidebar_status_label(self.storageDisplay)
     self.storageDisplay.setAlignment(Qt.AlignLeft | Qt.AlignTop)
     resources_box_layout.addWidget(self.storageDisplay)
 
@@ -976,7 +991,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   def _create_sidebar_settings_section(self) -> QVBoxLayout:
     bottom_button_area = QVBoxLayout()
     bottom_button_area.setObjectName("bottomButtonArea")
-    bottom_button_area.setContentsMargins(5, 4, 5, 0)
+    bottom_button_area.setContentsMargins(5, 4, 8, 0)
     bottom_button_area.addWidget(self.create_sidebar_section_label("Settings", "settingsSectionLabel"))
 
     self.themeToggleButton = self._create_sidebar_action_button(
