@@ -141,6 +141,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.__current_node_epoch_avail = -1
     self.__current_node_ver = -1
     self.__display_uptime = None
+    self.__display_status_metadata = None
 
     self._current_stylesheet = DARK_STYLESHEET  # Default to dark theme
     self.__last_plot_data = None
@@ -878,28 +879,28 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self._configure_sidebar_status_label(self.nameDisplay)
     info_box_layout.addWidget(self.nameDisplay)
 
-    self.node_uptime = QLabel(UPTIME_LABEL)
+    self.node_uptime = QLabel(f"{UPTIME_LABEL} {EMPTY_DASH_TEXT}")
     self.node_uptime.setObjectName("nodeUptimeDisplay")
     self.node_uptime.setAccessibleName("Node uptime")
     self.node_uptime.setFont(QFont("Courier New"))
     self._configure_sidebar_status_label(self.node_uptime)
     info_box_layout.addWidget(self.node_uptime)
 
-    self.node_epoch = QLabel(EPOCH_LABEL)
+    self.node_epoch = QLabel(f"{EPOCH_LABEL} {EMPTY_DASH_TEXT}")
     self.node_epoch.setObjectName("nodeEpochDisplay")
     self.node_epoch.setAccessibleName("Node epoch")
     self.node_epoch.setFont(QFont("Courier New"))
     self._configure_sidebar_status_label(self.node_epoch)
     info_box_layout.addWidget(self.node_epoch)
 
-    self.node_epoch_avail = QLabel(EPOCH_AVAIL_LABEL)
+    self.node_epoch_avail = QLabel(f"{EPOCH_AVAIL_LABEL} {EMPTY_DASH_TEXT}")
     self.node_epoch_avail.setObjectName("nodeEpochAvailabilityDisplay")
     self.node_epoch_avail.setAccessibleName("Node epoch availability")
     self.node_epoch_avail.setFont(QFont("Courier New"))
     self._configure_sidebar_status_label(self.node_epoch_avail)
     info_box_layout.addWidget(self.node_epoch_avail)
 
-    self.node_version = QLabel()
+    self.node_version = QLabel(f"{NODE_VERSION_LABEL} {EMPTY_DASH_TEXT}")
     self.node_version.setObjectName("nodeVersionDisplay")
     self.node_version.setAccessibleName("Node version")
     self.node_version.setFont(QFont("Courier New"))
@@ -2253,19 +2254,21 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         ver = "N/A"
         color = 'red'
       
+    prc = round(node_epoch_avail * 100 if node_epoch_avail > 0 else node_epoch_avail, 2) if node_epoch_avail is not None else 0
+    metadata = (uptime, node_epoch, prc, ver)
+
     # Only update if values have changed
-    if uptime != self.__display_uptime:
+    if metadata != self.__display_status_metadata:
+      self.node_uptime.setText(f'{UPTIME_LABEL} {uptime}')
 
-      self.node_uptime.setText(f'Up Time: {uptime}')
+      self.node_epoch.setText(f'{EPOCH_LABEL} {node_epoch}')
 
-      self.node_epoch.setText(f'Epoch: {node_epoch}')
+      self.node_epoch_avail.setText(f'{EPOCH_AVAIL_LABEL} {prc}%')
 
-      prc = round(node_epoch_avail * 100 if node_epoch_avail > 0 else node_epoch_avail, 2) if node_epoch_avail is not None else 0
-      self.node_epoch_avail.setText(f'Epoch avail: {prc}%')
-
-      self.node_version.setText(f'Running ver: {ver}')
+      self.node_version.setText(f'{NODE_VERSION_LABEL} {ver}')
 
       self.__display_uptime = uptime
+      self.__display_status_metadata = metadata
       self.add_log(f"Updated uptime display for container {container_name}", debug=True)
     return
 
@@ -2861,20 +2864,23 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.uptime_label.setText("Uptime: -")
     
     if hasattr(self, 'node_uptime'):
-        self.node_uptime.setText(UPTIME_LABEL)
+        self.node_uptime.setText(f"{UPTIME_LABEL} {EMPTY_DASH_TEXT}")
 
     if hasattr(self, 'node_epoch'):
-        self.node_epoch.setText(EPOCH_LABEL)
+        self.node_epoch.setText(f"{EPOCH_LABEL} {EMPTY_DASH_TEXT}")
 
     if hasattr(self, 'node_epoch_avail'):
-        self.node_epoch_avail.setText(EPOCH_AVAIL_LABEL)
+        self.node_epoch_avail.setText(f"{EPOCH_AVAIL_LABEL} {EMPTY_DASH_TEXT}")
 
     if hasattr(self, 'node_version'):
-        self.node_version.setText('')
+        self.node_version.setText(f"{NODE_VERSION_LABEL} {EMPTY_DASH_TEXT}")
 
     # Reset state variables
     if hasattr(self, '__display_uptime'):
         self.__display_uptime = None
+
+    if hasattr(self, '__display_status_metadata'):
+        self.__display_status_metadata = None
     
     if hasattr(self, '__current_node_uptime'):
         self.__current_node_uptime = -1

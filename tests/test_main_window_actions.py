@@ -16,6 +16,7 @@ from widgets.ToastWidget import NotificationType
 REAL_PLOT_DATA = frm_main.EdgeNodeLauncher.plot_data
 REAL_PLOT_GRAPHS = frm_main.EdgeNodeLauncher.plot_graphs
 REAL_REFRESH_NODE_INFO = frm_main.EdgeNodeLauncher.refresh_node_info
+REAL_MAYBE_REFRESH_UPTIME = frm_main.EdgeNodeLauncher.maybe_refresh_uptime
 
 
 class FakeToast:
@@ -287,6 +288,65 @@ def test_status_card_address_rows_keep_text_visible_next_to_copy_buttons(qtbot, 
     assert launcher.copyEthButton.isVisible()
     assert launcher.addressDisplay.width() > launcher.copyAddrButton.width()
     assert launcher.ethAddressDisplay.width() > launcher.copyEthButton.width()
+
+
+def test_status_card_runtime_labels_use_consistent_copy(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    launcher.maybe_refresh_uptime = REAL_MAYBE_REFRESH_UPTIME.__get__(launcher, frm_main.EdgeNodeLauncher)
+
+    launcher._EdgeNodeLauncher__current_node_uptime = "1h 2m"
+    launcher._EdgeNodeLauncher__current_node_epoch = 42
+    launcher._EdgeNodeLauncher__current_node_epoch_avail = 0.25
+    launcher._EdgeNodeLauncher__current_node_ver = "1.2.3"
+
+    launcher.maybe_refresh_uptime(assume_running=True)
+
+    assert launcher.node_uptime.text() == "Uptime: 1h 2m"
+    assert launcher.node_epoch.text() == "Epoch: 42"
+    assert launcher.node_epoch_avail.text() == "Epoch availability: 25.0%"
+    assert launcher.node_version.text() == "Version: 1.2.3"
+
+
+def test_status_card_initial_metadata_uses_placeholders(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+
+    assert launcher.node_uptime.text() == "Uptime: -"
+    assert launcher.node_epoch.text() == "Epoch: -"
+    assert launcher.node_epoch_avail.text() == "Epoch availability: -"
+    assert launcher.node_version.text() == "Version: -"
+
+
+def test_status_card_refreshes_when_epoch_changes_without_uptime_change(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    launcher.maybe_refresh_uptime = REAL_MAYBE_REFRESH_UPTIME.__get__(launcher, frm_main.EdgeNodeLauncher)
+
+    launcher._EdgeNodeLauncher__current_node_uptime = "1h"
+    launcher._EdgeNodeLauncher__current_node_epoch = 1
+    launcher._EdgeNodeLauncher__current_node_epoch_avail = 0.1
+    launcher._EdgeNodeLauncher__current_node_ver = "1.0.0"
+    launcher.maybe_refresh_uptime(assume_running=True)
+
+    launcher._EdgeNodeLauncher__current_node_epoch = 2
+    launcher._EdgeNodeLauncher__current_node_epoch_avail = 0.2
+    launcher._EdgeNodeLauncher__current_node_ver = "1.0.1"
+    launcher.maybe_refresh_uptime(assume_running=True)
+
+    assert launcher.node_uptime.text() == "Uptime: 1h"
+    assert launcher.node_epoch.text() == "Epoch: 2"
+    assert launcher.node_epoch_avail.text() == "Epoch availability: 20.0%"
+    assert launcher.node_version.text() == "Version: 1.0.1"
+
+
+def test_status_card_stopped_labels_use_consistent_copy(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launcher.maybe_refresh_uptime = REAL_MAYBE_REFRESH_UPTIME.__get__(launcher, frm_main.EdgeNodeLauncher)
+
+    launcher.maybe_refresh_uptime(assume_running=False)
+
+    assert launcher.node_uptime.text() == "Uptime: STOPPED"
+    assert launcher.node_epoch.text() == "Epoch: N/A"
+    assert launcher.node_epoch_avail.text() == "Epoch availability: 0%"
+    assert launcher.node_version.text() == "Version: N/A"
 
 
 def test_main_window_refresh_button_uses_limited_refresh_when_container_stopped(qtbot, monkeypatch):

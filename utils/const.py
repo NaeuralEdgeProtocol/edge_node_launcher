@@ -61,10 +61,10 @@ DOWNLOAD_DOCKER_BUTTON_TEXT = 'Download Docker'
 
 # Label texts
 LOCAL_NODE_ADDRESS_LABEL_TEXT = 'Local Node Address'
-UPTIME_LABEL = 'Up Time:'
+UPTIME_LABEL = 'Uptime:'
 EPOCH_LABEL = 'Epoch:'
-EPOCH_AVAIL_LABEL = 'Epochs avail:'
-NODE_VERSION_LABEL = 'Running ver:'
+EPOCH_AVAIL_LABEL = 'Epoch availability:'
+NODE_VERSION_LABEL = 'Version:'
 
 # Resources box labels
 RESOURCES_BOX_TITLE = 'System Resources'
