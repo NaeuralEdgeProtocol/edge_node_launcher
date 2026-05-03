@@ -316,6 +316,16 @@ def test_status_card_uses_semantic_label_roles(qtbot, monkeypatch):
     assert 'QLabel[statusField="metadata"]' in frm_main.DARK_STYLESHEET
 
 
+def test_stylesheets_do_not_reference_removed_status_selectors():
+    source = Path(frm_main.__file__).read_text(encoding="utf-8")
+    combined_stylesheets = frm_main.DARK_STYLESHEET + frm_main.LIGHT_STYLESHEET
+
+    assert "infoBoxText" not in source
+    assert "infoBoxText" not in combined_stylesheets
+    assert "myComboPopup" not in combined_stylesheets
+    assert "No additional styles needed" not in combined_stylesheets
+
+
 def test_status_card_runtime_labels_use_consistent_copy(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
     launcher.maybe_refresh_uptime = REAL_MAYBE_REFRESH_UPTIME.__get__(launcher, frm_main.EdgeNodeLauncher)

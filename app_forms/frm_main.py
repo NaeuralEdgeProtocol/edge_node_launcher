@@ -1313,9 +1313,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         #infoBox QLabel {
           font-size: 12pt !important;
         }
-        #infoBoxText QLabel {
-          font-size: 12pt !important;
-        }
         QComboBox QAbstractItemView {
           min-width: 254px !important; /* Wider dropdown on macOS */
         }

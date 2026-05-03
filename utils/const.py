@@ -785,23 +785,15 @@ COMMON_STYLESHEET_TEMPLATE = """
     margin-right: 0px;
     color: {text_color};
   }}
-  QLabel#infoBoxText,
   QLabel#resourcesBoxText {{
     color: {info_box_text};
     background-color: transparent;
     font-weight: {info_box_font_weight};
   }}
-  #myComboPopup {{
-    background-color: #2e2e2e; 
-    border: none; 
-}}
 
 """
 
-# Additional custom styles
-ADDITIONAL_STYLES = """
-  /* No additional styles needed anymore since we've set margins directly on layouts */
-"""
+ADDITIONAL_STYLES = ""
 
 # Apply the common template with dark theme values
 DARK_STYLESHEET = COMMON_STYLESHEET_TEMPLATE.format(**DARK_THEME) + ADDITIONAL_STYLES + """
