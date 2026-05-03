@@ -1,6 +1,8 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QDialog, QDialogButtonBox
 
+from models.NodeHistory import NodeHistory
+from models.NodeInfo import NodeInfo
 from widgets.app_widgets.config_editor import ConfigEditorWidget
 from widgets.app_widgets.container_list import ContainerListWidget
 from widgets.app_widgets.log_console import LogConsoleWidget
@@ -91,6 +93,28 @@ def test_node_info_widget_action_buttons_emit_signals(qtbot):
         qtbot.mouseClick(widget.btn_refresh, Qt.LeftButton)
 
 
+def test_node_info_widget_updates_from_current_model_contract(qtbot):
+    widget = NodeInfoWidget()
+    qtbot.addWidget(widget)
+
+    widget.update_node_info(
+        NodeInfo(
+            address="0xnode",
+            alias="edge-one",
+            eth_address="0xeth",
+            version_long="1.2.3-long",
+            version_short="1.2.3",
+            whitelist=[],
+        )
+    )
+
+    assert widget.lbl_node_address.text() == "0xnode"
+    assert widget.lbl_eth_address.text() == "0xeth"
+    assert widget.lbl_node_name.text() == "edge-one"
+    assert widget.lbl_node_status.text() == "Available"
+    assert widget.lbl_uptime.text() == "N/A"
+
+
 def test_metrics_widget_refresh_button_emits_signal(qtbot):
     widget = MetricsWidget()
     qtbot.addWidget(widget)
@@ -99,6 +123,39 @@ def test_metrics_widget_refresh_button_emits_signal(qtbot):
 
     with qtbot.waitSignal(widget.refresh_requested):
         qtbot.mouseClick(widget.btn_refresh, Qt.LeftButton)
+
+
+def test_metrics_widget_updates_from_current_history_model_contract(qtbot):
+    widget = MetricsWidget()
+    qtbot.addWidget(widget)
+
+    widget.update_metrics(
+        NodeHistory(
+            address="0xnode",
+            alias="edge-one",
+            cpu_load=[12.0, 24.0],
+            cpu_temp=[40.0, 41.0],
+            current_epoch=8,
+            current_epoch_avail=0.5,
+            eth_address="0xeth",
+            gpu_load=[30.0, 45.0],
+            gpu_occupied_memory=[1024.0, 2048.0],
+            gpu_temp=[60.0, 61.0],
+            gpu_total_memory=[4096.0, 4096.0],
+            last_epochs=[6, 7, 8],
+            last_save_time="2026-05-03T01:00:10",
+            occupied_memory=[512.0, 768.0],
+            timestamps=["2026-05-03T01:00:00", "2026-05-03T01:00:10"],
+            total_memory=[1024.0, 1024.0],
+            uptime="1h",
+            version="1.2.3",
+        )
+    )
+
+    assert len(widget.plot_cpu.listDataItems()) == 1
+    assert len(widget.plot_memory.listDataItems()) == 1
+    assert len(widget.plot_gpu.listDataItems()) == 1
+    assert len(widget.plot_gpu_memory.listDataItems()) == 1
 
 
 def test_config_editor_button_opens_dialog_with_named_actions(qtbot, monkeypatch):

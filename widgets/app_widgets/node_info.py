@@ -107,21 +107,16 @@ class NodeInfoWidget(QWidget):
             self.lbl_node_address.setText(node_info.address or "N/A")
             
             # Update ETH address
-            self.lbl_eth_address.setText(node_info.ethereum_address or "N/A")
+            self.lbl_eth_address.setText(node_info.eth_address or "N/A")
             
             # Update status
-            status_text = "Running" if node_info.is_running else "Stopped"
-            self.lbl_node_status.setText(status_text)
+            self.lbl_node_status.setText("Available")
             
-            # Update uptime if available
-            if node_info.uptime:
-                uptime_text = self._format_uptime(node_info.uptime)
-                self.lbl_uptime.setText(uptime_text)
-            else:
-                self.lbl_uptime.setText("N/A")
+            # NodeInfo snapshots do not include runtime uptime.
+            self.lbl_uptime.setText("N/A")
             
             # Update node name
-            self.lbl_node_name.setText(node_info.name or "N/A")
+            self.lbl_node_name.setText(node_info.alias or "N/A")
         else:
             self.clear_info()
     
