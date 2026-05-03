@@ -6,6 +6,7 @@ from models.NodeHistory import NodeHistory
 from models.NodeInfo import NodeInfo
 from widgets.DockerPullDialog import DockerPullDialog
 from widgets.LoadingDialog import LoadingDialog
+from widgets.CenteredComboBox import CenteredComboBox
 from widgets.app_widgets.config_editor import ConfigEditorWidget
 from widgets.app_widgets.container_list import ContainerListWidget
 from widgets.app_widgets.log_console import LogConsoleWidget
@@ -60,6 +61,22 @@ def test_log_console_adds_and_clears_text(qtbot):
     qtbot.mouseClick(widget.btn_clear, Qt.LeftButton)
 
     assert widget.text_console.toPlainText() == ""
+
+
+def test_centered_combo_light_popup_uses_supported_qt_stylesheet(qtbot):
+    combo = CenteredComboBox()
+    qtbot.addWidget(combo)
+    combo.set_theme(False)
+    combo.addItem("alpha", "r1node")
+
+    combo.showPopup()
+    qtbot.wait(50)
+    try:
+        stylesheet = combo.view().styleSheet()
+        assert "QListView" in stylesheet
+        assert "box-shadow" not in stylesheet
+    finally:
+        combo.hidePopup()
 
 
 def test_loading_dialog_progress_does_not_process_events_synchronously(qtbot, monkeypatch):

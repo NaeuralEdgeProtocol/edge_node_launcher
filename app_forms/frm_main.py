@@ -729,6 +729,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     container_selector_layout.addWidget(self.add_node_button)
 
     self.container_combo = CenteredComboBox()
+    self.container_combo.setObjectName("nodeSelectorCombo")
+    self.container_combo.setAccessibleName("Node selector")
+    self.container_combo.setToolTip("Select active node")
     self.container_combo.setFont(QFont("Courier New", 10))
     self.container_combo.currentTextChanged.connect(self._on_container_selected)
     self.container_combo.setMinimumHeight(32)

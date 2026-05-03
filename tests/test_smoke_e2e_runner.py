@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 import webbrowser
 
-from PyQt5.QtWidgets import QDialog, QLabel, QLineEdit, QProgressBar, QPushButton
+from PyQt5.QtWidgets import QApplication, QComboBox, QDialog, QLabel, QLineEdit, QProgressBar, QPushButton
 
 import tools.run_smoke_e2e as smoke
 from widgets.ToastWidget import NotificationType, ToastWidget
@@ -192,6 +192,32 @@ def test_capture_dialog_visual_evidence_omits_screenshot_without_dir(qtbot):
     assert evidence["label"] == "no_screenshot"
     assert evidence["dialog"]["title"] == "No Screenshot"
     assert "screenshot" not in evidence
+
+
+def test_combo_popup_visual_evidence_records_items_and_hides_popup(qtbot):
+    app = QApplication.instance()
+    parent = QDialog()
+    combo = QComboBox(parent)
+    combo.setObjectName("nodeSelectorCombo")
+    combo.setAccessibleName("Node selector")
+    combo.setToolTip("Select active node")
+    combo.addItem("alpha", "r1node")
+    combo.addItem("beta", "r1node2")
+    qtbot.addWidget(parent)
+    parent.show()
+    qtbot.waitUntil(parent.isVisible)
+
+    evidence = smoke.capture_combo_popup_visual_evidence(app, combo, "", "node_selector")
+
+    assert evidence["label"] == "node_selector"
+    assert evidence["combo_popup"]["combo_object_name"] == "nodeSelectorCombo"
+    assert evidence["combo_popup"]["combo_accessible_name"] == "Node selector"
+    assert evidence["combo_popup"]["combo_tooltip"] == "Select active node"
+    assert evidence["combo_popup"]["items"] == [
+        {"index": 0, "text": "alpha", "data": "r1node"},
+        {"index": 1, "text": "beta", "data": "r1node2"},
+    ]
+    assert combo.view().window().isVisible() is False
 
 
 def test_toast_visual_snapshot_records_visible_notification(qtbot):

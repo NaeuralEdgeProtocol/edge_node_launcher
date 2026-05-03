@@ -1269,6 +1269,14 @@ def test_main_window_graph_plots_stay_inside_styled_containers(qtbot, monkeypatc
         assert layout.itemAtPosition(row, column).widget() is container
 
 
+def test_node_selector_exposes_stable_visual_identity(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+
+    assert launcher.container_combo.objectName() == "nodeSelectorCombo"
+    assert launcher.container_combo.accessibleName() == "Node selector"
+    assert launcher.container_combo.toolTip() == "Select active node"
+
+
 def test_main_window_metric_empty_states_remain_visible_without_history(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
     launcher.plot_graphs = REAL_PLOT_GRAPHS.__get__(launcher, frm_main.EdgeNodeLauncher)

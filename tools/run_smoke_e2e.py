@@ -19,6 +19,8 @@ from types import SimpleNamespace
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SMOKE_CONTAINER = "r1nodesmoke"
 SMOKE_VOLUME = "r1volsmoke"
+SMOKE_SECONDARY_CONTAINER = "r1nodesmoke2"
+SMOKE_SECONDARY_VOLUME = "r1volsmoke2"
 
 
 class FakeDockerHandler:
@@ -243,6 +245,52 @@ def capture_visual_evidence(launcher, screenshot_dir, label):
     return evidence
 
 
+def combo_popup_visual_snapshot(app, combo):
+    combo.showPopup()
+    app.processEvents()
+    time.sleep(0.05)
+    app.processEvents()
+
+    popup = combo.view().window()
+    return {
+        "combo_object_name": combo.objectName(),
+        "combo_accessible_name": combo.accessibleName(),
+        "combo_tooltip": combo.toolTip(),
+        "combo_rect": widget_global_rect(combo),
+        "current_text": combo.currentText(),
+        "current_index": combo.currentIndex(),
+        "items": [
+            {
+                "index": index,
+                "text": combo.itemText(index),
+                "data": combo.itemData(index),
+            }
+            for index in range(combo.count())
+        ],
+        "popup_visible": popup.isVisible(),
+        "popup_rect": widget_global_rect(popup),
+        "popup_widget": popup,
+    }
+
+
+def capture_combo_popup_visual_evidence(app, combo, screenshot_dir, label):
+    snapshot = combo_popup_visual_snapshot(app, combo)
+    popup = snapshot.pop("popup_widget")
+    evidence = {
+        "label": label,
+        "combo_popup": snapshot,
+    }
+    if screenshot_dir and snapshot["popup_visible"]:
+        evidence["screenshot"] = save_widget_screenshot(
+            popup,
+            screenshot_dir,
+            f"{label}_combo_popup.png",
+        )
+    combo.hidePopup()
+    app.processEvents()
+    return evidence
+
+
 def dialog_visual_snapshot(dialog):
     from PyQt5.QtWidgets import QLabel, QLineEdit, QProgressBar, QPushButton
 
@@ -449,8 +497,8 @@ def run_scenarios(args):
     log = {
         "started_at": datetime.now().isoformat(),
         "destructive": False,
-        "containers": [SMOKE_CONTAINER],
-        "volumes": [SMOKE_VOLUME],
+        "containers": [SMOKE_CONTAINER, SMOKE_SECONDARY_CONTAINER],
+        "volumes": [SMOKE_VOLUME, SMOKE_SECONDARY_VOLUME],
         "screenshot_dir": args.screenshot_dir,
         "steps": [],
     }
@@ -467,6 +515,15 @@ def run_scenarios(args):
             node_address="0xsmokenode",
             eth_address="0xsmokeeth",
             node_alias="smoke-primary",
+        )
+    )
+    config_manager.add_container(
+        ContainerConfig(
+            name=SMOKE_SECONDARY_CONTAINER,
+            volume=SMOKE_SECONDARY_VOLUME,
+            node_address="0xsmokenode2",
+            eth_address="0xsmokeeth2",
+            node_alias="smoke-secondary",
         )
     )
     fake_docker = FakeDockerHandler(SMOKE_CONTAINER)
@@ -513,6 +570,20 @@ def run_scenarios(args):
         if not compact_visual["sidebar"]["passed"]:
             raise AssertionError("; ".join(compact_visual["sidebar"]["issues"]))
 
+        record_step(
+            log,
+            args.output,
+            {
+                "step": "captured dark node selector popup visual evidence",
+                "visual": capture_combo_popup_visual_evidence(
+                    app,
+                    launcher.container_combo,
+                    args.screenshot_dir,
+                    "dark_node_selector",
+                ),
+            },
+        )
+
         launcher.setMinimumSize(original_minimum_size)
         launcher.resize(1600, 900)
         app.processEvents()
@@ -558,6 +629,23 @@ def run_scenarios(args):
 
         record_step(log, args.output, {"step": click_button(app, launcher.themeToggleButton, "toggle light theme")})
         wait_until(app, lambda: launcher.themeToggleButton.text() == frm_main.DARK_DASHBOARD_BUTTON_TEXT, args.timeout, "light theme")
+        light_visual = capture_visual_evidence(launcher, args.screenshot_dir, "light_theme")
+        record_step(log, args.output, {"step": "captured light theme visual evidence", "visual": light_visual})
+        if not light_visual["sidebar"]["passed"]:
+            raise AssertionError("; ".join(light_visual["sidebar"]["issues"]))
+        record_step(
+            log,
+            args.output,
+            {
+                "step": "captured light node selector popup visual evidence",
+                "visual": capture_combo_popup_visual_evidence(
+                    app,
+                    launcher.container_combo,
+                    args.screenshot_dir,
+                    "light_node_selector",
+                ),
+            },
+        )
         record_step(log, args.output, {"step": click_button(app, launcher.themeToggleButton, "toggle dark theme")})
         wait_until(app, lambda: launcher.themeToggleButton.text() == frm_main.LIGHT_DASHBOARD_BUTTON_TEXT, args.timeout, "dark theme")
 

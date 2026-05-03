@@ -321,7 +321,6 @@ class CenteredComboBox(QComboBox):
                     background-color: {popup_bg_color};
                     outline: none;
                     padding: 14px;
-                    box-shadow: 0px 3px 8px rgba(0, 0, 0, 0.15);
                 }}
                 
                 QListView::item {{
