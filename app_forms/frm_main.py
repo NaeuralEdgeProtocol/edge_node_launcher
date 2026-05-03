@@ -1960,16 +1960,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     
     if config_container and config_container.node_address:
       # Use cached data if available
-      self.node_addr = config_container.node_address
-      self.node_eth_address = config_container.eth_address
-      self.node_name = config_container.node_alias
-      
-      # Update UI with cached data
-      self._update_address_display(self.node_addr, show_copy_button=True)
-      self._update_eth_address_display(self.node_eth_address, show_copy_button=True)
-      if self.node_name:
-        self.nameDisplay.setText('Name: ' + self.node_name)
-      
+      self._display_cached_container_data(config_container)
       self.add_log(f"Showing cached data for stopped container: {container_name}", debug=True)
     else:
       # No cached data available
@@ -2005,15 +1996,12 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                 self.container_combo.setCurrentIndex(i)
                 break
 
-    # Update instance variables with fresh data
-    self.node_addr = node_info.address
-    self.node_eth_address = node_info.eth_address
-    self.node_name = node_info.alias
-
-    # Update UI displays
-    self._update_address_display(self.node_addr, show_copy_button=True)
-    self._update_eth_address_display(self.node_eth_address, show_copy_button=True)
-    self.nameDisplay.setText('Name: ' + node_info.alias)
+    self._update_node_identity_display(
+      node_info.address,
+      node_info.eth_address,
+      node_info.alias,
+      show_copy_buttons=True,
+    )
 
     # Save fresh data to config
     if container_name:
@@ -2086,6 +2074,41 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     else:
       self.ethAddressDisplay.setText('ETH Address: -')
       self.copyEthButton.hide()
+
+  def _update_name_display(self, node_name: str, empty_text: str = ""):
+    if node_name:
+      self.nameDisplay.setText('Name: ' + node_name)
+    else:
+      self.nameDisplay.setText(empty_text)
+
+  def _update_node_identity_display(
+    self,
+    node_address: str,
+    eth_address: str,
+    node_name: str,
+    show_copy_buttons: bool = False,
+    empty_name_text: str = "",
+  ):
+    self.node_addr = node_address
+    self.node_eth_address = eth_address
+    self.node_name = node_name
+    self._update_address_display(
+      self.node_addr,
+      show_copy_button=show_copy_buttons and bool(self.node_addr),
+    )
+    self._update_eth_address_display(
+      self.node_eth_address,
+      show_copy_button=show_copy_buttons and bool(self.node_eth_address),
+    )
+    self._update_name_display(self.node_name, empty_text=empty_name_text)
+
+  def _display_cached_container_data(self, config_container):
+    self._update_node_identity_display(
+      config_container.node_address,
+      config_container.eth_address,
+      config_container.node_alias,
+      show_copy_buttons=True,
+    )
 
   def maybe_refresh_uptime(self, assume_running: Optional[bool] = None):
     """Update uptime, epoch and epoch availability displays.
@@ -2269,49 +2292,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         # Define success callback for get_node_info
         def on_node_info_success(node_info: NodeInfo) -> None:
             self.add_log(f"Received fresh node info: {node_info.address}, {node_info.alias}, ETH: {node_info.eth_address}", color="green")
-            
-            # Update all node information from the fresh response
-            self.node_addr = node_info.address
-            self.node_eth_address = node_info.eth_address
-            self.node_name = node_info.alias
-            
-            # Update displays with fresh data
-            if self.node_addr:
-                if len(self.node_addr) > 24:
-                    str_display = f"Address: {self.node_addr[:16]}...{self.node_addr[-8:]}"
-                else:
-                    str_display = f"Address: {self.node_addr}"
-                self.addressDisplay.setText(str_display)
-                self.copyAddrButton.setVisible(True)
-            
-            if self.node_eth_address:
-                if len(self.node_eth_address) > 24:
-                    str_eth_display = f"ETH Address: {self.node_eth_address[:16]}...{self.node_eth_address[-8:]}"
-                else:
-                    str_eth_display = f"ETH Address: {self.node_eth_address}"
-                self.ethAddressDisplay.setText(str_eth_display)
-                self.copyEthButton.setVisible(True)
-            
-            if self.node_name:
-                self.nameDisplay.setText('Name: ' + self.node_name)
-            
-            # Save fresh addresses to config
-            self.config_manager.update_node_address(container_name, self.node_addr)
-            self.config_manager.update_eth_address(container_name, self.node_eth_address)
-            
-            # Check if node alias has changed and update config
-            config_container = self.config_manager.get_container(container_name)
-            if config_container and node_info.alias != config_container.node_alias:
-                self.add_log(f"Node alias changed from '{config_container.node_alias}' to '{node_info.alias}', updating config", debug=True)
-                self.config_manager.update_node_alias(container_name, node_info.alias)
-                # Refresh container list to update display in dropdown
-                current_container = container_name
-                self.refresh_container_list()
-                # Restore the selection
-                for i in range(self.container_combo.count()):
-                    if self.container_combo.itemData(i) == current_container:
-                        self.container_combo.setCurrentIndex(i)
-                        break
+            self._update_ui_with_fresh_data(node_info, container_name)
             
             # Now refresh metrics and other data
             self.add_log("Refreshing node metrics and performance data...", debug=True)
@@ -2740,9 +2721,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     
     # Don't stop the loading indicator here - let the calling methods manage it
     
-    # Set text color based on theme
-    text_color = "white" if self._current_stylesheet == DARK_STYLESHEET else "black"
-    
     # Get the current container name if available
     container_name = None
     if hasattr(self, 'container_combo') and self.container_combo.currentIndex() >= 0:
@@ -2755,33 +2733,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     
     # If we have cached data, use it instead of clearing
     if cached_data and cached_data.node_address:
-        # Update instance variables
-        self.node_addr = cached_data.node_address
-        self.node_eth_address = cached_data.eth_address
-        self.node_name = cached_data.node_alias
-        
-        # Update displays with cached data but indicate node is not running
-        if hasattr(self, 'nameDisplay') and self.node_name:
-            self.nameDisplay.setText('Name: ' + self.node_name)
-
-        if hasattr(self, 'addressDisplay') and self.node_addr:
-            if len(self.node_addr) > 24:  # Only truncate if long enough
-              str_display = f"Address: {self.node_addr[:16]}...{self.node_addr[-8:]}"
-            else:
-              str_display = f"Address: {self.node_addr}"
-            self.addressDisplay.setText(str_display)
-            # self.addressDisplay.setStyleSheet(f"color: {text_color};")
-            if hasattr(self, 'copyAddrButton'):
-                self.copyAddrButton.setVisible(True)
-        
-        if hasattr(self, 'ethAddressDisplay') and self.node_eth_address:
-            if len(self.node_eth_address) > 24:  # Only truncate if long enough
-              str_eth_display = f"ETH Address: {self.node_eth_address[:16]}...{self.node_eth_address[-8:]}"
-            else:
-              str_eth_display = f"ETH Address: {self.node_eth_address}"
-            self.ethAddressDisplay.setText(str_eth_display)
-            if hasattr(self, 'copyEthButton'):
-                self.copyEthButton.setVisible(True)
+        self._display_cached_container_data(cached_data)
     else:
         # No cached data - show loading state if container is starting, otherwise show placeholder
         if is_loading:
@@ -2928,31 +2880,13 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         if not container_exists:
             if config_container:
                 self.add_log(f"Container {actual_container_name} exists in config but not in Docker. It will be recreated when launched.", debug=True)
-                
-                # Display saved addresses if available
+
+                self._display_cached_container_data(config_container)
                 if config_container.node_address:
-                    self.node_addr = config_container.node_address
-                    if len(self.node_addr) > 24:  # Only truncate if long enough
-                      str_display = f"Address: {self.node_addr[:16]}...{self.node_addr[-8:]}"
-                    else:
-                      str_display = f"Address: {self.node_addr}"
-                    self.addressDisplay.setText(str_display)
-                    self.copyAddrButton.setVisible(True)
                     self.add_log(f"Displaying saved node address for {actual_container_name}", debug=True)
-                
                 if config_container.eth_address:
-                    self.node_eth_address = config_container.eth_address
-                    if len(self.node_eth_address) > 24:  # Only truncate if long enough
-                      str_eth_display = f"ETH Address: {self.node_eth_address[:16]}...{self.node_eth_address[-8:]}"
-                    else:
-                      str_eth_display = f"ETH Address: {self.node_eth_address}"
-                    self.ethAddressDisplay.setText(str_eth_display)
-                    self.copyEthButton.setVisible(True)
                     self.add_log(f"Displaying saved ETH address for {actual_container_name}", debug=True)
-                
                 if config_container.node_alias:
-                    self.node_name = config_container.node_alias
-                    self.nameDisplay.setText('Name: ' + config_container.node_alias)
                     self.add_log(f"Displaying saved node alias for {actual_container_name}", debug=True)
                 
                 return
@@ -2970,24 +2904,10 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         else:
             # Display saved addresses from config if available
             if config_container:
+                self._display_cached_container_data(config_container)
                 if config_container.node_address:
-                    self.node_addr = config_container.node_address
-                    if len(self.node_addr) > 24:  # Only truncate if long enough
-                      str_display = f"Address: {self.node_addr[:16]}...{self.node_addr[-8:]}"
-                    else:
-                      str_display = f"Address: {self.node_addr}"
-                    self.addressDisplay.setText(str_display)
-                    self.copyAddrButton.setVisible(True)
                     self.add_log(f"Displaying saved node address for {actual_container_name}", debug=True)
-                
                 if config_container.eth_address:
-                    self.node_eth_address = config_container.eth_address
-                    if len(self.node_eth_address) > 24:  # Only truncate if long enough
-                      str_eth_display = f"ETH Address: {self.node_eth_address[:16]}...{self.node_eth_address[-8:]}"
-                    else:
-                      str_eth_display = f"ETH Address: {self.node_eth_address}"
-                    self.ethAddressDisplay.setText(str_eth_display)
-                    self.copyEthButton.setVisible(True)
                     self.add_log(f"Displaying saved ETH address for {actual_container_name}", debug=True)
                 
                 self.add_log(f"Container {actual_container_name} is not running, displaying saved data", debug=True)

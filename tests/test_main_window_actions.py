@@ -459,6 +459,36 @@ def test_refresh_node_info_targets_selected_container_id_not_display_alias(qtbot
     assert fake_config.get_container("r1node").node_address == "0xfreshnode"
 
 
+def test_force_refresh_empty_addresses_clear_stale_display(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+
+    def return_empty_node_info(on_success, _on_error):
+        on_success(
+            NodeInfo(
+                address="",
+                eth_address="",
+                alias="fresh",
+                version_long="",
+                version_short="",
+                whitelist=[],
+            )
+        )
+
+    fake_handler.get_node_info = return_empty_node_info
+    launcher.addressDisplay.setText("Address: stale")
+    launcher.ethAddressDisplay.setText("ETH Address: stale")
+    launcher.copyAddrButton.show()
+    launcher.copyEthButton.show()
+
+    launcher.force_refresh_all()
+
+    assert launcher.addressDisplay.text() == "Address: -"
+    assert launcher.ethAddressDisplay.text() == "ETH Address: -"
+    assert launcher.nameDisplay.text() == "Name: fresh"
+    assert not launcher.copyAddrButton.isVisible()
+    assert not launcher.copyEthButton.isVisible()
+
+
 def test_toggle_state_targets_selected_container_id_not_display_alias(qtbot, monkeypatch):
     launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
 
@@ -479,6 +509,25 @@ def test_container_selection_checks_docker_with_container_id_not_display_alias(q
 
     assert checked_containers == ["r1node"]
     assert fake_handler.container_name == "r1node"
+
+
+def test_container_selection_cached_data_clears_missing_eth_address(qtbot, monkeypatch):
+    launcher, fake_config, _fake_handler = _build_launcher(
+        monkeypatch,
+        qtbot,
+        running=False,
+        config_setup=lambda config: setattr(config.containers[0], "eth_address", None),
+    )
+    launcher.ethAddressDisplay.setText("ETH Address: stale")
+    launcher.copyEthButton.show()
+
+    launcher._on_container_selected("alpha")
+
+    assert launcher.addressDisplay.text() == "Address: 0xnodeaddress"
+    assert launcher.copyAddrButton.isVisible()
+    assert launcher.ethAddressDisplay.text() == "ETH Address: -"
+    assert not launcher.copyEthButton.isVisible()
+    assert fake_config.get_container("r1node").eth_address is None
 
 
 def test_copy_address_fallback_uses_container_id_not_display_alias(qtbot, monkeypatch):
