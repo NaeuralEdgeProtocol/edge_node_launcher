@@ -1,4 +1,5 @@
 import webbrowser
+from pathlib import Path
 from types import SimpleNamespace
 
 from PyQt5 import sip
@@ -233,6 +234,12 @@ def test_add_log_does_not_process_events_synchronously(qtbot, monkeypatch):
         launcher.add_log("visible log entry")
 
     assert "visible log entry" in launcher.logView.toPlainText()
+
+
+def test_main_window_does_not_process_events_synchronously():
+    source = Path(frm_main.__file__).read_text(encoding="utf-8")
+
+    assert "QApplication.processEvents" not in source
 
 
 def test_main_window_copy_buttons_copy_current_addresses(qtbot, monkeypatch):

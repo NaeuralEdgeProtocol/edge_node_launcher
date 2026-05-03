@@ -424,6 +424,17 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         log_view.ensureCursorVisible()
 
     QTimer.singleShot(0, scroll_to_latest)
+
+  def _queue_ui_refresh(self, widget=None) -> None:
+    target = widget or self
+    if target is None:
+      return
+
+    def refresh_target() -> None:
+      if not self._qt_object_deleted(target):
+        target.update()
+
+    QTimer.singleShot(0, refresh_target)
   
   def center(self):
     geometry = calculate_initial_window_geometry(
@@ -1409,8 +1420,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                 # Schedule removal of the reference after a delay
                 QTimer.singleShot(1000, lambda: setattr(self, 'toggle_dialog', None) if hasattr(self, 'toggle_dialog') else None)
             
-            # Process events to ensure immediate UI update
-            QApplication.processEvents()
+            self._queue_ui_refresh()
             
             # Show success notification
             # Get node alias from config if available
@@ -1507,8 +1517,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         # Update message to indicate starting the launch process
         self.launcher_dialog.update_progress("Preparing to launch Docker container...")
         
-        # Process events to ensure dialog is visible and responsive
-        QApplication.processEvents()
+        self._queue_ui_refresh(self.launcher_dialog)
         
         # Start the container launch process
         self._perform_container_launch(container_name, volume_name)
@@ -3085,8 +3094,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       )
       self.startup_dialog.show()
       
-      # Process events to ensure dialog is visible
-      QApplication.processEvents()
+      self._queue_ui_refresh(self.startup_dialog)
       
       # Add a small delay to ensure dialog is fully rendered
       QTimer.singleShot(100, lambda: self._perform_add_new_node(container_name, volume_name, display_name))
@@ -3231,8 +3239,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             # Update message to indicate starting the launch process
             self.launcher_dialog.update_progress("Preparing to launch Docker container...")
             
-            # Process events to ensure dialog is visible and responsive
-            QApplication.processEvents()
+            self._queue_ui_refresh(self.launcher_dialog)
             
             # Add a small delay to ensure dialog is fully rendered
             QTimer.singleShot(100, lambda: self._perform_container_launch(container_name, volume_name))
@@ -3423,8 +3430,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         # Remove the reference immediately
         self.docker_pull_dialog = None
     
-    # Process events to ensure UI updates
-    QApplication.processEvents()
+    self._queue_ui_refresh()
     
     # If pull was successful, continue with the launch target captured before the pull.
     if success:
@@ -3451,8 +3457,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             # Update message to indicate starting the launch process
             self.launcher_dialog.update_progress("Preparing to launch Docker container...")
 
-            # Process events to ensure dialog is visible and responsive
-            QApplication.processEvents()
+            self._queue_ui_refresh(self.launcher_dialog)
 
             # Continue with container launch after pull - use a short timer to ensure UI is updated first
             QTimer.singleShot(100, lambda: self._perform_container_launch_after_pull(container_name, volume_name))
@@ -3762,8 +3767,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     # Log the setup
     self.add_log('Post-launch setup completed', debug=True)
     
-    # Process events to update UI immediately
-    QApplication.processEvents()
+    self._queue_ui_refresh()
     
     return
 
