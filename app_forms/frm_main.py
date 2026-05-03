@@ -755,15 +755,20 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     # the graph area
     self.graphView = QWidget()
+    self.graphView.setObjectName("metricsGraphGrid")
     graph_layout = QGridLayout()
     graph_layout.setSpacing(10)  # Add some spacing between graphs
     graph_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins from graph layout
     
     # Create plot containers with proper styling
     cpu_container = QWidget()
+    cpu_container.setObjectName("cpuPlotContainer")
     memory_container = QWidget()
+    memory_container.setObjectName("memoryPlotContainer")
     gpu_container = QWidget()
+    gpu_container.setObjectName("gpuPlotContainer")
     gpu_memory_container = QWidget()
+    gpu_memory_container.setObjectName("gpuMemoryPlotContainer")
     
     # Set the plot-container class for styling
     cpu_container.setProperty('class', 'plot-container')
@@ -799,14 +804,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     graph_layout.addWidget(memory_container, 0, 1)
     graph_layout.addWidget(gpu_container, 1, 0)
     graph_layout.addWidget(gpu_memory_container, 1, 1)
-    
-    self.graphView.setLayout(graph_layout)
-    right_panel_layout.addWidget(self.graphView)
-
-    graph_layout.addWidget(self.cpu_plot, 0, 0)
-    graph_layout.addWidget(self.memory_plot, 0, 1)
-    graph_layout.addWidget(self.gpu_plot, 1, 0)
-    graph_layout.addWidget(self.gpu_memory_plot, 1, 1)
     
     self.graphView.setLayout(graph_layout)
     right_panel_layout.addWidget(self.graphView)

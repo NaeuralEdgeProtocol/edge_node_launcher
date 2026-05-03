@@ -1,7 +1,7 @@
 import webbrowser
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QDialog, QPushButton
+from PyQt5.QtWidgets import QApplication, QDialog, QPushButton, QWidget
 
 import app_forms.frm_main as frm_main
 from models.NodeInfo import NodeInfo
@@ -302,3 +302,24 @@ def test_main_window_add_node_dialog_create_action_is_clickable(qtbot, monkeypat
     assert container_name.startswith("r1node")
     assert volume_name.startswith("r1vol")
     assert display_name is None
+
+
+def test_main_window_graph_plots_stay_inside_styled_containers(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+
+    assert launcher.graphView.objectName() == "metricsGraphGrid"
+    assert launcher.graphView.layout().count() == 4
+
+    expected = {
+        "cpuPlotContainer": launcher.cpu_plot,
+        "memoryPlotContainer": launcher.memory_plot,
+        "gpuPlotContainer": launcher.gpu_plot,
+        "gpuMemoryPlotContainer": launcher.gpu_memory_plot,
+    }
+
+    for container_name, plot in expected.items():
+        container = launcher.findChild(QWidget, container_name)
+
+        assert container is not None
+        assert plot.parent() is container
+        assert container.layout().count() == 1

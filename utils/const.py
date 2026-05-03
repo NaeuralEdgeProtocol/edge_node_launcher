@@ -675,14 +675,12 @@ COMMON_STYLESHEET_TEMPLATE = """
     margin: 2px;
     padding: 2px 4px;
     background-color: transparent;
-    word-wrap: break-word;
     max-width: 270px;
   }}
   #resourcesBoxText QLabel {{
     color: {info_box_text};
     background-color: transparent;
     font-weight: {info_box_font_weight};
-    word-wrap: break-word;
     max-width: 270px;
   }}
   #myComboPopup {{
@@ -732,4 +730,3 @@ NOTIFICATION_ADDRESS_COPY_FAILED = "No address available to copy. Try again afte
 #    margin-left: 5px;
 #    margin-right: 5px;
 #}}
-
