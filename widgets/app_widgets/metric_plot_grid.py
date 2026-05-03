@@ -32,6 +32,8 @@ METRIC_PLOT_SPECS = (
     ),
 )
 METRIC_EMPTY_STATE_TEXT = "No metric history yet"
+METRIC_AXIS_COLOR = "#94a3b8"
+METRIC_GRID_ALPHA = 0.18
 
 
 class MetricPlotWidget(pg.PlotWidget):
@@ -107,6 +109,20 @@ def create_plot_container(
     return container
 
 
+def configure_metric_plot(plot_widget: MetricPlotWidget) -> None:
+    plot_widget.setBackground(None)
+    plot_widget.showGrid(x=True, y=True, alpha=METRIC_GRID_ALPHA)
+    plot_widget.setMenuEnabled(False)
+    if hasattr(plot_widget, "hideButtons"):
+        plot_widget.hideButtons()
+
+    axis_pen = pg.mkPen(METRIC_AXIS_COLOR)
+    for axis_name in ("left", "bottom"):
+        axis = plot_widget.getAxis(axis_name)
+        axis.setPen(axis_pen)
+        axis.setTextPen(axis_pen)
+
+
 def create_metrics_graph_grid():
     graph_view = QWidget()
     graph_view.setObjectName("metricsGraphGrid")
@@ -121,6 +137,7 @@ def create_metrics_graph_grid():
     for plot_attr, container_name, title_name, empty_name, plot_name, title, row, column in METRIC_PLOT_SPECS:
         bottom_axis = DateAxisItem(orientation="bottom")
         plot_widget = MetricPlotWidget(axisItems={"bottom": bottom_axis})
+        configure_metric_plot(plot_widget)
         plot_widget._r1_bottom_axis = bottom_axis
         plots[plot_attr] = plot_widget
         axis_items[plot_attr] = bottom_axis

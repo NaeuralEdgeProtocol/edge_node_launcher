@@ -19,7 +19,13 @@ from widgets.CenteredComboBox import CenteredComboBox
 from widgets.app_widgets.config_editor import ConfigEditorWidget
 from widgets.app_widgets.container_list import ContainerListWidget
 from widgets.app_widgets.log_console import LogConsoleWidget
-from widgets.app_widgets.metric_plot_grid import METRIC_EMPTY_STATE_TEXT, MetricPlotWidget, create_metrics_graph_grid
+from widgets.app_widgets.metric_plot_grid import (
+    METRIC_AXIS_COLOR,
+    METRIC_EMPTY_STATE_TEXT,
+    METRIC_GRID_ALPHA,
+    MetricPlotWidget,
+    create_metrics_graph_grid,
+)
 from widgets.app_widgets.metrics_widget import MetricsWidget
 from widgets.app_widgets.node_info import NodeInfoWidget
 
@@ -325,6 +331,13 @@ def test_metric_plot_grid_builder_preserves_dashboard_contract(qtbot):
         assert isinstance(plot, MetricPlotWidget)
         assert plot.objectName() == plot_name
         assert plot.accessibleName() == f"{title_label.text()} plot"
+        assert plot.backgroundBrush().style() == Qt.NoBrush
+        assert plot.getAxis("left").pen().color().name() == METRIC_AXIS_COLOR
+        assert plot.getAxis("bottom").pen().color().name() == METRIC_AXIS_COLOR
+        assert not plot.getPlotItem().menuEnabled()
+        assert plot.getPlotItem().ctrl.xGridCheck.isChecked()
+        assert plot.getPlotItem().ctrl.yGridCheck.isChecked()
+        assert plot.getPlotItem().ctrl.gridAlphaSlider.value() == int(METRIC_GRID_ALPHA * 255)
         assert plot.parent() is container
         assert plot._r1_bottom_axis is axis_items[plot_attr]
         assert plot.getAxis("bottom") is axis_items[plot_attr]
