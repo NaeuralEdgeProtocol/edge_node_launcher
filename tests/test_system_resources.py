@@ -62,6 +62,10 @@ def test_user_visible_source_copy_does_not_contain_common_mojibake_or_typographi
         "\u2019",
         "\u201c",
         "\u201d",
+        "\u00f0",
+        "\u0178",
+        "\U0001f4cb",
+        "\U0001f5d1",
     )
     violations = []
 

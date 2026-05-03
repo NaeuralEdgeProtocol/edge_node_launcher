@@ -1,5 +1,5 @@
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QLabel, QLineEdit, QPushButton
+from PyQt5.QtWidgets import QApplication, QLabel, QLineEdit, QPushButton, QScrollArea
 
 import widgets.dialogs.DockerCheckDialog as docker_check_module
 from ui.ProgressDialog import ImagePullProgressDialog
@@ -196,9 +196,26 @@ def test_authorized_address_row_buttons_copy_and_delete(qtbot):
     row = AddressRow(address="0xabc123", alias="alpha", on_delete=deleted_rows.append)
     qtbot.addWidget(row)
 
+    assert row.objectName() == "authorizedAddressRow"
+    assert row.accessibleName() == "Authorized address row"
+    assert row.address_input.objectName() == "authorizedAddressInput"
+    assert row.address_input.accessibleName() == "Authorized address"
+    assert row.address_input.styleSheet() == ""
+    assert row.alias_input.objectName() == "authorizedAliasInput"
+    assert row.alias_input.accessibleName() == "Authorized address alias"
+    assert row.alias_input.styleSheet() == ""
     assert row.copy_addr_btn.objectName() == "authorizedAddressCopyAddressButton"
+    assert row.copy_addr_btn.text() == "Copy"
+    assert row.copy_addr_btn.accessibleName() == "Copy authorized address"
+    assert row.copy_addr_btn.toolTip() == "Copy authorized address"
     assert row.copy_alias_btn.objectName() == "authorizedAddressCopyAliasButton"
+    assert row.copy_alias_btn.text() == "Copy"
+    assert row.copy_alias_btn.accessibleName() == "Copy authorized address alias"
+    assert row.copy_alias_btn.toolTip() == "Copy authorized address alias"
     assert row.delete_btn.objectName() == "authorizedAddressDeleteButton"
+    assert row.delete_btn.text() == "Remove"
+    assert row.delete_btn.accessibleName() == "Remove authorized address"
+    assert row.delete_btn.toolTip() == "Remove authorized address"
 
     qtbot.mouseClick(row.copy_addr_btn, Qt.LeftButton)
     assert QApplication.clipboard().text() == "0xabc123"
@@ -218,10 +235,25 @@ def test_authorized_addresses_dialog_add_save_and_close_actions(qtbot):
     add_button = dialog.findChild(QPushButton, "authorizedAddressAddButton")
     save_button = dialog.findChild(QPushButton, "authorizedAddressSaveButton")
     close_button = dialog.findChild(QPushButton, "authorizedAddressCloseButton")
+    note_label = dialog.findChild(QLabel, "authorizedAddressNoteLabel")
+    address_header = dialog.findChild(QLabel, "authorizedAddressHeaderLabel")
+    alias_header = dialog.findChild(QLabel, "authorizedAliasHeaderLabel")
+    scroll_area = dialog.findChild(QScrollArea, "authorizedAddressScrollArea")
 
+    assert dialog.objectName() == "authorizedAddressesDialog"
+    assert dialog.accessibleName() == "Edit Authorized Addresses"
     assert add_button is not None
+    assert add_button.accessibleName() == "Add authorized address"
     assert save_button is not None
+    assert save_button.accessibleName() == "Save authorized addresses"
     assert close_button is not None
+    assert close_button.accessibleName() == "Close authorized addresses"
+    assert note_label.accessibleName() == "Authorized address note"
+    assert address_header.accessibleName() == "Authorized address header"
+    assert alias_header.accessibleName() == "Authorized alias header"
+    assert scroll_area.accessibleName() == "Authorized address rows"
+    assert dialog.scroll_content.objectName() == "authorizedAddressScrollContent"
+    assert dialog.scroll_content.accessibleName() == "Authorized address row content"
 
     qtbot.mouseClick(add_button, Qt.LeftButton)
     assert len(dialog.rows) == 1

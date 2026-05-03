@@ -9,26 +9,32 @@ class AddressRow(QWidget):
     def __init__(self, parent=None, address="", alias="", on_delete=None):
         super().__init__(parent)
         self.parent_dialog = parent
+        self.setObjectName("authorizedAddressRow")
+        self.setAccessibleName("Authorized address row")
 
         self.layout = QHBoxLayout()
         self.layout.setContentsMargins(0, 5, 0, 5)
 
         # Address input container
         address_container = QWidget()
+        address_container.setObjectName("authorizedAddressInputContainer")
         address_layout = QHBoxLayout(address_container)
         address_layout.setContentsMargins(0, 0, 0, 0)
         address_layout.setSpacing(2)
 
         self.address_input = QLineEdit(parent=self)
+        self.address_input.setObjectName("authorizedAddressInput")
+        self.address_input.setAccessibleName("Authorized address")
         self.address_input.setText(str(address) if address else "")
         self.address_input.setPlaceholderText("Enter address")
         self.address_input.setMinimumWidth(300)
         self.address_input.setMinimumHeight(35)
-        self.address_input.setStyleSheet("QLineEdit { color: white; }")
 
-        self.copy_addr_btn = QPushButton("📋", parent=self)
+        self.copy_addr_btn = QPushButton("Copy", parent=self)
         self.copy_addr_btn.setObjectName("authorizedAddressCopyAddressButton")
-        self.copy_addr_btn.setFixedSize(30, 50)
+        self.copy_addr_btn.setAccessibleName("Copy authorized address")
+        self.copy_addr_btn.setToolTip("Copy authorized address")
+        self.copy_addr_btn.setFixedSize(64, 50)
         self.copy_addr_btn.clicked.connect(self.copy_address)
 
         address_layout.addWidget(self.address_input)
@@ -36,29 +42,35 @@ class AddressRow(QWidget):
 
         # Alias input container
         alias_container = QWidget()
+        alias_container.setObjectName("authorizedAliasInputContainer")
         alias_layout = QHBoxLayout(alias_container)
         alias_layout.setContentsMargins(0, 0, 0, 0)
         alias_layout.setSpacing(2)
 
         self.alias_input = QLineEdit(parent=self)
+        self.alias_input.setObjectName("authorizedAliasInput")
+        self.alias_input.setAccessibleName("Authorized address alias")
         self.alias_input.setText(str(alias) if alias else "")
         self.alias_input.setPlaceholderText("Enter alias")
         self.alias_input.setMinimumWidth(200)
         self.alias_input.setMinimumHeight(50)
-        self.alias_input.setStyleSheet("QLineEdit { color: white; }")
 
-        self.copy_alias_btn = QPushButton("📋", parent=self)
+        self.copy_alias_btn = QPushButton("Copy", parent=self)
         self.copy_alias_btn.setObjectName("authorizedAddressCopyAliasButton")
-        self.copy_alias_btn.setFixedSize(30, 50)
+        self.copy_alias_btn.setAccessibleName("Copy authorized address alias")
+        self.copy_alias_btn.setToolTip("Copy authorized address alias")
+        self.copy_alias_btn.setFixedSize(64, 50)
         self.copy_alias_btn.clicked.connect(self.copy_alias)
 
         alias_layout.addWidget(self.alias_input)
         alias_layout.addWidget(self.copy_alias_btn)
 
         # Delete button
-        self.delete_btn = QPushButton("🗑", parent=self)
+        self.delete_btn = QPushButton("Remove", parent=self)
         self.delete_btn.setObjectName("authorizedAddressDeleteButton")
-        self.delete_btn.setFixedSize(30, 50)
+        self.delete_btn.setAccessibleName("Remove authorized address")
+        self.delete_btn.setToolTip("Remove authorized address")
+        self.delete_btn.setFixedSize(86, 50)
         self.delete_btn.clicked.connect(lambda: on_delete(self) if on_delete else None)
 
         self.layout.addWidget(address_container)
@@ -99,6 +111,8 @@ class AuthorizedAddressesDialog(QDialog):
 
         self.on_save_callback = on_save_callback
         self.setWindowTitle("Edit Authorized Addresses")
+        self.setObjectName("authorizedAddressesDialog")
+        self.setAccessibleName("Edit Authorized Addresses")
         self.setMinimumWidth(800)
         self.setMinimumHeight(600)
         self.setStyleSheet(parent._current_stylesheet if parent else "")
@@ -107,22 +121,34 @@ class AuthorizedAddressesDialog(QDialog):
 
         # Add note about max length
         note_label = QLabel("Note: Maximum alias length is 15 characters")
+        note_label.setObjectName("authorizedAddressNoteLabel")
+        note_label.setAccessibleName("Authorized address note")
         note_label.setStyleSheet("color: gray; font-style: italic;")
         layout.addWidget(note_label)
 
         # Headers
         header_layout = QHBoxLayout()
-        header_layout.addWidget(QLabel("Address"))
-        header_layout.addWidget(QLabel("Alias"))
+        address_header = QLabel("Address")
+        address_header.setObjectName("authorizedAddressHeaderLabel")
+        address_header.setAccessibleName("Authorized address header")
+        alias_header = QLabel("Alias")
+        alias_header.setObjectName("authorizedAliasHeaderLabel")
+        alias_header.setAccessibleName("Authorized alias header")
+        header_layout.addWidget(address_header)
+        header_layout.addWidget(alias_header)
         header_layout.addSpacing(80)
         layout.addLayout(header_layout)
 
         # Scroll area
         scroll = QScrollArea()
+        scroll.setObjectName("authorizedAddressScrollArea")
+        scroll.setAccessibleName("Authorized address rows")
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         self.scroll_content = QWidget()
+        self.scroll_content.setObjectName("authorizedAddressScrollContent")
+        self.scroll_content.setAccessibleName("Authorized address row content")
         self.rows_layout = QVBoxLayout()
         self.rows_layout.setAlignment(Qt.AlignTop)
         self.scroll_content.setLayout(self.rows_layout)
@@ -133,12 +159,15 @@ class AuthorizedAddressesDialog(QDialog):
         bottom_layout = QHBoxLayout()
         add_btn = QPushButton("Add New Address")
         add_btn.setObjectName("authorizedAddressAddButton")
+        add_btn.setAccessibleName("Add authorized address")
         add_btn.clicked.connect(self.add_row)
         save_btn = QPushButton("Save")
         save_btn.setObjectName("authorizedAddressSaveButton")
+        save_btn.setAccessibleName("Save authorized addresses")
         save_btn.clicked.connect(self.save_changes)
         close_btn = QPushButton("Close")
         close_btn.setObjectName("authorizedAddressCloseButton")
+        close_btn.setAccessibleName("Close authorized addresses")
         close_btn.clicked.connect(self.reject)
 
         bottom_layout.addWidget(add_btn)
