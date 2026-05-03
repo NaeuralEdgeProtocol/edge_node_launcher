@@ -1,7 +1,7 @@
 import webbrowser
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QPushButton, QWidget
+from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QLineEdit, QPushButton, QWidget
 
 import app_forms.frm_main as frm_main
 from models.NodeInfo import NodeInfo
@@ -88,6 +88,7 @@ class FakeDockerHandler:
         self.debug_values = []
         self.node_name_updates = []
         self.node_info_requests = 0
+        self.stopped_containers = []
 
     def set_container_name(self, container_name):
         self.container_name = container_name
@@ -109,6 +110,10 @@ class FakeDockerHandler:
     def update_node_name(self, new_name, on_success, on_error):
         self.node_name_updates.append(new_name)
         on_success({})
+
+    def stop_container_threaded(self, container_name, callback, error_callback):
+        self.stopped_containers.append(container_name)
+        callback(("", "", 0))
 
 
 def _build_launcher(monkeypatch, qtbot, running=False):
@@ -260,6 +265,35 @@ def test_main_window_rename_guard_reports_stopped_container(qtbot, monkeypatch):
         NotificationType.ERROR,
         "Container not running. Could not change node name.",
     )
+
+
+def test_main_window_rename_save_restarts_without_legacy_stop_modal(qtbot, monkeypatch):
+    launcher, fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    launch_calls = []
+
+    def fail_legacy_stop(*args, **kwargs):
+        raise AssertionError("rename flow should not use blocking legacy stop_container")
+
+    launcher.stop_container = fail_legacy_stop
+    launcher.launch_container = lambda volume_name=None: launch_calls.append(volume_name)
+
+    def save_rename(dialog):
+        name_input = dialog.findChild(QLineEdit)
+        save_button = dialog.findChild(QPushButton, "renameNodeSaveButton")
+        assert name_input is not None
+        assert save_button is not None
+        name_input.setText("renamed")
+        save_button.click()
+        return QDialog.Accepted
+
+    monkeypatch.setattr(QDialog, "exec_", save_rename)
+
+    qtbot.mouseClick(launcher.renameNodeButton, Qt.LeftButton)
+
+    assert fake_handler.node_name_updates == ["renamed"]
+    assert fake_handler.stopped_containers == ["r1node"]
+    assert launch_calls == ["r1vol"]
+    assert fake_config.get_container("r1node").node_alias == "renamed"
 
 
 def test_main_window_add_node_dialog_create_action_is_clickable(qtbot, monkeypatch):

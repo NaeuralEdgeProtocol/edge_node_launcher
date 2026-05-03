@@ -2314,39 +2314,15 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             'Node renamed successfully. Restarting...'
         )
         dialog.accept()
-        
-        # Get the actual node name from the container
-        def update_config_with_container_name(node_info: NodeInfo) -> None:
-            # Update config with the name from the container
-            if node_info.alias:
-                self.config_manager.update_node_alias(container_name, node_info.alias)
-                self.add_log(f"Saved node alias '{node_info.alias}' from container to config", debug=True)
-                
-                # Refresh the container list to update the display name in the dropdown
-                current_container = container_name  # Store current selection
-                self.refresh_container_list()
-                # Restore the selection
-                for i in range(self.container_combo.count()):
-                    if self.container_combo.itemData(i) == current_container:
-                        self.container_combo.setCurrentIndex(i)
-                        break
-        
-        def on_node_info_error(error):
-            self.add_log(f"Error getting node info after rename: {error}", debug=True)
-            # Still proceed with restart even if we couldn't get the node info
-            self.stop_container()
-            self.launch_container()
-            self.post_launch_setup()
-            self.refresh_node_info()
-        
-        # Get node info to update config with actual container name
-        self.docker_handler.get_node_info(update_config_with_container_name, on_node_info_error)
-        
-        # Stop and restart the container
-        self.stop_container()
-        self.launch_container()
-        self.post_launch_setup()
-        self.refresh_node_info()
+
+        self.config_manager.update_node_alias(container_name, new_name)
+        self.refresh_container_list()
+        for i in range(self.container_combo.count()):
+            if self.container_combo.itemData(i) == container_name:
+                self.container_combo.setCurrentIndex(i)
+                break
+
+        self._restart_container_after_rename(container_name)
 
     def on_error(error: str) -> None:
         self.add_log(f'Error renaming node: {error}', debug=True)
@@ -2358,6 +2334,36 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         )
 
     self.docker_handler.update_node_name(new_name, on_success, on_error)
+
+  def _restart_container_after_rename(self, container_name: str) -> None:
+    """Restart a renamed container without using legacy modal message boxes."""
+    container_config = self.config_manager.get_container(container_name)
+    volume_name = container_config.volume if container_config and container_config.volume else get_volume_name(container_name)
+
+    self.docker_handler.set_container_name(container_name)
+    self.user_stopped_container = False
+    self._clear_info_display()
+    self.loading_indicator.start()
+    self.add_log(f"Restarting renamed node container {container_name}...", color="blue")
+
+    def on_stop_success(result):
+        stdout, stderr, return_code = result
+        if return_code != 0:
+            error_msg = f"Failed to stop renamed node before restart: {stderr}"
+            self.loading_indicator.stop()
+            self.add_log(error_msg, color="red")
+            self.toast.show_notification(NotificationType.ERROR, error_msg)
+            return
+
+        self.add_log(f"Renamed node container {container_name} stopped; launching again...", color="blue")
+        self.launch_container(volume_name)
+
+    def on_stop_error(error_msg):
+        self.loading_indicator.stop()
+        self.add_log(f"Error restarting renamed node: {error_msg}", color="red")
+        self.toast.show_notification(NotificationType.ERROR, f"Error restarting renamed node: {error_msg}")
+
+    self.docker_handler.stop_container_threaded(container_name, on_stop_success, on_stop_error)
 
   def _validate_node_alias(self, alias: str) -> str:
     """Validate a node alias according to the rules.

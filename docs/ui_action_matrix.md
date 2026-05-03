@@ -11,20 +11,20 @@ object name near construction.
 
 | Area | Object name | Control | Action | Current coverage |
 | --- | --- | --- | --- | --- |
-| Top actions | `addNodeButton` | button | Opens the create-node dialog. | Static inventory, mocked main-window click |
-| Top actions | `startNodeButton` | button | Starts or stops the selected node container. | Static inventory, mocked start/stop dispatch click |
+| Top actions | `addNodeButton` | button | Opens the create-node dialog. | Static inventory, mocked main-window click, destructive Docker second-node E2E |
+| Top actions | `startNodeButton` | button | Starts or stops the selected node container. | Static inventory, mocked start/stop dispatch click, destructive Docker start/stop/restart E2E |
 | Top actions | `downloadDockerButton` | button | Opens Docker download flow. | Static inventory, direct action click; not shown in current layout |
 | Top actions | `openDappButton` | button | Opens the node dApp URL. | Static inventory, mocked main-window click |
 | Top actions | `openExplorerButton` | button | Opens the node explorer URL. | Static inventory, mocked main-window click |
 | Node info | `refreshNodeInfoButton` | button | Refreshes node metadata from Docker. | Static inventory, mocked main-window click |
 | Node info | `copyAddrButton` | button | Copies node address. | Static inventory, mocked main-window click |
 | Node info | `copyEthButton` | button | Copies ETH address. | Static inventory, mocked main-window click |
-| Bottom actions | `renameNodeButton` | button | Opens rename-node dialog. | Static inventory, mocked main-window guard |
+| Bottom actions | `renameNodeButton` | button | Opens rename-node dialog. | Static inventory, mocked main-window guard/save, destructive Docker rename E2E |
 | Bottom actions | `themeToggleButton` | button | Switches light or dark theme. | Static inventory, mocked main-window click |
 | Bottom actions | `forceDebugCheckbox` | checkbox | Enables or disables debug logging. | Static inventory, mocked main-window click |
-| Rename dialog | `renameNodeSaveButton` | button | Saves renamed node alias. | Static inventory |
+| Rename dialog | `renameNodeSaveButton` | button | Saves renamed node alias. | Static inventory, mocked save/restart, destructive Docker rename E2E |
 | Rename dialog | `renameNodeCancelButton` | button | Closes rename dialog without saving. | Static inventory |
-| Create-node dialog | `createNodeConfirmButton` | button | Creates a new node container entry. | Static inventory |
+| Create-node dialog | `createNodeConfirmButton` | button | Creates a new node container entry. | Static inventory, destructive Docker second-node E2E |
 | Create-node dialog | `createNodeCancelButton` | button | Closes create-node dialog without creating. | Static inventory |
 
 ## Dialogs
@@ -65,5 +65,8 @@ object name near construction.
   button must have a stable `objectName`.
 - Every stable action ID must appear in this matrix and in source.
 - Workflow tests should be added before changing behavior behind an action.
+- Destructive Docker scenarios live outside the default pytest suite in
+  `tools/run_destructive_e2e.py`; they use dedicated `r1nodee2e*` containers
+  and `r1vole2e*` volumes and write JSON evidence for each run.
 - Visual redesigns should preserve these IDs unless the action is intentionally removed
   and this matrix plus tests are updated in the same commit.
