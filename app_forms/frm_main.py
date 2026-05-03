@@ -556,6 +556,54 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     graph_view.setLayout(graph_layout)
     return graph_view
 
+  def _create_activity_log_view(self) -> QTextEdit:
+    """Create the activity log view with a stable automation target."""
+    log_view = QTextEdit()
+    log_view.setObjectName("logView")
+    log_view.setReadOnly(True)
+    log_view.setStyleSheet(self._current_stylesheet)
+    log_view.setFixedHeight(150)
+    log_view.setFont(QFont("Courier New"))
+    return log_view
+
+  def _flush_log_buffer_to_view(self) -> None:
+    if not self.log_buffer or self.logView is None:
+      return
+
+    for line in self.log_buffer:
+      self.logView.append(line)
+    self.log_buffer = []
+
+  def _create_dashboard_panel(self) -> QWidget:
+    """Create the right-side metrics and activity panel."""
+    dashboard_panel = QWidget()
+    dashboard_panel.setObjectName("dashboardPanel")
+
+    dashboard_layout = QVBoxLayout(dashboard_panel)
+    dashboard_layout.setContentsMargins(10, 0, 10, 10)
+    dashboard_layout.setSpacing(10)
+
+    self.graphView = self._create_metrics_graph_grid()
+    dashboard_layout.addWidget(self.graphView)
+
+    self.logView = self._create_activity_log_view()
+    dashboard_layout.addWidget(self.logView)
+    self._flush_log_buffer_to_view()
+
+    return dashboard_panel
+
+  def _create_right_dashboard_container(self) -> QWidget:
+    right_container = QWidget()
+    right_container.setObjectName("rightDashboardContainer")
+
+    right_container_layout = QVBoxLayout(right_container)
+    right_container_layout.setContentsMargins(0, 0, 0, 29)
+    right_container_layout.setSpacing(0)
+    right_container_layout.addSpacing(5)
+    right_container_layout.addWidget(self._create_dashboard_panel())
+
+    return right_container
+
   def initUI(self):
     self.setWindowTitle(WINDOW_TITLE)
     self.apply_initial_window_geometry()
@@ -820,38 +868,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     bottom_button_area.addStretch()
     menu_layout.addLayout(bottom_button_area)
     
-    # Right panel with mode switch overlay
-    right_container = QWidget()
-    right_container_layout = QVBoxLayout(right_container)
-    right_container_layout.setContentsMargins(0, 0, 0, 29)
-    right_container_layout.setSpacing(0)
-
-    # Add a small spacer between mode switch and graphs
-    right_container_layout.addSpacing(5)
-    
-    # Right side layout (for graphs)
-    right_panel = QWidget()
-    right_panel_layout = QVBoxLayout(right_panel)
-    right_panel_layout.setContentsMargins(10, 0, 10, 10)  # Set consistent padding for right panel with equal left and right margins
-
-    self.graphView = self._create_metrics_graph_grid()
-    right_panel_layout.addWidget(self.graphView)
-
-    right_panel_layout.setSpacing(10)
-
-    # the log scroll text area
-    self.logView = QTextEdit()
-    self.logView.setReadOnly(True)
-    self.logView.setStyleSheet(self._current_stylesheet)
-    self.logView.setFixedHeight(150)
-    self.logView.setFont(QFont("Courier New"))
-    right_panel_layout.addWidget(self.logView)
-    if self.log_buffer:
-        for line in self.log_buffer:
-            self.logView.append(line)
-        self.log_buffer = []
-
-    right_container_layout.addWidget(right_panel)
+    right_container = self._create_right_dashboard_container()
     
     # Add the main content widgets
     content_widget.layout().addWidget(menu_widget)
@@ -1124,7 +1141,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
   def apply_stylesheet(self):
     is_dark = self._current_stylesheet == DARK_STYLESHEET
-    self.logView.setObjectName("logView")  # Set object name for logView
     self.change_text_color()
 
     # Apply larger font size for info box labels on macOS

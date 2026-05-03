@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from PyQt5 import sip
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QLineEdit, QPushButton, QWidget
+from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QLineEdit, QPushButton, QTextEdit, QWidget
 
 import app_forms.frm_main as frm_main
 from models.NodeInfo import NodeInfo
@@ -640,6 +640,25 @@ def test_main_window_graph_plots_stay_inside_styled_containers(qtbot, monkeypatc
         assert container.layout().count() == 1
         assert container.layout().contentsMargins().left() == 0
         assert layout.itemAtPosition(row, column).widget() is container
+
+
+def test_main_window_log_view_has_stable_identity_and_dimensions(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+    dashboard_panel = launcher.findChild(QWidget, "dashboardPanel")
+
+    assert dashboard_panel is not None
+    assert dashboard_panel.layout().indexOf(launcher.graphView) >= 0
+    assert dashboard_panel.layout().indexOf(launcher.logView) >= 0
+    assert launcher.logView.objectName() == "logView"
+    assert launcher.findChild(QTextEdit, "logView") is launcher.logView
+    assert launcher.logView.isReadOnly()
+    assert launcher.logView.minimumHeight() == 150
+    assert launcher.logView.maximumHeight() == 150
+    assert launcher.logView.font().family() == "Courier New"
+
+    launcher.add_log("log view identity smoke", debug=True)
+
+    assert "log view identity smoke" in launcher.logView.toPlainText()
 
 
 def test_main_window_sidebar_sections_group_controls(qtbot, monkeypatch):
