@@ -20,7 +20,7 @@ from widgets.LoadingDialog import LoadingDialog
 from widgets.CenteredComboBox import CenteredComboBox
 from widgets.app_widgets.config_editor import ConfigEditorWidget
 from widgets.app_widgets.container_list import CONTAINER_LIST_EMPTY_TEXT, ContainerListWidget
-from widgets.app_widgets.log_console import LogConsoleWidget
+from widgets.app_widgets.log_console import MAX_LOG_LINES, LogConsoleWidget
 from widgets.app_widgets.metric_plot_grid import (
     METRIC_AXIS_COLOR,
     METRIC_EMPTY_STATE_TEXT,
@@ -133,18 +133,41 @@ def test_log_console_adds_and_clears_text(qtbot):
     assert widget.accessibleName() == "Log console"
     assert widget.log_group.objectName() == "logConsoleGroup"
     assert widget.log_group.accessibleName() == "Console log"
+    assert widget.log_group.property("role") == "logConsolePanel"
     assert widget.text_console.objectName() == "logConsoleText"
     assert widget.text_console.accessibleName() == "Console log output"
+    assert widget.text_console.property("role") == "logConsoleOutput"
+    assert not widget.text_console.acceptRichText()
+    assert widget.text_console.document().maximumBlockCount() == MAX_LOG_LINES
+    assert widget.text_console.placeholderText() == "No log entries yet"
     assert widget.btn_clear.accessibleName() == "Clear console log"
+    assert widget.btn_clear.property("actionRole") == "secondary"
     assert widget.btn_clear.toolTip() == "Clear console log"
+    assert not widget.btn_clear.isEnabled()
+    assert "QGroupBox#logConsoleGroup" in widget.styleSheet()
 
     widget.add_log("hello", color="green")
 
     assert "hello" in widget.text_console.toPlainText()
+    assert widget.btn_clear.isEnabled()
 
     qtbot.mouseClick(widget.btn_clear, Qt.LeftButton)
 
     assert widget.text_console.toPlainText() == ""
+    assert not widget.btn_clear.isEnabled()
+
+
+def test_log_console_theme_styles_are_switchable(qtbot):
+    widget = LogConsoleWidget()
+    qtbot.addWidget(widget)
+
+    widget.apply_theme(True)
+    assert "#122033" in widget.styleSheet()
+    assert "#E8EEF8" in widget.styleSheet()
+
+    widget.apply_theme(False)
+    assert "#FFFFFF" in widget.styleSheet()
+    assert "#1F2937" in widget.styleSheet()
 
 
 def test_centered_combo_light_popup_uses_supported_qt_stylesheet(qtbot):
