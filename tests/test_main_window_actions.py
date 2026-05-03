@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from PyQt5 import sip
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QLineEdit, QPushButton, QTextEdit, QWidget
+from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QLineEdit, QPushButton, QSplitter, QTextEdit, QWidget
 
 import app_forms.frm_main as frm_main
 from models.NodeInfo import NodeInfo
@@ -645,15 +645,21 @@ def test_main_window_graph_plots_stay_inside_styled_containers(qtbot, monkeypatc
 def test_main_window_log_view_has_stable_identity_and_dimensions(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
     dashboard_panel = launcher.findChild(QWidget, "dashboardPanel")
+    dashboard_splitter = launcher.findChild(QSplitter, "dashboardSplitter")
 
     assert dashboard_panel is not None
-    assert dashboard_panel.layout().indexOf(launcher.graphView) >= 0
-    assert dashboard_panel.layout().indexOf(launcher.logView) >= 0
+    assert dashboard_splitter is not None
+    assert dashboard_splitter.orientation() == Qt.Vertical
+    assert dashboard_splitter.count() == 2
+    assert dashboard_panel.layout().indexOf(dashboard_splitter) >= 0
+    assert dashboard_splitter.widget(0) is launcher.graphView
+    assert dashboard_splitter.widget(1) is launcher.logView
+    assert not dashboard_splitter.childrenCollapsible()
     assert launcher.logView.objectName() == "logView"
     assert launcher.findChild(QTextEdit, "logView") is launcher.logView
     assert launcher.logView.isReadOnly()
-    assert launcher.logView.minimumHeight() == 150
-    assert launcher.logView.maximumHeight() == 150
+    assert launcher.logView.minimumHeight() == 120
+    assert launcher.logView.maximumHeight() > 150
     assert launcher.logView.font().family() == "Courier New"
 
     launcher.add_log("log view identity smoke", debug=True)

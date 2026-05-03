@@ -562,7 +562,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     log_view.setObjectName("logView")
     log_view.setReadOnly(True)
     log_view.setStyleSheet(self._current_stylesheet)
-    log_view.setFixedHeight(150)
+    log_view.setMinimumHeight(120)
     log_view.setFont(QFont("Courier New"))
     return log_view
 
@@ -583,11 +583,20 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     dashboard_layout.setContentsMargins(10, 0, 10, 10)
     dashboard_layout.setSpacing(10)
 
-    self.graphView = self._create_metrics_graph_grid()
-    dashboard_layout.addWidget(self.graphView)
+    dashboard_splitter = QSplitter(Qt.Vertical)
+    dashboard_splitter.setObjectName("dashboardSplitter")
+    dashboard_splitter.setChildrenCollapsible(False)
+    dashboard_splitter.setHandleWidth(8)
 
+    self.graphView = self._create_metrics_graph_grid()
     self.logView = self._create_activity_log_view()
-    dashboard_layout.addWidget(self.logView)
+    dashboard_splitter.addWidget(self.graphView)
+    dashboard_splitter.addWidget(self.logView)
+    dashboard_splitter.setStretchFactor(0, 4)
+    dashboard_splitter.setStretchFactor(1, 1)
+    dashboard_splitter.setSizes([700, 180])
+
+    dashboard_layout.addWidget(dashboard_splitter)
     self._flush_log_buffer_to_view()
 
     return dashboard_panel
