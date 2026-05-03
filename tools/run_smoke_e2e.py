@@ -123,6 +123,12 @@ def click_dialog_button(app, dialog, object_name):
     click_button(app, button, button.objectName() or button.text())
 
 
+def click_visible_button(app, button, label):
+    if not button.isVisible():
+        raise AssertionError(f"{label} button is not visible")
+    return click_button(app, button, label)
+
+
 def patch_message_boxes(log, output_path):
     from PyQt5.QtWidgets import QMessageBox
 
@@ -232,6 +238,22 @@ def run_scenarios(args):
         wait_until(app, lambda: launcher.themeToggleButton.text() == frm_main.LIGHT_DASHBOARD_BUTTON_TEXT, args.timeout, "dark theme")
 
         record_step(log, args.output, {"step": click_button(app, launcher.refreshButton, "refresh stopped node")})
+        record_step(
+            log,
+            args.output,
+            {
+                "step": click_visible_button(app, launcher.copyAddrButton, "copy node address"),
+                "clipboard": app.clipboard().text(),
+            },
+        )
+        record_step(
+            log,
+            args.output,
+            {
+                "step": click_visible_button(app, launcher.copyEthButton, "copy eth address"),
+                "clipboard": app.clipboard().text(),
+            },
+        )
         record_step(log, args.output, {"step": click_button(app, launcher.force_debug_checkbox, "toggle force debug")})
         record_step(log, args.output, {"step": click_button(app, launcher.dapp_button, "open dapp link")})
         record_step(log, args.output, {"step": click_button(app, launcher.explorer_button, "show explorer placeholder")})

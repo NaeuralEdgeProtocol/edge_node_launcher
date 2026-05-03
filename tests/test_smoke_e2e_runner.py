@@ -73,3 +73,16 @@ def test_smoke_browser_recorder_captures_and_restores_open(monkeypatch):
         restore()
 
     assert webbrowser.open is original_open
+
+
+def test_click_visible_button_rejects_hidden_buttons():
+    class FakeButton:
+        def isVisible(self):
+            return False
+
+    try:
+        smoke.click_visible_button(None, FakeButton(), "copy node address")
+    except AssertionError as exc:
+        assert "copy node address button is not visible" in str(exc)
+    else:
+        raise AssertionError("hidden smoke buttons should fail fast")
