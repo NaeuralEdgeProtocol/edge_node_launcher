@@ -935,6 +935,26 @@ def test_main_window_sidebar_actions_have_hierarchy_roles(qtbot, monkeypatch):
     assert "border-radius: 8px;" in launcher.toggleButton.styleSheet()
 
 
+def test_main_window_sidebar_actions_have_accessible_names(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+
+    for button in (
+        launcher.add_node_button,
+        launcher.renameNodeButton,
+        launcher.toggleButton,
+        launcher.docker_download_button,
+        launcher.dapp_button,
+        launcher.explorer_button,
+        launcher.refreshButton,
+        launcher.themeToggleButton,
+    ):
+        assert button.accessibleName() == button.text()
+
+    launcher.update_toggle_button_text(assume_running=True)
+
+    assert launcher.toggleButton.accessibleName() == launcher.toggleButton.text()
+
+
 def test_status_panels_have_semantic_roles(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
     info_box = launcher.findChild(QGroupBox, "infoBox")

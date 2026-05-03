@@ -694,6 +694,15 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     sidebar_scroll.setWidget(sidebar_widget)
     return sidebar_scroll
 
+  def _create_sidebar_action_button(self, text, object_name, action_role, tooltip, handler) -> QPushButton:
+    button = QPushButton(text)
+    button.setObjectName(object_name)
+    button.setProperty("actionRole", action_role)
+    button.setToolTip(tooltip)
+    button.setAccessibleName(text)
+    button.clicked.connect(handler)
+    return button
+
   def _create_sidebar_panel(self) -> QWidget:
     """Create the left navigation and status sidebar."""
     menu_widget = QWidget()
@@ -711,11 +720,13 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     top_button_area.addWidget(self.create_sidebar_section_label("Node", "nodeControlsSectionLabel"))
 
     container_selector_layout = QVBoxLayout()
-    self.add_node_button = QPushButton("Add New Node")
-    self.add_node_button.clicked.connect(self.show_add_node_dialog)
-    self.add_node_button.setObjectName("addNodeButton")
-    self.add_node_button.setProperty("actionRole", "secondary")
-    self.add_node_button.setToolTip(ADD_NODE_TOOLTIP)
+    self.add_node_button = self._create_sidebar_action_button(
+        "Add New Node",
+        "addNodeButton",
+        "secondary",
+        ADD_NODE_TOOLTIP,
+        self.show_add_node_dialog,
+    )
     container_selector_layout.addWidget(self.add_node_button)
 
     self.container_combo = CenteredComboBox()
@@ -729,52 +740,64 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     top_button_area.addLayout(container_selector_layout)
 
-    self.renameNodeButton = QPushButton(RENAME_NODE_BUTTON_TEXT)
-    self.renameNodeButton.setObjectName("renameNodeButton")
-    self.renameNodeButton.setProperty("actionRole", "secondary")
-    self.renameNodeButton.setToolTip(RENAME_NODE_TOOLTIP)
-    self.renameNodeButton.clicked.connect(self.show_rename_dialog)
+    self.renameNodeButton = self._create_sidebar_action_button(
+        RENAME_NODE_BUTTON_TEXT,
+        "renameNodeButton",
+        "secondary",
+        RENAME_NODE_TOOLTIP,
+        self.show_rename_dialog,
+    )
     top_button_area.addWidget(self.renameNodeButton)
 
-    self.toggleButton = QPushButton(LAUNCH_CONTAINER_BUTTON_TEXT)
-    self.toggleButton.setObjectName("startNodeButton")
-    self.toggleButton.setProperty("actionRole", "primary")
-    self.toggleButton.setToolTip(TOGGLE_NODE_TOOLTIP)
-    self.toggleButton.clicked.connect(self.toggle_container)
+    self.toggleButton = self._create_sidebar_action_button(
+        LAUNCH_CONTAINER_BUTTON_TEXT,
+        "startNodeButton",
+        "primary",
+        TOGGLE_NODE_TOOLTIP,
+        self.toggle_container,
+    )
     self.apply_button_style(self.toggleButton, 'toggle_start')
     top_button_area.addWidget(self.toggleButton)
 
     top_button_area.addWidget(self.create_sidebar_section_label("Network", "networkActionsSectionLabel"))
 
-    self.docker_download_button = QPushButton(DOWNLOAD_DOCKER_BUTTON_TEXT)
-    self.docker_download_button.setObjectName("downloadDockerButton")
-    self.docker_download_button.setProperty("actionRole", "secondary")
-    self.docker_download_button.setToolTip(DOCKER_DOWNLOAD_TOOLTIP)
-    self.docker_download_button.clicked.connect(self.open_docker_download)
+    self.docker_download_button = self._create_sidebar_action_button(
+        DOWNLOAD_DOCKER_BUTTON_TEXT,
+        "downloadDockerButton",
+        "secondary",
+        DOCKER_DOWNLOAD_TOOLTIP,
+        self.open_docker_download,
+    )
     top_button_area.addWidget(self.docker_download_button)
 
-    self.dapp_button = QPushButton(DAPP_BUTTON_TEXT)
-    self.dapp_button.setObjectName("openDappButton")
-    self.dapp_button.setProperty("actionRole", "secondary")
-    self.dapp_button.setToolTip(DAPP_TOOLTIP)
-    self.dapp_button.clicked.connect(self.dapp_button_clicked)
+    self.dapp_button = self._create_sidebar_action_button(
+        DAPP_BUTTON_TEXT,
+        "openDappButton",
+        "secondary",
+        DAPP_TOOLTIP,
+        self.dapp_button_clicked,
+    )
     top_button_area.addWidget(self.dapp_button)
 
-    self.explorer_button = QPushButton(EXPLORER_BUTTON_TEXT)
-    self.explorer_button.setObjectName("openExplorerButton")
-    self.explorer_button.setProperty("actionRole", "secondary")
-    self.explorer_button.setToolTip(EXPLORER_TOOLTIP)
-    self.explorer_button.clicked.connect(self.explorer_button_clicked)
+    self.explorer_button = self._create_sidebar_action_button(
+        EXPLORER_BUTTON_TEXT,
+        "openExplorerButton",
+        "secondary",
+        EXPLORER_TOOLTIP,
+        self.explorer_button_clicked,
+    )
     top_button_area.addWidget(self.explorer_button)
 
     top_button_area.addSpacing(7)
     top_button_area.addWidget(self.create_sidebar_section_label("Status", "statusSectionLabel"))
 
-    self.refreshButton = QPushButton("Refresh Node Info")
-    self.refreshButton.setObjectName("refreshNodeInfoButton")
-    self.refreshButton.setProperty("actionRole", "secondary")
-    self.refreshButton.clicked.connect(self.force_refresh_all)
-    self.refreshButton.setToolTip(REFRESH_NODE_INFO_TOOLTIP)
+    self.refreshButton = self._create_sidebar_action_button(
+        "Refresh Node Info",
+        "refreshNodeInfoButton",
+        "secondary",
+        REFRESH_NODE_INFO_TOOLTIP,
+        self.force_refresh_all,
+    )
     top_button_area.addWidget(self.refreshButton)
 
     top_button_area.addSpacing(7)
@@ -907,11 +930,13 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     bottom_button_area.setContentsMargins(5, 4, 5, 0)
     bottom_button_area.addWidget(self.create_sidebar_section_label("Settings", "settingsSectionLabel"))
 
-    self.themeToggleButton = QPushButton(LIGHT_DASHBOARD_BUTTON_TEXT)
-    self.themeToggleButton.setObjectName("themeToggleButton")
-    self.themeToggleButton.setProperty("actionRole", "utility")
-    self.themeToggleButton.setToolTip(THEME_TOGGLE_TOOLTIP)
-    self.themeToggleButton.clicked.connect(self.toggle_theme)
+    self.themeToggleButton = self._create_sidebar_action_button(
+        LIGHT_DASHBOARD_BUTTON_TEXT,
+        "themeToggleButton",
+        "utility",
+        THEME_TOGGLE_TOOLTIP,
+        self.toggle_theme,
+    )
     bottom_button_area.addWidget(self.themeToggleButton)
 
     self.force_debug_checkbox = QCheckBox('Force Debug Mode')
@@ -973,11 +998,13 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     if self._current_stylesheet == DARK_STYLESHEET:
         self._current_stylesheet = LIGHT_STYLESHEET
         self.themeToggleButton.setText(DARK_DASHBOARD_BUTTON_TEXT)
+        self.themeToggleButton.setAccessibleName(DARK_DASHBOARD_BUTTON_TEXT)
         self.force_debug_checkbox.setProperty('class', 'light')
         is_dark = False
     else:
         self._current_stylesheet = DARK_STYLESHEET
         self.themeToggleButton.setText(LIGHT_DASHBOARD_BUTTON_TEXT)
+        self.themeToggleButton.setAccessibleName(LIGHT_DASHBOARD_BUTTON_TEXT)
         self.force_debug_checkbox.setProperty('class', 'dark')
         is_dark = True
     
@@ -2414,6 +2441,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         # Only update if state changed
         if current_text != LAUNCH_CONTAINER_BUTTON_TEXT or current_enabled:
             self.toggleButton.setText(LAUNCH_CONTAINER_BUTTON_TEXT)
+            self.toggleButton.setAccessibleName(LAUNCH_CONTAINER_BUTTON_TEXT)
             self.apply_button_style(self.toggleButton, 'toggle_disabled')
             self.toggleButton.setEnabled(False)
         return
@@ -2433,6 +2461,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                 # Only update if state changed
                 if current_text != LAUNCH_CONTAINER_BUTTON_TEXT or not current_enabled:
                     self.toggleButton.setText(LAUNCH_CONTAINER_BUTTON_TEXT)
+                    self.toggleButton.setAccessibleName(LAUNCH_CONTAINER_BUTTON_TEXT)
                     self.apply_button_style(self.toggleButton, 'toggle_start')
                     self.toggleButton.setEnabled(True)
                 return
@@ -2449,6 +2478,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     # Update text if changed
     if current_text != new_text:
         self.toggleButton.setText(new_text)
+        self.toggleButton.setAccessibleName(new_text)
     
     # Always apply the style to ensure it updates when theme changes
     self.apply_button_style(self.toggleButton, new_style)

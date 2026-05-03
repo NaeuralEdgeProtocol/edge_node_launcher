@@ -75,6 +75,18 @@ def _source_text() -> str:
     return "\n".join(_read(path) for path in ACTION_SOURCE_FILES)
 
 
+def _has_action_id_source(source: str, action_id: str) -> bool:
+    if f'.setObjectName("{action_id}")' in source:
+        return True
+
+    helper_pattern = re.compile(
+        r"_create_sidebar_action_button\(\s*(?:[^\n]*\n){0,6}\s*"
+        rf'"{re.escape(action_id)}"',
+        re.MULTILINE,
+    )
+    return bool(helper_pattern.search(source))
+
+
 def test_ui_action_ids_are_unique():
     assert len(ACTION_IDS) == len(set(ACTION_IDS))
 
@@ -85,7 +97,7 @@ def test_ui_action_ids_exist_in_source():
     missing = [
         action_id
         for action_id in ACTION_IDS
-        if f'.setObjectName("{action_id}")' not in source
+        if not _has_action_id_source(source, action_id)
     ]
 
     assert missing == []
