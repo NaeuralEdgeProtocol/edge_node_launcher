@@ -17,6 +17,7 @@ class MetricsWidget(QWidget):
         
         # Initialize UI components
         self.btn_refresh = QPushButton("Refresh Metrics")
+        self.btn_refresh.setObjectName("metricsRefreshButton")
         
         # Create plot widgets
         self.plot_cpu = pg.PlotWidget()
@@ -158,4 +159,4 @@ class MetricsWidget(QWidget):
         self.plot_cpu.clear()
         self.plot_memory.clear()
         self.plot_disk.clear()
-        self.plot_network.clear() 
+        self.plot_network.clear()

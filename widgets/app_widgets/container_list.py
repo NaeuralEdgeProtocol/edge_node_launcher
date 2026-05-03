@@ -17,7 +17,9 @@ class ContainerListWidget(QWidget):
         # Initialize UI components
         self.containers_combo = CenteredComboBox()
         self.btn_toggle = QPushButton("Start Container")
+        self.btn_toggle.setObjectName("containerListToggleButton")
         self.btn_add_node = QPushButton("Add Node")
+        self.btn_add_node.setObjectName("containerListAddNodeButton")
         
         # Setup UI layout
         self.init_ui()
@@ -119,4 +121,4 @@ class ContainerListWidget(QWidget):
         index = self.containers_combo.currentIndex()
         if index >= 0:
             return self.containers_combo.itemData(index)
-        return None 
+        return None

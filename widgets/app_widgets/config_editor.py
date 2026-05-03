@@ -14,6 +14,7 @@ class ConfigEditorWidget(QWidget):
         
         # Initialize UI components
         self.btn_edit_config = QPushButton("Edit Configuration")
+        self.btn_edit_config.setObjectName("configEditorEditButton")
         
         # Setup UI layout
         self.init_ui()
@@ -83,6 +84,9 @@ class ConfigEditorWidget(QWidget):
         
         # Add buttons
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.setObjectName("configEditorDialogButtons")
+        button_box.button(QDialogButtonBox.Ok).setObjectName("configEditorSaveButton")
+        button_box.button(QDialogButtonBox.Cancel).setObjectName("configEditorCancelButton")
         button_box.accepted.connect(lambda: self._save_config(startup_text_edit, app_text_edit, dialog))
         button_box.rejected.connect(dialog.reject)
         
@@ -134,4 +138,4 @@ class ConfigEditorWidget(QWidget):
             startup_config: Startup configuration text
             app_config: App configuration text
         """
-        self.open_config_editor(startup_config, app_config) 
+        self.open_config_editor(startup_config, app_config)

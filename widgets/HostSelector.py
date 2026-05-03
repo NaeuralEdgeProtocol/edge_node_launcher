@@ -153,6 +153,7 @@ class HostSelector(QWidget):
         # Mode selector
         mode_layout = QHBoxLayout()
         self.mode_checkbox = QCheckBox("Multi-host Mode")
+        self.mode_checkbox.setObjectName("hostSelectorModeCheckbox")
         self.mode_checkbox.setFont(QFont("Courier New", 10, QFont.Bold))
         self.mode_checkbox.stateChanged.connect(self._on_mode_changed)
         mode_layout.addWidget(self.mode_checkbox)
@@ -186,6 +187,7 @@ class HostSelector(QWidget):
         combo_layout.addWidget(self.current_status)
         
         self.refresh_button = QPushButton("Refresh")
+        self.refresh_button.setObjectName("hostSelectorRefreshButton")
         self.refresh_button.setFont(QFont("Courier New", 10))
         
         controls_layout.addWidget(combo_container)
@@ -534,4 +536,4 @@ class HostSelector(QWidget):
         if self.isVisible() and self.host_combo.isVisible():
             current_host = self.host_combo.currentText()
             if current_host:
-                self.check_host_status(current_host) 
+                self.check_host_status(current_host)

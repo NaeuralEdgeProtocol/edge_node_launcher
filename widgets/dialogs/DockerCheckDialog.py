@@ -30,18 +30,21 @@ class DockerCheckDialog(QDialog):
         
         # Download Docker button - apply toggle_button_start styles
         self.download_button = QPushButton('Download Docker')
+        self.download_button.setObjectName("dockerCheckDownloadButton")
         self.download_button.clicked.connect(self.open_docker_download)
         self.download_button.setProperty("type", "toggle_button_start")
         button_layout.addWidget(self.download_button)
         
         # Try Again button - apply toggle_button_start styles
         self.retry_button = QPushButton('Try Again')
+        self.retry_button.setObjectName("dockerCheckRetryButton")
         self.retry_button.setProperty("type", "toggle_button_start")
         self.retry_button.clicked.connect(self.accept)
         button_layout.addWidget(self.retry_button)
         
         # Quit button - explicitly using toggle_button_stop styles
         self.quit_button = QPushButton('Quit')
+        self.quit_button.setObjectName("dockerCheckQuitButton")
         # Set the property to use toggle_button_stop styles
         self.quit_button.setProperty("type", "toggle_button_stop")
         self.quit_button.clicked.connect(self.reject)

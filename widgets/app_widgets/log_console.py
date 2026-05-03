@@ -13,6 +13,7 @@ class LogConsoleWidget(QWidget):
         # Initialize UI components
         self.text_console = QTextEdit()
         self.btn_clear = QPushButton("Clear Log")
+        self.btn_clear.setObjectName("logConsoleClearButton")
         
         # Configure console
         self.text_console.setReadOnly(True)
@@ -89,4 +90,4 @@ class LogConsoleWidget(QWidget):
         """
         # This would be connected to a debug setting in the parent application
         # For now, always return True to show all messages
-        return True 
+        return True

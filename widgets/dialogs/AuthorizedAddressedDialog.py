@@ -27,6 +27,7 @@ class AddressRow(QWidget):
         self.address_input.setStyleSheet("QLineEdit { color: white; }")
 
         self.copy_addr_btn = QPushButton("📋", parent=self)
+        self.copy_addr_btn.setObjectName("authorizedAddressCopyAddressButton")
         self.copy_addr_btn.setFixedSize(30, 50)
         self.copy_addr_btn.clicked.connect(self.copy_address)
 
@@ -47,6 +48,7 @@ class AddressRow(QWidget):
         self.alias_input.setStyleSheet("QLineEdit { color: white; }")
 
         self.copy_alias_btn = QPushButton("📋", parent=self)
+        self.copy_alias_btn.setObjectName("authorizedAddressCopyAliasButton")
         self.copy_alias_btn.setFixedSize(30, 50)
         self.copy_alias_btn.clicked.connect(self.copy_alias)
 
@@ -55,6 +57,7 @@ class AddressRow(QWidget):
 
         # Delete button
         self.delete_btn = QPushButton("🗑", parent=self)
+        self.delete_btn.setObjectName("authorizedAddressDeleteButton")
         self.delete_btn.setFixedSize(30, 50)
         self.delete_btn.clicked.connect(lambda: on_delete(self) if on_delete else None)
 
@@ -129,10 +132,13 @@ class AuthorizedAddressesDialog(QDialog):
         # Bottom buttons
         bottom_layout = QHBoxLayout()
         add_btn = QPushButton("Add New Address")
+        add_btn.setObjectName("authorizedAddressAddButton")
         add_btn.clicked.connect(self.add_row)
         save_btn = QPushButton("Save")
+        save_btn.setObjectName("authorizedAddressSaveButton")
         save_btn.clicked.connect(self.save_changes)
         close_btn = QPushButton("Close")
+        close_btn.setObjectName("authorizedAddressCloseButton")
         close_btn.clicked.connect(self.reject)
 
         bottom_layout.addWidget(add_btn)
@@ -229,4 +235,3 @@ class AuthorizedAddressesDialog(QDialog):
 
     def save_and_close(self):
         self.accept()
-

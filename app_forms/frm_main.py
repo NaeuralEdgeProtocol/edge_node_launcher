@@ -542,17 +542,20 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     # Docker download button right under Launch Edge Node
     self.docker_download_button = QPushButton(DOWNLOAD_DOCKER_BUTTON_TEXT)
+    self.docker_download_button.setObjectName("downloadDockerButton")
     self.docker_download_button.setToolTip(DOCKER_DOWNLOAD_TOOLTIP)
     self.docker_download_button.clicked.connect(self.open_docker_download)
     # top_button_area.addWidget(self.docker_download_button)
 
     # dApp button
     self.dapp_button = QPushButton(DAPP_BUTTON_TEXT)
+    self.dapp_button.setObjectName("openDappButton")
     self.dapp_button.clicked.connect(self.dapp_button_clicked)
     top_button_area.addWidget(self.dapp_button)
 
     # Explorer button
     self.explorer_button = QPushButton(EXPLORER_BUTTON_TEXT)
+    self.explorer_button.setObjectName("openExplorerButton")
     self.explorer_button.clicked.connect(self.explorer_button_clicked)
     top_button_area.addWidget(self.explorer_button)
     
@@ -561,6 +564,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     
     # Refresh button
     self.refreshButton = QPushButton("Refresh Node Info")
+    self.refreshButton.setObjectName("refreshNodeInfoButton")
     self.refreshButton.clicked.connect(self.force_refresh_all)
     self.refreshButton.setToolTip("Force refresh all node information including address, metrics, and status")
     top_button_area.addWidget(self.refreshButton)
@@ -701,17 +705,20 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     ## buttons
     # Add Rename Node button
     self.renameNodeButton = QPushButton(RENAME_NODE_BUTTON_TEXT)
+    self.renameNodeButton.setObjectName("renameNodeButton")
     self.renameNodeButton.clicked.connect(self.show_rename_dialog)
     bottom_button_area.addWidget(self.renameNodeButton)
 
     # Toggle theme button
     self.themeToggleButton = QPushButton(LIGHT_DASHBOARD_BUTTON_TEXT)
+    self.themeToggleButton.setObjectName("themeToggleButton")
     # self.themeToggleButton.setCheckable(True)
     self.themeToggleButton.clicked.connect(self.toggle_theme)
     bottom_button_area.addWidget(self.themeToggleButton)    
     
     # add a checkbox item to force debug
     self.force_debug_checkbox = QCheckBox('Force Debug Mode')
+    self.force_debug_checkbox.setObjectName("forceDebugCheckbox")
     self.force_debug_checkbox.setChecked(self.__force_debug)  # Set initial state from config
     self.force_debug_checkbox.setFont(QFont("Courier New", 9, QFont.Bold))
     
@@ -2243,8 +2250,10 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     # Add buttons
     button_layout = QHBoxLayout()
     save_btn = QPushButton("Save")
+    save_btn.setObjectName("renameNodeSaveButton")
     save_btn.setProperty("type", "confirm")  # Set property for styling
     cancel_btn = QPushButton("Cancel")
+    cancel_btn.setObjectName("renameNodeCancelButton")
     cancel_btn.setProperty("type", "cancel")  # Set property for styling
     
     button_layout.addWidget(save_btn)
@@ -2738,7 +2747,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     # Add buttons
     button_layout = QHBoxLayout()
     create_button = QPushButton("Create Node")
+    create_button.setObjectName("createNodeConfirmButton")
     cancel_button = QPushButton("Cancel")
+    cancel_button.setObjectName("createNodeCancelButton")
 
     # Apply the same styling as Start/Stop buttons
     self.apply_button_style(create_button, 'start')  # Use 'start' style for Create button

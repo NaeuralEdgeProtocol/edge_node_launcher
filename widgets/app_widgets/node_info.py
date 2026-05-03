@@ -22,8 +22,11 @@ class NodeInfoWidget(QWidget):
         self.lbl_node_name = QLabel("N/A")
         
         self.btn_copy_address = QPushButton("Copy")
+        self.btn_copy_address.setObjectName("nodeInfoCopyAddressButton")
         self.btn_copy_eth = QPushButton("Copy")
+        self.btn_copy_eth.setObjectName("nodeInfoCopyEthButton")
         self.btn_refresh = QPushButton("Refresh")
+        self.btn_refresh.setObjectName("nodeInfoRefreshButton")
         
         # Setup UI layout
         self.init_ui()
@@ -151,4 +154,4 @@ class NodeInfoWidget(QWidget):
         elif minutes > 0:
             return f"{int(minutes)}m {int(seconds)}s"
         else:
-            return f"{int(seconds)}s" 
+            return f"{int(seconds)}s"
