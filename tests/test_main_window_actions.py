@@ -618,23 +618,28 @@ def test_main_window_add_node_dialog_create_action_is_clickable(qtbot, monkeypat
 
 def test_main_window_graph_plots_stay_inside_styled_containers(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+    layout = launcher.graphView.layout()
 
     assert launcher.graphView.objectName() == "metricsGraphGrid"
-    assert launcher.graphView.layout().count() == 4
+    assert layout.count() == 4
+    assert layout.spacing() == 10
 
     expected = {
-        "cpuPlotContainer": launcher.cpu_plot,
-        "memoryPlotContainer": launcher.memory_plot,
-        "gpuPlotContainer": launcher.gpu_plot,
-        "gpuMemoryPlotContainer": launcher.gpu_memory_plot,
+        "cpuPlotContainer": (launcher.cpu_plot, 0, 0),
+        "memoryPlotContainer": (launcher.memory_plot, 0, 1),
+        "gpuPlotContainer": (launcher.gpu_plot, 1, 0),
+        "gpuMemoryPlotContainer": (launcher.gpu_memory_plot, 1, 1),
     }
 
-    for container_name, plot in expected.items():
+    for container_name, (plot, row, column) in expected.items():
         container = launcher.findChild(QWidget, container_name)
 
         assert container is not None
+        assert container.property("class") == "plot-container"
         assert plot.parent() is container
         assert container.layout().count() == 1
+        assert container.layout().contentsMargins().left() == 0
+        assert layout.itemAtPosition(row, column).widget() is container
 
 
 def test_main_window_sidebar_sections_group_controls(qtbot, monkeypatch):

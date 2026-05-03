@@ -515,6 +515,47 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       self.add_log(f"Applied icon to application and window", debug=True)
     return
 
+  def _create_plot_container(self, object_name: str, plot_widget: QWidget) -> QWidget:
+    """Create one styled plot container for the metrics grid."""
+    container = QWidget()
+    container.setObjectName(object_name)
+    container.setProperty('class', 'plot-container')
+
+    layout = QVBoxLayout(container)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(0)
+    layout.addWidget(plot_widget)
+
+    return container
+
+  def _create_metrics_graph_grid(self) -> QWidget:
+    """Build the four-panel metrics graph grid and retain public plot attributes."""
+    graph_view = QWidget()
+    graph_view.setObjectName("metricsGraphGrid")
+
+    graph_layout = QGridLayout()
+    graph_layout.setSpacing(10)
+    graph_layout.setContentsMargins(0, 0, 0, 0)
+
+    plot_specs = (
+      ("cpu_plot", "cpuPlotContainer", 0, 0),
+      ("memory_plot", "memoryPlotContainer", 0, 1),
+      ("gpu_plot", "gpuPlotContainer", 1, 0),
+      ("gpu_memory_plot", "gpuMemoryPlotContainer", 1, 1),
+    )
+
+    for plot_attr, container_name, row, column in plot_specs:
+      plot_widget = pg.PlotWidget()
+      setattr(self, plot_attr, plot_widget)
+      graph_layout.addWidget(
+        self._create_plot_container(container_name, plot_widget),
+        row,
+        column,
+      )
+
+    graph_view.setLayout(graph_layout)
+    return graph_view
+
   def initUI(self):
     self.setWindowTitle(WINDOW_TITLE)
     self.apply_initial_window_geometry()
@@ -793,59 +834,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     right_panel_layout = QVBoxLayout(right_panel)
     right_panel_layout.setContentsMargins(10, 0, 10, 10)  # Set consistent padding for right panel with equal left and right margins
 
-    # the graph area
-    self.graphView = QWidget()
-    self.graphView.setObjectName("metricsGraphGrid")
-    graph_layout = QGridLayout()
-    graph_layout.setSpacing(10)  # Add some spacing between graphs
-    graph_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins from graph layout
-    
-    # Create plot containers with proper styling
-    cpu_container = QWidget()
-    cpu_container.setObjectName("cpuPlotContainer")
-    memory_container = QWidget()
-    memory_container.setObjectName("memoryPlotContainer")
-    gpu_container = QWidget()
-    gpu_container.setObjectName("gpuPlotContainer")
-    gpu_memory_container = QWidget()
-    gpu_memory_container.setObjectName("gpuMemoryPlotContainer")
-    
-    # Set the plot-container class for styling
-    cpu_container.setProperty('class', 'plot-container')
-    memory_container.setProperty('class', 'plot-container')
-    gpu_container.setProperty('class', 'plot-container')
-    gpu_memory_container.setProperty('class', 'plot-container')
-    
-    # Create plot widgets
-    self.cpu_plot = pg.PlotWidget()
-    self.memory_plot = pg.PlotWidget()
-    self.gpu_plot = pg.PlotWidget()
-    self.gpu_memory_plot = pg.PlotWidget()
-    
-    # Create layouts for containers
-    cpu_layout = QVBoxLayout(cpu_container)
-    memory_layout = QVBoxLayout(memory_container)
-    gpu_layout = QVBoxLayout(gpu_container)
-    gpu_memory_layout = QVBoxLayout(gpu_memory_container)
-    
-    # Set margins and spacing
-    for layout in [cpu_layout, memory_layout, gpu_layout, gpu_memory_layout]:
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-    
-    # Add plots to their containers
-    cpu_layout.addWidget(self.cpu_plot)
-    memory_layout.addWidget(self.memory_plot)
-    gpu_layout.addWidget(self.gpu_plot)
-    gpu_memory_layout.addWidget(self.gpu_memory_plot)
-    
-    # Add containers to the grid layout
-    graph_layout.addWidget(cpu_container, 0, 0)
-    graph_layout.addWidget(memory_container, 0, 1)
-    graph_layout.addWidget(gpu_container, 1, 0)
-    graph_layout.addWidget(gpu_memory_container, 1, 1)
-    
-    self.graphView.setLayout(graph_layout)
+    self.graphView = self._create_metrics_graph_grid()
     right_panel_layout.addWidget(self.graphView)
 
     right_panel_layout.setSpacing(10)
