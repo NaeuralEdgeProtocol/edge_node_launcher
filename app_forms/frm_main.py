@@ -48,6 +48,7 @@ from PyQt5.QtWidgets import (
   QFormLayout,
   QListWidgetItem
 )
+from PyQt5 import sip
 from PyQt5.QtCore import (
     Qt, QTimer, QSize, QThread, QObject, pyqtSignal, QUrl, QSettings,
     QProcess, QPropertyAnimation, QModelIndex, QSortFilterProxyModel
@@ -894,6 +895,64 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     # Update resources display for theme consistency
     self.update_resources_display()
 
+  @staticmethod
+  def _qt_object_deleted(obj) -> bool:
+    """Return True when a Qt wrapper no longer owns a live C++ object."""
+    if obj is None:
+      return True
+
+    try:
+      return sip.isdeleted(obj)
+    except (RuntimeError, TypeError):
+      return True
+
+  def _clear_dialog_reference(self, dialog_attr: str, dialog=None) -> None:
+    """Clear a dialog attribute when it still points at the supplied dialog."""
+    if not hasattr(self, dialog_attr):
+      return
+
+    try:
+      current_dialog = getattr(self, dialog_attr)
+    except RuntimeError:
+      setattr(self, dialog_attr, None)
+      return
+
+    if dialog is None or current_dialog is dialog:
+      setattr(self, dialog_attr, None)
+
+  def _close_dialog_reference(self, dialog_attr: str) -> bool:
+    """Close a stored dialog reference, tolerating already-deleted Qt wrappers."""
+    if not hasattr(self, dialog_attr):
+      return False
+
+    try:
+      dialog = getattr(self, dialog_attr)
+    except RuntimeError:
+      setattr(self, dialog_attr, None)
+      self.add_log(f"Cleared deleted {dialog_attr}", debug=True)
+      return False
+
+    if dialog is None:
+      return False
+
+    if self._qt_object_deleted(dialog):
+      setattr(self, dialog_attr, None)
+      self.add_log(f"Cleared deleted {dialog_attr}", debug=True)
+      return False
+
+    try:
+      dialog.close()
+      self._clear_dialog_reference(dialog_attr, dialog)
+      self.add_log(f"Closed {dialog_attr}", debug=True)
+      return True
+    except RuntimeError as e:
+      if "wrapped C/C++ object" in str(e):
+        setattr(self, dialog_attr, None)
+        self.add_log(f"Cleared deleted {dialog_attr}", debug=True)
+        return False
+      self.add_log(f"Error closing {dialog_attr}: {str(e)}", debug=True)
+      return False
+
   def closeEvent(self, event):
     """Handle application close event with proper cleanup."""
     try:
@@ -912,19 +971,12 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         # Close any open dialogs forcefully
         dialog_attrs = ['startup_dialog', 'launcher_dialog', 'toggle_dialog', 'docker_pull_dialog']
         for dialog_attr in dialog_attrs:
-            if hasattr(self, dialog_attr):
-                dialog = getattr(self, dialog_attr)
-                if dialog and hasattr(dialog, 'close'):
-                    try:
-                        dialog.close()
-                        self.add_log(f"Closed {dialog_attr}", debug=True)
-                    except Exception as e:
-                        self.add_log(f"Error closing {dialog_attr}: {str(e)}", debug=True)
+            self._close_dialog_reference(dialog_attr)
         
         # Force close any remaining child widgets
         try:
             for child in self.findChildren(QDialog):
-                if child and child.isVisible():
+                if not self._qt_object_deleted(child) and child.isVisible():
                     child.close()
                     self.add_log(f"Force closed dialog: {type(child).__name__}", debug=True)
         except Exception as e:

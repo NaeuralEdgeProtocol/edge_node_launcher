@@ -1,5 +1,6 @@
 import webbrowser
 
+from PyQt5 import sip
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QLineEdit, QPushButton, QWidget
 
@@ -361,6 +362,27 @@ def test_stale_node_info_failures_do_not_restart_other_nodes(qtbot, monkeypatch)
 
     launcher.user_stopped_container = False
     assert launcher._should_restart_after_node_info_failure("r1node")
+
+
+def test_close_event_clears_deleted_dialog_reference(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    dialog = frm_main.LoadingDialog(launcher, title="Launching Node", message="Please wait")
+    launcher.launcher_dialog = dialog
+    sip.delete(dialog)
+
+    class FakeCloseEvent:
+        def __init__(self):
+            self.accepted = False
+
+        def accept(self):
+            self.accepted = True
+
+    event = FakeCloseEvent()
+    launcher.closeEvent(event)
+
+    assert event.accepted
+    assert launcher.launcher_dialog is None
+    assert not any("Error closing launcher_dialog" in line for line in launcher.log_buffer)
 
 
 def test_main_window_add_node_dialog_create_action_is_clickable(qtbot, monkeypatch):
