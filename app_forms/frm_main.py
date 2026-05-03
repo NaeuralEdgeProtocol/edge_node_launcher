@@ -407,12 +407,23 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       line = f'{timestamp} {line}'
       if self.logView is not None:
         self.logView.append(line)
+        self._schedule_log_scroll()
       else:
         self.log_buffer.append(line)
-      QApplication.processEvents()  # Flush the event queue
       if debug or self.__force_debug:
         log_with_color(line, color=color)
     return  
+
+  def _schedule_log_scroll(self) -> None:
+    log_view = self.logView
+    if log_view is None:
+      return
+
+    def scroll_to_latest() -> None:
+      if not sip.isdeleted(log_view):
+        log_view.ensureCursorVisible()
+
+    QTimer.singleShot(0, scroll_to_latest)
   
   def center(self):
     geometry = calculate_initial_window_geometry(
@@ -605,7 +616,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     )
 
     for plot_attr, container_name, row, column in plot_specs:
-      plot_widget = pg.PlotWidget()
+      plot_widget = pg.PlotWidget(axisItems={"bottom": DateAxisItem(orientation="bottom")})
       setattr(self, plot_attr, plot_widget)
       graph_layout.addWidget(
         self._create_plot_container(container_name, plot_widget),
@@ -1112,6 +1123,22 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       self._end_lifecycle_operation(container_name)
     return True
 
+  def _disable_metric_plot_updates_for_shutdown(self) -> None:
+    for plot_attr in ("cpu_plot", "memory_plot", "gpu_plot", "gpu_memory_plot"):
+      plot_widget = getattr(self, plot_attr, None)
+      if plot_widget is None or self._qt_object_deleted(plot_widget):
+        continue
+      try:
+        plot_widget.clear()
+        plot_widget.setUpdatesEnabled(False)
+        viewport = plot_widget.viewport() if hasattr(plot_widget, "viewport") else None
+        if viewport is not None and not self._qt_object_deleted(viewport):
+          viewport.setUpdatesEnabled(False)
+          viewport.hide()
+        plot_widget.hide()
+      except RuntimeError:
+        continue
+
   def closeEvent(self, event):
     """Handle application close event with proper cleanup."""
     try:
@@ -1128,6 +1155,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         if hasattr(self, 'loading_indicator') and self.loading_indicator:
             self.loading_indicator.stop()
             self.add_log("Stopped loading indicators", debug=True)
+
+        self._disable_metric_plot_updates_for_shutdown()
         
         # Close any open dialogs forcefully
         dialog_attrs = ['startup_dialog', 'launcher_dialog', 'toggle_dialog', 'docker_pull_dialog']
@@ -1142,13 +1171,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                     self.add_log(f"Force closed dialog: {type(child).__name__}", debug=True)
         except Exception as e:
             self.add_log(f"Error force closing dialogs: {str(e)}", debug=True)
-        
-        # Process any remaining events
-        try:
-            QApplication.processEvents()
-            self.add_log("Processed remaining events", debug=True)
-        except:
-            pass
         
         self.add_log("Application shutdown completed successfully", debug=True)
         
@@ -1576,6 +1598,13 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       if plot_widget is not None:
         plot_widget.clear()
 
+  def _configure_metric_axis(self, plot_widget, timestamps, parent: str) -> None:
+    date_axis = plot_widget.getAxis('bottom')
+    if hasattr(date_axis, "setTimestamps"):
+      date_axis.setTimestamps(timestamps, parent=parent)
+    date_axis.setTickSpacing(60, 10)
+    date_axis.setStyle(tickTextOffset=10)
+
   def plot_graphs(self, history: Optional[NodeHistory] = None, limit: int = 100) -> None:
     """Plot the graphs with the given history data.
     
@@ -1644,40 +1673,24 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             plot_widget.plot(numeric_timestamps, data, pen=color, name=name)
     
     # CPU Plot
-    cpu_date_axis = DateAxisItem(orientation='bottom')
-    cpu_date_axis.setTimestamps(timestamps, parent="cpu")
-    self.cpu_plot.getAxis('bottom').setTickSpacing(60, 10)
-    self.cpu_plot.getAxis('bottom').setStyle(tickTextOffset=10)
-    self.cpu_plot.setAxisItems({'bottom': cpu_date_axis})
+    self._configure_metric_axis(self.cpu_plot, timestamps, parent="cpu")
     self.cpu_plot.setTitle(CPU_LOAD_TITLE)
     update_plot(self.cpu_plot, timestamps, history.cpu_load, 'CPU Load', colors["graph_cpu_color"])
     
     # Memory Plot
-    mem_date_axis = DateAxisItem(orientation='bottom')
-    mem_date_axis.setTimestamps(timestamps, parent="mem")
-    self.memory_plot.getAxis('bottom').setTickSpacing(60, 10)
-    self.memory_plot.getAxis('bottom').setStyle(tickTextOffset=10)
-    self.memory_plot.setAxisItems({'bottom': mem_date_axis})
+    self._configure_metric_axis(self.memory_plot, timestamps, parent="mem")
     self.memory_plot.setTitle(MEMORY_USAGE_TITLE)
     update_plot(self.memory_plot, timestamps, history.occupied_memory, 'Occupied Memory', colors["graph_memory_color"])
     
     # GPU Plot if available
     if history and history.gpu_load:
-      gpu_date_axis = DateAxisItem(orientation='bottom')
-      gpu_date_axis.setTimestamps(timestamps, parent="gpu")
-      self.gpu_plot.getAxis('bottom').setTickSpacing(60, 10)
-      self.gpu_plot.getAxis('bottom').setStyle(tickTextOffset=10)
-      self.gpu_plot.setAxisItems({'bottom': gpu_date_axis})
+      self._configure_metric_axis(self.gpu_plot, timestamps, parent="gpu")
       self.gpu_plot.setTitle(GPU_LOAD_TITLE)
       update_plot(self.gpu_plot, timestamps, history.gpu_load, 'GPU Load', colors["graph_gpu_color"])
 
     # GPU Memory if available
     if history and history.gpu_occupied_memory:
-      gpumem_date_axis = DateAxisItem(orientation='bottom')
-      gpumem_date_axis.setTimestamps(timestamps, parent="gpu_mem")
-      self.gpu_memory_plot.getAxis('bottom').setTickSpacing(60, 10)
-      self.gpu_memory_plot.getAxis('bottom').setStyle(tickTextOffset=10)
-      self.gpu_memory_plot.setAxisItems({'bottom': gpumem_date_axis})
+      self._configure_metric_axis(self.gpu_memory_plot, timestamps, parent="gpu_mem")
       self.gpu_memory_plot.setTitle(GPU_MEMORY_LOAD_TITLE)
       update_plot(self.gpu_memory_plot, timestamps, history.gpu_occupied_memory, 'Occupied GPU Memory', colors["graph_gpu_memory_color"])
       

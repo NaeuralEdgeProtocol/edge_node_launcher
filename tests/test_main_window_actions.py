@@ -222,6 +222,19 @@ def test_main_window_navigation_buttons_use_mocked_side_effects(qtbot, monkeypat
     ]
 
 
+def test_add_log_does_not_process_events_synchronously(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+
+    def fail_process_events(*args, **kwargs):
+        raise AssertionError("add_log should not pump the Qt event loop synchronously")
+
+    with monkeypatch.context() as process_events_patch:
+        process_events_patch.setattr(frm_main.QApplication, "processEvents", fail_process_events)
+        launcher.add_log("visible log entry")
+
+    assert "visible log entry" in launcher.logView.toPlainText()
+
+
 def test_main_window_copy_buttons_copy_current_addresses(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
     launcher.node_addr = "0xnodeaddress"
@@ -502,6 +515,34 @@ def test_plot_graphs_clears_stale_gpu_plots_when_history_has_no_gpu(qtbot, monke
     assert len(launcher.gpu_memory_plot.listDataItems()) == 0
 
 
+def test_plot_graphs_reuses_existing_axis_items(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    launcher.plot_graphs = REAL_PLOT_GRAPHS.__get__(launcher, frm_main.EdgeNodeLauncher)
+    launcher.add_log = lambda *args, **kwargs: None
+    axes_before = {
+        plot_attr: getattr(launcher, plot_attr).getAxis("bottom")
+        for plot_attr in ("cpu_plot", "memory_plot", "gpu_plot", "gpu_memory_plot")
+    }
+
+    launcher.plot_graphs(
+        _history_with_optional_gpu(
+            gpu_load=[30.0, 40.0],
+            gpu_occupied_memory=[1024.0, 2048.0],
+        )
+    )
+    launcher.plot_graphs(
+        _history_with_optional_gpu(
+            gpu_load=[35.0, 45.0],
+            gpu_occupied_memory=[1536.0, 2560.0],
+        )
+    )
+
+    assert {
+        plot_attr: getattr(launcher, plot_attr).getAxis("bottom")
+        for plot_attr in axes_before
+    } == axes_before
+
+
 def test_refresh_node_info_targets_selected_container_id_not_display_alias(qtbot, monkeypatch):
     launcher, fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
     launcher.refresh_node_info = REAL_REFRESH_NODE_INFO.__get__(launcher, frm_main.EdgeNodeLauncher)
@@ -653,6 +694,50 @@ def test_close_event_clears_deleted_dialog_reference(qtbot, monkeypatch):
     assert event.accepted
     assert launcher.launcher_dialog is None
     assert not any("Error closing launcher_dialog" in line for line in launcher.log_buffer)
+
+
+def test_close_event_does_not_process_events_synchronously(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    process_event_calls = []
+
+    class FakeCloseEvent:
+        def __init__(self):
+            self.accepted = False
+
+        def accept(self):
+            self.accepted = True
+
+    with monkeypatch.context() as process_events_patch:
+        process_events_patch.setattr(
+            frm_main.QApplication,
+            "processEvents",
+            lambda *args, **kwargs: process_event_calls.append("processEvents"),
+        )
+        event = FakeCloseEvent()
+        launcher.closeEvent(event)
+
+    assert event.accepted
+    assert process_event_calls == []
+
+
+def test_close_event_disables_metric_plot_updates(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+
+    class FakeCloseEvent:
+        def __init__(self):
+            self.accepted = False
+
+        def accept(self):
+            self.accepted = True
+
+    event = FakeCloseEvent()
+    launcher.closeEvent(event)
+
+    assert event.accepted
+    for plot_attr in ("cpu_plot", "memory_plot", "gpu_plot", "gpu_memory_plot"):
+        plot = getattr(launcher, plot_attr)
+        assert not plot.updatesEnabled()
+        assert not plot.isVisible()
 
 
 def test_late_launch_success_does_not_update_ui_during_shutdown(qtbot, monkeypatch):
