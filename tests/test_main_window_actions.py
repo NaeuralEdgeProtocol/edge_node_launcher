@@ -280,6 +280,8 @@ def test_status_card_address_rows_keep_text_visible_next_to_copy_buttons(qtbot, 
 
     assert launcher.addressDisplay.objectName() == "nodeAddressDisplay"
     assert launcher.ethAddressDisplay.objectName() == "nodeEthAddressDisplay"
+    assert launcher.addressDisplay.property("statusField") == "address"
+    assert launcher.ethAddressDisplay.property("statusField") == "address"
     assert launcher.copyAddrButton.accessibleName() == "Copy node address"
     assert launcher.copyEthButton.accessibleName() == "Copy ETH address"
     assert launcher.addressDisplay.text() == "Address: 0xnodeaddress"
@@ -288,6 +290,30 @@ def test_status_card_address_rows_keep_text_visible_next_to_copy_buttons(qtbot, 
     assert launcher.copyEthButton.isVisible()
     assert launcher.addressDisplay.width() > launcher.copyAddrButton.width()
     assert launcher.ethAddressDisplay.width() > launcher.copyEthButton.width()
+
+
+def test_status_card_uses_semantic_label_roles(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+
+    metadata_labels = (
+        launcher.nameDisplay,
+        launcher.node_uptime,
+        launcher.node_epoch,
+        launcher.node_epoch_avail,
+        launcher.node_version,
+    )
+
+    assert launcher.addressDisplay.property("statusField") == "address"
+    assert launcher.ethAddressDisplay.property("statusField") == "address"
+    assert launcher.addressDisplay.font().family() == "Courier New"
+    assert launcher.ethAddressDisplay.font().family() == "Courier New"
+
+    for label in metadata_labels:
+        assert label.property("statusField") == "metadata"
+        assert label.font().family() == "Segoe UI"
+
+    assert 'QLabel[statusField="address"]' in frm_main.DARK_STYLESHEET
+    assert 'QLabel[statusField="metadata"]' in frm_main.DARK_STYLESHEET
 
 
 def test_status_card_runtime_labels_use_consistent_copy(qtbot, monkeypatch):

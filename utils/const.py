@@ -761,11 +761,17 @@ COMMON_STYLESHEET_TEMPLATE = """
   QGroupBox[role="statusPanel"] QLabel,
   QGroupBox[role="resourcePanel"] QLabel {{
     color: {info_box_text};
-    font-family: "Courier New";
+    font-family: "Segoe UI";
     font-size: 10pt;
     font-weight: {info_box_font_weight};
     margin: 2px;
     background-color: transparent;
+  }}
+  QGroupBox[role="statusPanel"] QLabel[statusField="address"] {{
+    font-family: "Courier New";
+  }}
+  QGroupBox[role="statusPanel"] QLabel[statusField="metadata"] {{
+    font-family: "Segoe UI";
   }}
   QGroupBox[role="resourcePanel"] QLabel {{
     padding: 2px 4px;
