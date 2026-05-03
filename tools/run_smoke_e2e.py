@@ -148,6 +148,25 @@ def patch_message_boxes(log, output_path):
     QMessageBox.question = staticmethod(record_box("question", QMessageBox.Yes))
 
 
+def install_browser_recorder(log):
+    import webbrowser
+
+    opened_urls = []
+    original_open = webbrowser.open
+
+    def record_open(url, *args, **kwargs):
+        opened_urls.append(str(url))
+        return True
+
+    webbrowser.open = record_open
+    log["opened_urls"] = opened_urls
+
+    def restore():
+        webbrowser.open = original_open
+
+    return restore
+
+
 def run_scenarios(args):
     os.chdir(REPO_ROOT)
     sys.path.insert(0, str(REPO_ROOT))
@@ -167,6 +186,7 @@ def run_scenarios(args):
     }
     write_log(log, args.output)
     patch_message_boxes(log, args.output)
+    restore_browser = install_browser_recorder(log)
 
     temp_root = Path(tempfile.mkdtemp(prefix="r1-launcher-smoke-"))
     config_manager = ConfigManager(str(temp_root / "config"))
@@ -213,6 +233,9 @@ def run_scenarios(args):
 
         record_step(log, args.output, {"step": click_button(app, launcher.refreshButton, "refresh stopped node")})
         record_step(log, args.output, {"step": click_button(app, launcher.force_debug_checkbox, "toggle force debug")})
+        record_step(log, args.output, {"step": click_button(app, launcher.dapp_button, "open dapp link")})
+        record_step(log, args.output, {"step": click_button(app, launcher.explorer_button, "show explorer placeholder")})
+        record_step(log, args.output, {"step": click_button(app, launcher.docker_download_button, "open docker download link")})
 
         def cancel_add_node_dialog():
             dialog = find_dialog(app, "Add New Node")
@@ -233,11 +256,14 @@ def run_scenarios(args):
         log["error"] = str(exc)
         raise
     finally:
-        launcher.close()
-        app.processEvents()
-        log["finished_at"] = datetime.now().isoformat()
-        write_log(log, args.output)
-        print(json.dumps(log, indent=2))
+        try:
+            restore_browser()
+        finally:
+            launcher.close()
+            app.processEvents()
+            log["finished_at"] = datetime.now().isoformat()
+            write_log(log, args.output)
+            print(json.dumps(log, indent=2))
 
 
 def main():

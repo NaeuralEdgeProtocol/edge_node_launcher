@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+import webbrowser
 
 import tools.run_smoke_e2e as smoke
 
@@ -58,3 +59,17 @@ def test_smoke_window_snapshot_serializes_geometry():
         "frame": {"x": 8, "y": 0, "w": 304, "h": 240},
         "visible": True,
     }
+
+
+def test_smoke_browser_recorder_captures_and_restores_open(monkeypatch):
+    original_open = webbrowser.open
+    log = {}
+
+    restore = smoke.install_browser_recorder(log)
+    try:
+        assert webbrowser.open("https://example.test") is True
+        assert log["opened_urls"] == ["https://example.test"]
+    finally:
+        restore()
+
+    assert webbrowser.open is original_open
