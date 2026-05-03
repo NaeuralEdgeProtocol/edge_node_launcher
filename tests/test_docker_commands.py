@@ -38,6 +38,42 @@ def test_launch_command_adds_gpu_flag_when_available(monkeypatch):
     assert "--gpus=all" in command
 
 
+def test_launch_command_can_target_captured_container_name(monkeypatch):
+    handler = make_handler(monkeypatch, container_name="r1node")
+    monkeypatch.setattr(handler, "check_nvidia_gpu_available", lambda: False)
+    monkeypatch.setattr(docker_commands.platform, "machine", lambda: "AMD64")
+    monkeypatch.setattr(docker_commands.platform, "system", lambda: "Windows")
+
+    command = handler.get_launch_command("ratio1_vol", container_name="r1node2")
+
+    assert command[command.index("--name") + 1] == "r1node2"
+    assert handler.container_name == "r1node"
+
+
+def test_launch_container_threaded_defers_launch_command_build_until_worker(monkeypatch):
+    handler = make_handler(monkeypatch)
+    calls = []
+
+    def fail_if_called_on_inspect_callback(*args, **kwargs):
+        raise AssertionError("get_launch_command should run inside the launch worker")
+
+    def fake_execute_direct(command, callback=None, error_callback=None):
+        calls.append(command)
+        if command == ["docker", "container", "inspect", "r1node"]:
+            callback(("", "not found", 1))
+
+    monkeypatch.setattr(handler, "get_launch_command", fail_if_called_on_inspect_callback)
+    monkeypatch.setattr(handler, "_execute_direct_threaded", fake_execute_direct)
+    monkeypatch.setattr(handler, "_execute_launch_threaded", lambda volume_name, callback=None, error_callback=None: calls.append(("launch", volume_name)))
+
+    handler.launch_container_threaded("ratio1_vol")
+
+    assert calls == [
+        ["docker", "container", "inspect", "r1node"],
+        ("launch", "ratio1_vol"),
+    ]
+
+
 def test_list_containers_parses_docker_ps_output(monkeypatch):
     handler = make_handler(monkeypatch)
 

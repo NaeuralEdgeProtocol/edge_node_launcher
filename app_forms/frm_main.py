@@ -7,7 +7,7 @@ import dataclasses
 import subprocess
 
 from datetime import datetime, timedelta
-from time import time, sleep
+from time import time
 from typing import Optional
 import re
 
@@ -1383,7 +1383,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         if 'container_name' in locals():
             self._end_lifecycle_operation(container_name)
 
-  def plot_data(self):
+  def plot_data(self, assume_running: Optional[bool] = None):
     """Plot container metrics data."""
     # Skip plotting if Docker pull is in progress to avoid conflicts
     if self.__docker_pull_in_progress:
@@ -1399,7 +1399,12 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     # Make sure we're working with the correct container
     self.docker_handler.set_container_name(container_name)
     
-    if not self.is_container_running():
+    if assume_running is None:
+        is_running = self.is_container_running()
+    else:
+        is_running = assume_running
+
+    if not is_running:
         self.add_log(f"Container {container_name} is not running, skipping plot data", debug=True)
         return
 
@@ -1419,7 +1424,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.__current_node_epoch_avail = history.current_epoch_avail
         self.__current_node_ver = history.version
         
-        self.maybe_refresh_uptime()
+        self.maybe_refresh_uptime(assume_running=True)
         self.add_log(f"Updated metrics for container {container_name}", debug=True)
 
     def on_error(error):
@@ -1970,7 +1975,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       self.ethAddressDisplay.setText('ETH Address: -')
       self.copyEthButton.hide()
 
-  def maybe_refresh_uptime(self):
+  def maybe_refresh_uptime(self, assume_running: Optional[bool] = None):
     """Update uptime, epoch and epoch availability displays.
     
     This method updates the UI with the latest uptime, epoch, and epoch availability data.
@@ -1989,8 +1994,13 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     ver = self.__current_node_ver
     color = 'black'
     
+    if assume_running is None:
+      is_running = self.is_container_running()
+    else:
+      is_running = assume_running
+
     # Check if container is running
-    if not self.is_container_running():
+    if not is_running:
       # Check if we're in a loading state (container starting up)
       is_loading = hasattr(self, 'loading_indicator') and self.loading_indicator.isVisible()
       
@@ -2076,13 +2086,20 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     if self.__docker_pull_in_progress:
         self.add_log("Docker pull in progress, skipping refresh all", debug=True)
         return
+    if self.__active_lifecycle_operation is not None:
+        active = self.__active_lifecycle_operation
+        self.add_log(
+            f"Lifecycle operation {active.get('operation')} active on {active.get('container_name')}, skipping refresh all",
+            debug=True,
+        )
+        return
     self.add_log('Refreshing', debug=True)
 
     # Only auto-restart if container is not running, button is enabled, user didn't intentionally stop it, AND no pull is in progress
     if not self.is_container_running() and self.toggleButton.isEnabled() == True and not self.user_stopped_container:
       self.add_log("Container is supposed to run. Starting it now...", debug=True, color="red")
       self._start_container()
-      sleep(5)
+      return
 
     self._refresh_local_containers()
 
@@ -2298,7 +2315,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     return
   
   
-  def update_toggle_button_text(self):
+  def update_toggle_button_text(self, assume_running: Optional[bool] = None):
     """Update the toggle button text and style based on the current container state"""
     # Get the current index from the combo box
     current_index = self.container_combo.currentIndex()
@@ -2325,25 +2342,28 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             self.toggleButton.setEnabled(False)
         return
     
-    # Check if container exists in Docker
-    container_exists = self.container_exists_in_docker(container_name)
-    
-    # If container doesn't exist in Docker but exists in config, show launch button
-    if not container_exists:
-        config_container = self.config_manager.get_container(container_name)
-        if config_container:
-            # Only update if state changed
-            if current_text != LAUNCH_CONTAINER_BUTTON_TEXT or not current_enabled:
-                self.toggleButton.setText(LAUNCH_CONTAINER_BUTTON_TEXT)
-                self.apply_button_style(self.toggleButton, 'toggle_start')
-                self.toggleButton.setEnabled(True)
-            return
-    
     # Make sure the docker handler has the correct container name
     self.docker_handler.set_container_name(container_name)
-    
-    # Check if the container is running using docker_handler directly
-    is_running = self.docker_handler.is_container_running()
+
+    if assume_running is None:
+        # Check if container exists in Docker
+        container_exists = self.container_exists_in_docker(container_name)
+
+        # If container doesn't exist in Docker but exists in config, show launch button
+        if not container_exists:
+            config_container = self.config_manager.get_container(container_name)
+            if config_container:
+                # Only update if state changed
+                if current_text != LAUNCH_CONTAINER_BUTTON_TEXT or not current_enabled:
+                    self.toggleButton.setText(LAUNCH_CONTAINER_BUTTON_TEXT)
+                    self.apply_button_style(self.toggleButton, 'toggle_start')
+                    self.toggleButton.setEnabled(True)
+                return
+
+        # Check if the container is running using docker_handler directly
+        is_running = self.docker_handler.is_container_running()
+    else:
+        is_running = assume_running
     
     # Determine the new state
     new_text = STOP_CONTAINER_BUTTON_TEXT if is_running else LAUNCH_CONTAINER_BUTTON_TEXT
@@ -3199,18 +3219,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         if hasattr(self, 'launcher_dialog') and self.launcher_dialog is not None :
             self.launcher_dialog.update_progress("Preparing Docker command...")
         
-        # Get the Docker command that will be executed (for logging purposes only)
-        command = self.docker_handler.get_launch_command(volume_name=volume_name)
-        # Log the command without debug flag to ensure it's always visible
-        self.add_log(f'Docker command: {" ".join(command)}', color="blue")
-        
-        # First check if the container already exists
-        container_exists = self.container_exists_in_docker(container_name)
-        if container_exists:
-            # Update loading dialog with progress
-            if hasattr(self, 'launcher_dialog') and self.launcher_dialog is not None :
-                self.launcher_dialog.update_progress(f"Removing existing container '{container_name}' before launch...")
-            self.add_log(f"Container {container_name} already exists, removing it first", color="yellow")
+        self.add_log(f"Preparing Docker launch for {container_name} with volume {volume_name}. Container cleanup and command preparation will run in the background.", color="blue")
         
         # Check if Docker pull is already in progress
         if self.__docker_pull_in_progress:
@@ -3311,6 +3320,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             if return_code != 0:
                 # Handle error case
                 error_msg = f"Failed to launch container: {stderr}"
+                self.loading_indicator.stop()
+                self._close_dialog_reference("launcher_dialog")
+                self._close_dialog_reference("startup_dialog")
                 self.add_log(error_msg, color="red")
                 self.toast.show_notification(NotificationType.ERROR, error_msg)
                 self._end_lifecycle_operation(container_name)
@@ -3341,8 +3353,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             # Update UI after launch
             self.post_launch_setup()
             self.refresh_node_info()
-            self.plot_data()
-            self.update_toggle_button_text()
+            self.plot_data(assume_running=True)
+            self.update_toggle_button_text(assume_running=True)
             
             # Stop loading indicator
             self.loading_indicator.stop()
@@ -3402,16 +3414,17 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                     
                     if container_id:
                         self.add_log(f"Attempting to forcefully remove container with ID: {container_id}", color="yellow")
-                        # Run docker rm -f directly 
-                        remove_cmd = ['docker', 'rm', '-f', container_id]
-                        result = subprocess.run(remove_cmd, capture_output=True, text=True)
-                        if result.returncode == 0:
+                        def on_conflict_remove_success(result):
+                            _stdout, stderr, return_code = result
+                            if return_code != 0:
+                                self.add_log(f"Failed to remove conflicting container: {stderr}", color="red")
+                                return
+
                             self.add_log("Successfully removed conflicting container, retrying launch", color="blue")
-                            # Wait to ensure Docker has released the resources
-                            time.sleep(1)
-                            # Retry the launch
-                            self.docker_handler.launch_container_threaded(volume_name, on_launch_success, on_launch_error)
-                            return
+                            QTimer.singleShot(1000, lambda: self.docker_handler.launch_container_threaded(volume_name, on_launch_success, on_launch_error))
+
+                        self.docker_handler.remove_container_threaded(container_id, on_conflict_remove_success, on_launch_error, force=True)
+                        return
                 except Exception as retry_err:
                     self.add_log(f"Failed to resolve container conflict: {retry_err}", color="red")
             
@@ -3534,6 +3547,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             QTimer.singleShot(100, lambda: self._perform_container_launch_after_pull(container_name, volume_name))
         else:
             self.add_log("Docker pull completed without a pending launch target", color="yellow")
+            self._end_lifecycle_operation()
     else:
         # Show error notification
         if launch_context:
@@ -3564,6 +3578,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             if return_code != 0:
                 # Handle error case
                 error_msg = f"Failed to launch container: {stderr}"
+                self.loading_indicator.stop()
+                self._close_dialog_reference("launcher_dialog")
+                self._close_dialog_reference("startup_dialog")
                 self.add_log(error_msg, color="red")
                 self.toast.show_notification(NotificationType.ERROR, error_msg)
                 self._end_lifecycle_operation(container_name)
@@ -3594,8 +3611,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             # Update UI after launch
             self.post_launch_setup()
             self.refresh_node_info()
-            self.plot_data()
-            self.update_toggle_button_text()
+            self.plot_data(assume_running=True)
+            self.update_toggle_button_text(assume_running=True)
             
             # Stop loading indicator
             self.loading_indicator.stop()
@@ -3655,16 +3672,17 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                     
                     if container_id:
                         self.add_log(f"Attempting to forcefully remove container with ID: {container_id}", color="yellow")
-                        # Run docker rm -f directly 
-                        remove_cmd = ['docker', 'rm', '-f', container_id]
-                        result = subprocess.run(remove_cmd, capture_output=True, text=True)
-                        if result.returncode == 0:
+                        def on_conflict_remove_success(result):
+                            _stdout, stderr, return_code = result
+                            if return_code != 0:
+                                self.add_log(f"Failed to remove conflicting container: {stderr}", color="red")
+                                return
+
                             self.add_log("Successfully removed conflicting container, retrying launch", color="blue")
-                            # Wait to ensure Docker has released the resources
-                            time.sleep(1)
-                            # Retry the launch
-                            self.docker_handler.launch_container_threaded(volume_name, on_launch_success, on_launch_error)
-                            return
+                            QTimer.singleShot(1000, lambda: self.docker_handler.launch_container_threaded(volume_name, on_launch_success, on_launch_error))
+
+                        self.docker_handler.remove_container_threaded(container_id, on_conflict_remove_success, on_launch_error, force=True)
+                        return
                 except Exception as retry_err:
                     self.add_log(f"Failed to resolve container conflict: {retry_err}", color="red")
             

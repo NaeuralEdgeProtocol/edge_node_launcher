@@ -91,6 +91,7 @@ class FakeDockerHandler:
         self.node_info_requests = 0
         self.stopped_containers = []
         self.launched_containers = []
+        self.pull_requests = 0
 
     def set_container_name(self, container_name):
         self.container_name = container_name
@@ -121,6 +122,9 @@ class FakeDockerHandler:
         self.launched_containers.append((self.container_name, volume_name))
         if callback:
             callback(("", "", 0))
+
+    def pull_image(self, callback, error_callback, output_callback=None):
+        self.pull_requests += 1
 
 
 def _build_launcher(monkeypatch, qtbot, running=False):
@@ -330,6 +334,16 @@ def test_docker_pull_completion_uses_captured_launch_target(qtbot, monkeypatch):
     assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
 
 
+def test_docker_pull_completion_without_launch_target_clears_lifecycle(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launcher._begin_lifecycle_operation("launch", "r1node")
+
+    launcher._on_docker_pull_complete(True, "pulled")
+
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+    assert getattr(launcher, "_EdgeNodeLauncher__docker_pull_in_progress") is False
+
+
 def test_stale_node_info_failures_do_not_restart_other_nodes(qtbot, monkeypatch):
     launcher, fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
     fake_config.add_container(
@@ -412,6 +426,36 @@ def test_late_launch_success_does_not_update_ui_during_shutdown(qtbot, monkeypat
     if launcher.logView is not None:
         log_text += launcher.logView.toPlainText()
     assert "Ignoring launch success for r1node" in log_text
+
+
+def test_launch_preparation_does_not_run_blocking_docker_checks_on_ui_thread(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+
+    fake_handler.get_launch_command = lambda *args, **kwargs: (_ for _ in ()).throw(
+        AssertionError("launch command should be built in Docker worker thread")
+    )
+    launcher.container_exists_in_docker = lambda _name: (_ for _ in ()).throw(
+        AssertionError("container existence should be handled in Docker worker thread")
+    )
+    launcher._begin_lifecycle_operation("launch", "r1node")
+
+    launcher._perform_container_launch("r1node", "r1vol")
+
+    assert fake_handler.pull_requests == 1
+    assert getattr(launcher, "_EdgeNodeLauncher__docker_pull_in_progress") is True
+
+
+def test_refresh_all_auto_start_does_not_sleep_on_ui_thread(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    calls = []
+
+    launcher._start_container = lambda: calls.append("start")
+    launcher.update_resources_display = lambda: calls.append("resources")
+    launcher._refresh_local_containers = lambda: calls.append("containers")
+
+    launcher.refresh_all()
+
+    assert calls == ["start"]
 
 
 def test_main_window_add_node_dialog_create_action_is_clickable(qtbot, monkeypatch):

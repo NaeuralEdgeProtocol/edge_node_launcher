@@ -1,7 +1,7 @@
 import os
 import json
 import subprocess
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Union
 from dataclasses import dataclass
 from datetime import datetime
 from PyQt5.QtCore import QThread, pyqtSignal
@@ -317,12 +317,15 @@ class DockerStreamingCommandThread(QThread):
             except Exception as e:
                 logging.error(f"Error terminating process: {e}")
 
+DockerDirectCommand = Union[List[str], Callable[[], List[str]]]
+
+
 class DockerDirectCommandThread(QThread):
     """ Thread to run a direct Docker command (not a container exec command) """
     command_finished = pyqtSignal(object)
     command_error = pyqtSignal(str)
 
-    def __init__(self, command: list, remote_ssh_command: list = None):
+    def __init__(self, command: DockerDirectCommand, remote_ssh_command: list = None):
         super().__init__()
         self.command = command
         self.remote_ssh_command = remote_ssh_command
@@ -332,8 +335,8 @@ class DockerDirectCommandThread(QThread):
 
     def run(self):
         try:
-            full_command = self.command
-            is_docker_pull = len(self.command) >= 2 and self.command[0] == 'docker' and self.command[1] == 'pull'
+            full_command = self.command() if callable(self.command) else self.command
+            is_docker_pull = len(full_command) >= 2 and full_command[0] == 'docker' and full_command[1] == 'pull'
 
             # Add remote prefix if needed
             if self.remote_ssh_command:
@@ -532,7 +535,7 @@ class DockerCommandHandler:
         
         return stdout, stderr, return_code
 
-    def get_launch_command(self, volume_name: str = None) -> list:
+    def get_launch_command(self, volume_name: str = None, container_name: str = None) -> list:
         """Get the Docker command that will be used to launch the container.
         
         Args:
@@ -544,6 +547,8 @@ class DockerCommandHandler:
         # Check for GPU support
         use_gpu = self.check_nvidia_gpu_available()
         
+        target_container_name = container_name or self.container_name
+
         # Base command with container name
         command = [
             'docker', 'run'
@@ -566,7 +571,7 @@ class DockerCommandHandler:
         command += [
             '-d',  # Run in detached mode
             '--privileged',  # Privileged mode
-            '--name', self.container_name,  # Set container name
+            '--name', target_container_name,  # Set container name
             '--restart', 'unless-stopped',  # Restart policy
         ]
         
@@ -878,7 +883,7 @@ class DockerCommandHandler:
         except Exception:
             return False
 
-    def _execute_direct_threaded(self, command: list, callback=None, error_callback=None) -> None:
+    def _execute_direct_threaded(self, command: DockerDirectCommand, callback=None, error_callback=None) -> None:
         """Execute a direct Docker command in a background thread.
         
         Args:
@@ -896,6 +901,15 @@ class DockerCommandHandler:
         
         self.threads.append(thread)  # Keep reference to prevent GC
         thread.start()
+
+    def _execute_launch_threaded(self, volume_name: str = None, callback=None, error_callback=None) -> None:
+        """Build and execute the Docker launch command entirely off the UI thread."""
+        container_name = self.container_name
+
+        def build_launch_command():
+            return self.get_launch_command(volume_name, container_name=container_name)
+
+        self._execute_direct_threaded(build_launch_command, callback, error_callback)
 
     def _handle_direct_thread_finished(self, thread, callback, error_callback):
         # This method runs in the main thread
@@ -968,9 +982,7 @@ class DockerCommandHandler:
                 error_callback
             )
         else:  # Container doesn't exist, create it
-            # Launch the container
-            launch_command = self.get_launch_command(volume_name)
-            self._execute_direct_threaded(launch_command, callback, error_callback)
+            self._execute_launch_threaded(volume_name, callback, error_callback)
     
     def _handle_container_remove_result(self, result, volume_name, callback, error_callback):
         """Handle the result of container removal during launch.
@@ -989,8 +1001,23 @@ class DockerCommandHandler:
             return
             
         # Container was removed successfully, now launch a new one
-        launch_command = self.get_launch_command(volume_name)
-        self._execute_direct_threaded(launch_command, callback, error_callback)
+        self._execute_launch_threaded(volume_name, callback, error_callback)
+
+    def remove_container_threaded(self, container_name: str, callback, error_callback, force: bool = True) -> None:
+        """Remove a container in a background thread."""
+        try:
+            if not container_name:
+                error_callback("No container name specified")
+                return
+
+            command = ['docker', 'rm']
+            if force:
+                command.append('-f')
+            command.append(container_name)
+            self._execute_direct_threaded(command, callback, error_callback)
+        except Exception as e:
+            logging.error(f"Error in remove_container_threaded: {str(e)}")
+            error_callback(f"Error removing container: {str(e)}")
 
     def stop_container_threaded(self, container_name: str, callback, error_callback) -> None:
         """Stop a container in a background thread.

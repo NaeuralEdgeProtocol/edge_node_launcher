@@ -26,15 +26,25 @@ DEFAULT_STARTUP_TEMPLATE = REPO_ROOT.parent / "edge_node" / ".config_startup.jso
 
 
 def run_command(command, timeout=120, check=False):
-    result = subprocess.run(
-        command,
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=timeout,
-    )
+    try:
+        result = subprocess.run(
+            command,
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "command": command,
+            "returncode": -1,
+            "stdout": (exc.stdout or "").strip() if isinstance(exc.stdout, str) else "",
+            "stderr": (exc.stderr or "").strip() if isinstance(exc.stderr, str) else "",
+            "timed_out": True,
+            "timeout": timeout,
+        }
     if check and result.returncode != 0:
         raise RuntimeError(
             f"Command failed ({result.returncode}): {' '.join(command)}\n"
@@ -45,6 +55,7 @@ def run_command(command, timeout=120, check=False):
         "returncode": result.returncode,
         "stdout": (result.stdout or "").strip(),
         "stderr": (result.stderr or "").strip(),
+        "timed_out": False,
     }
 
 
@@ -66,6 +77,112 @@ def collect_container_diagnostics(container_name):
             timeout=30,
         ),
         "logs_tail": run_command(["docker", "logs", "--tail", "120", container_name], timeout=60),
+    }
+
+
+def visible_dialog_titles(app):
+    from PyQt5.QtWidgets import QDialog
+
+    return [
+        widget.windowTitle()
+        for widget in app.topLevelWidgets()
+        if isinstance(widget, QDialog) and widget.isVisible()
+    ]
+
+
+def visible_dialog_details(app):
+    from PyQt5.QtWidgets import QDialog, QLabel, QProgressBar
+
+    details = []
+    for widget in app.topLevelWidgets():
+        if not isinstance(widget, QDialog) or not widget.isVisible():
+            continue
+
+        labels = [
+            label.text()
+            for label in widget.findChildren(QLabel)
+            if label.text()
+        ]
+        progress = [
+            {
+                "object_name": progress_bar.objectName(),
+                "value": progress_bar.value(),
+                "minimum": progress_bar.minimum(),
+                "maximum": progress_bar.maximum(),
+            }
+            for progress_bar in widget.findChildren(QProgressBar)
+        ]
+        details.append(
+            {
+                "class": type(widget).__name__,
+                "title": widget.windowTitle(),
+                "labels": labels,
+                "progress": progress,
+            }
+        )
+    return details
+
+
+def launcher_log_tail(launcher, max_chars=5000):
+    if getattr(launcher, "logView", None) is not None:
+        text = launcher.logView.toPlainText()
+    else:
+        text = "\n".join(getattr(launcher, "log_buffer", []))
+    return text[-max_chars:]
+
+
+def collect_launcher_diagnostics(app, launcher, containers):
+    current_index = launcher.container_combo.currentIndex()
+    current_container = launcher.container_combo.itemData(current_index) if current_index >= 0 else None
+    return {
+        "visible_dialogs": visible_dialog_titles(app),
+        "dialog_details": visible_dialog_details(app),
+        "current_container": current_container,
+        "toggle_text": launcher.toggleButton.text(),
+        "lifecycle_operation": getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation", None),
+        "docker_pull_in_progress": getattr(launcher, "_EdgeNodeLauncher__docker_pull_in_progress", None),
+        "pending_launch_context": getattr(launcher, "_EdgeNodeLauncher__pending_launch_context", None),
+        "launcher_log_tail": launcher_log_tail(launcher),
+        "containers": {
+            container_name: collect_container_diagnostics(container_name)
+            for container_name in containers
+        },
+    }
+
+
+def launcher_failure_message(launcher):
+    log_tail = launcher_log_tail(launcher).lower()
+    fatal_markers = [
+        "failed to launch container",
+        "error launching container",
+        "docker image pull failed",
+        "error pulling docker image",
+        "docker pull completed without a pending launch target",
+        "unexpected keyword argument",
+        "traceback",
+    ]
+    for marker in fatal_markers:
+        if marker in log_tail:
+            return marker
+    return None
+
+
+def launch_progress_signature(app, launcher, container_name):
+    current_index = launcher.container_combo.currentIndex()
+    current_container = launcher.container_combo.itemData(current_index) if current_index >= 0 else None
+    log_text = launcher_log_tail(launcher, max_chars=1000)
+    return {
+        "container": container_name,
+        "docker_exists": docker_exists(container_name),
+        "docker_running": docker_running(container_name),
+        "visible_dialogs": visible_dialog_details(app),
+        "log_length": len(log_text),
+        "log_tail": log_text[-300:],
+        "current_container": current_container,
+        "toggle_text": launcher.toggleButton.text(),
+        "lifecycle_operation": getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation", None),
+        "docker_pull_in_progress": getattr(launcher, "_EdgeNodeLauncher__docker_pull_in_progress", None),
+        "pending_launch_context": getattr(launcher, "_EdgeNodeLauncher__pending_launch_context", None),
     }
 
 
@@ -138,6 +255,104 @@ def wait_until(app, predicate, timeout, label, interval=0.5):
             last_error = exc
         time.sleep(interval)
     raise TimeoutError(f"Timed out waiting for {label}: {last_error}")
+
+
+def wait_for_launch_activity(app, launcher, log, output_path, timeout, label):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        app.processEvents()
+        failure_marker = launcher_failure_message(launcher)
+        if failure_marker:
+            log["result"] = "failed_launcher_error"
+            log["error"] = f"Launcher reported {failure_marker} while waiting for {label}"
+            log["diagnostics"] = collect_launcher_diagnostics(app, launcher, [PRIMARY_CONTAINER, SECOND_CONTAINER])
+            write_log(log, output_path)
+            raise RuntimeError(log["error"])
+
+        if (
+            docker_running(PRIMARY_CONTAINER)
+            or docker_running(SECOND_CONTAINER)
+            or visible_dialog_titles(app)
+            or getattr(launcher, "_EdgeNodeLauncher__docker_pull_in_progress", False)
+            or getattr(launcher, "_EdgeNodeLauncher__pending_launch_context", None)
+        ):
+            record_step(
+                log,
+                output_path,
+                {
+                    "step": "launch activity observed",
+                    "label": label,
+                    "visible_dialogs": visible_dialog_titles(app),
+                    "docker_pull_in_progress": getattr(launcher, "_EdgeNodeLauncher__docker_pull_in_progress", None),
+                    "pending_launch_context": getattr(launcher, "_EdgeNodeLauncher__pending_launch_context", None),
+                },
+            )
+            return
+        time.sleep(0.25)
+
+    log["result"] = "failed_no_launch_activity"
+    log["error"] = f"No launch activity observed while waiting for {label}"
+    log["diagnostics"] = collect_launcher_diagnostics(app, launcher, [PRIMARY_CONTAINER, SECOND_CONTAINER])
+    write_log(log, output_path)
+    raise TimeoutError(log["error"])
+
+
+def wait_for_container_running(app, launcher, log, output_path, container_name, timeout, label, stall_timeout=120):
+    deadline = time.monotonic() + timeout
+    started_at = time.monotonic()
+    last_progress_at = time.monotonic()
+    next_heartbeat = started_at + 15
+    last_signature = launch_progress_signature(app, launcher, container_name)
+
+    while time.monotonic() < deadline:
+        app.processEvents()
+        if docker_running(container_name):
+            return
+
+        failure_marker = launcher_failure_message(launcher)
+        if failure_marker:
+            log["result"] = "failed_launcher_error"
+            log["error"] = f"Launcher reported {failure_marker} while waiting for {label}"
+            log["diagnostics"] = collect_launcher_diagnostics(app, launcher, [PRIMARY_CONTAINER, SECOND_CONTAINER])
+            write_log(log, output_path)
+            raise RuntimeError(log["error"])
+
+        signature = launch_progress_signature(app, launcher, container_name)
+        if signature != last_signature:
+            last_progress_at = time.monotonic()
+            last_signature = signature
+
+        if time.monotonic() >= next_heartbeat:
+            record_step(
+                log,
+                output_path,
+                {
+                    "step": "waiting for container",
+                    "label": label,
+                    "container": container_name,
+                    "elapsed_seconds": round(time.monotonic() - started_at, 1),
+                    "visible_dialogs": signature["visible_dialogs"],
+                    "lifecycle_operation": signature["lifecycle_operation"],
+                    "docker_exists": signature["docker_exists"],
+                    "docker_running": signature["docker_running"],
+                },
+            )
+            next_heartbeat = time.monotonic() + 15
+
+        if time.monotonic() - last_progress_at > stall_timeout:
+            log["result"] = "failed_stale_main_window"
+            log["error"] = f"No visible launcher progress while waiting for {label}"
+            log["diagnostics"] = collect_launcher_diagnostics(app, launcher, [PRIMARY_CONTAINER, SECOND_CONTAINER])
+            write_log(log, output_path)
+            raise TimeoutError(log["error"])
+
+        time.sleep(0.5)
+
+    log["result"] = "failed_timeout"
+    log["error"] = f"Timed out waiting for {label}"
+    log["diagnostics"] = collect_launcher_diagnostics(app, launcher, [PRIMARY_CONTAINER, SECOND_CONTAINER])
+    write_log(log, output_path)
+    raise TimeoutError(log["error"])
 
 
 def wait_for_stable_container(app, container_name, seconds):
@@ -269,10 +484,11 @@ def run_scenarios(args):
     docker_commands.DOCKER_IMAGE = args.image
     original_get_launch_command = docker_commands.DockerCommandHandler.get_launch_command
 
-    def get_launch_command_with_e2e_config(self, volume_name=None):
-        command = original_get_launch_command(self, volume_name)
+    def get_launch_command_with_e2e_config(self, volume_name=None, *extra_args, **kwargs):
+        command = original_get_launch_command(self, volume_name, *extra_args, **kwargs)
         if args.offline_config:
-            node_alias = "e2e-primary" if self.container_name == PRIMARY_CONTAINER else "e2e-second"
+            target_container_name = kwargs.get("container_name", self.container_name)
+            node_alias = "e2e-primary" if target_container_name == PRIMARY_CONTAINER else "e2e-second"
             startup_json = build_startup_config(args.startup_template, node_alias)
             image_index = len(command) - 1
             command[image_index:image_index] = [
@@ -314,14 +530,24 @@ def run_scenarios(args):
         wait_until(app, lambda: launcher.themeToggleButton.text() == frm_main.LIGHT_DASHBOARD_BUTTON_TEXT, 10, "dark theme")
 
         record_step(log, args.output, {"step": click_button(app, launcher.toggleButton, "start primary container")})
-        wait_until(
+        wait_for_launch_activity(
             app,
-            lambda: getattr(launcher, "docker_pull_dialog", None) is not None,
+            launcher,
+            log,
+            args.output,
             45,
-            "Docker pull loader dialog",
+            "primary launch activity",
         )
-        record_step(log, args.output, {"step": "docker pull loader observed", "dialog": "Pulling Docker Image"})
-        wait_until(app, lambda: docker_running(PRIMARY_CONTAINER), args.launch_timeout, "primary container running")
+        wait_for_container_running(
+            app,
+            launcher,
+            log,
+            args.output,
+            PRIMARY_CONTAINER,
+            args.launch_timeout,
+            "primary container running",
+            stall_timeout=args.ui_stall_timeout,
+        )
         record_step(log, args.output, {"step": "primary container running", "container": PRIMARY_CONTAINER})
 
         node_info_result = wait_for_node_command(PRIMARY_CONTAINER, timeout=args.node_ready_timeout)
@@ -399,7 +625,16 @@ def run_scenarios(args):
             write_log(log, args.output)
             return log
         wait_until(app, lambda: not docker_running(PRIMARY_CONTAINER), args.rename_timeout, "primary stopped during rename restart")
-        wait_until(app, lambda: docker_running(PRIMARY_CONTAINER), args.launch_timeout, "primary running after rename")
+        wait_for_container_running(
+            app,
+            launcher,
+            log,
+            args.output,
+            PRIMARY_CONTAINER,
+            args.launch_timeout,
+            "primary running after rename",
+            stall_timeout=args.ui_stall_timeout,
+        )
         record_step(log, args.output, {"step": "rename flow completed"})
 
         record_step(log, args.output, {"step": click_button(app, launcher.toggleButton, "stop primary container")})
@@ -407,7 +642,16 @@ def run_scenarios(args):
         record_step(log, args.output, {"step": "primary container stopped"})
 
         record_step(log, args.output, {"step": click_button(app, launcher.toggleButton, "restart primary container")})
-        wait_until(app, lambda: docker_running(PRIMARY_CONTAINER), args.launch_timeout, "primary restarted")
+        wait_for_container_running(
+            app,
+            launcher,
+            log,
+            args.output,
+            PRIMARY_CONTAINER,
+            args.launch_timeout,
+            "primary restarted",
+            stall_timeout=args.ui_stall_timeout,
+        )
         record_step(log, args.output, {"step": "primary container restarted"})
 
         def create_add_node_dialog():
@@ -421,14 +665,25 @@ def run_scenarios(args):
         record_step(log, args.output, {"step": "open create second node dialog"})
         click_button(app, launcher.add_node_button, "create second node")
         record_step(log, args.output, {"step": "create second node dialog returned"})
-        wait_until(app, lambda: docker_running(SECOND_CONTAINER), args.launch_timeout, "second container running")
+        wait_for_container_running(
+            app,
+            launcher,
+            log,
+            args.output,
+            SECOND_CONTAINER,
+            args.launch_timeout,
+            "second container running",
+            stall_timeout=args.ui_stall_timeout,
+        )
         record_step(log, args.output, {"step": "second container running", "container": SECOND_CONTAINER})
 
         log["result"] = "passed"
         return log
     except Exception as exc:
-        log["result"] = "failed"
-        log["error"] = str(exc)
+        if "result" not in log:
+            log["result"] = "failed"
+        if "error" not in log:
+            log["error"] = str(exc)
         raise
     finally:
         try:
@@ -470,6 +725,7 @@ def main():
     parser.add_argument("--rename-timeout", type=int, default=360)
     parser.add_argument("--node-ready-timeout", type=int, default=300)
     parser.add_argument("--stability-window", type=int, default=20)
+    parser.add_argument("--ui-stall-timeout", type=int, default=120)
     parser.add_argument("--output", default="")
     args = parser.parse_args()
     log = run_scenarios(args)
