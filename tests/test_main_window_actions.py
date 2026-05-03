@@ -197,6 +197,8 @@ def _build_launcher(monkeypatch, qtbot, running=False, config_setup=None):
     launcher.show()
     launcher.timer.stop()
     launcher.toast = FakeToast()
+    for plot_attr in ("cpu_plot", "memory_plot", "gpu_plot", "gpu_memory_plot"):
+        getattr(launcher, plot_attr).disable_late_paints()
 
     return launcher, fake_config, fake_handler
 
@@ -438,6 +440,116 @@ def test_main_window_rename_save_restarts_without_legacy_stop_modal(qtbot, monke
     assert fake_handler.stopped_containers == ["r1node"]
     assert launch_calls == ["r1vol"]
     assert fake_config.get_container("r1node").node_alias == "renamed"
+
+
+def test_rename_dialog_double_click_saves_once(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    updates = []
+
+    def defer_update_node_name(new_name, on_success, on_error):
+        updates.append(new_name)
+
+    fake_handler.update_node_name = defer_update_node_name
+
+    def click_save_twice(dialog):
+        name_input = dialog.findChild(QLineEdit, "renameNodeNameInput")
+        save_button = dialog.findChild(QPushButton, "renameNodeSaveButton")
+        cancel_button = dialog.findChild(QPushButton, "renameNodeCancelButton")
+        assert name_input is not None
+        assert save_button is not None
+        assert cancel_button is not None
+
+        name_input.setText("renamed")
+        save_button.click()
+        assert not save_button.isEnabled()
+        assert not cancel_button.isEnabled()
+        assert save_button.text() == "Saving..."
+        save_button.click()
+        return QDialog.Accepted
+
+    monkeypatch.setattr(QDialog, "exec_", click_save_twice)
+
+    qtbot.mouseClick(launcher.renameNodeButton, Qt.LeftButton)
+
+    assert updates == ["renamed"]
+
+
+def test_rename_dialog_invalid_name_keeps_save_enabled(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    observed = {}
+
+    def fail_update_node_name(*args, **kwargs):
+        raise AssertionError("invalid rename input should not submit an update request")
+
+    fake_handler.update_node_name = fail_update_node_name
+
+    def click_invalid_save(dialog):
+        name_input = dialog.findChild(QLineEdit, "renameNodeNameInput")
+        save_button = dialog.findChild(QPushButton, "renameNodeSaveButton")
+        cancel_button = dialog.findChild(QPushButton, "renameNodeCancelButton")
+        assert name_input is not None
+        assert save_button is not None
+        assert cancel_button is not None
+
+        name_input.setText("bad name!")
+        save_button.click()
+        observed["save_enabled"] = save_button.isEnabled()
+        observed["cancel_enabled"] = cancel_button.isEnabled()
+        observed["save_text"] = save_button.text()
+        return QDialog.Rejected
+
+    monkeypatch.setattr(QDialog, "exec_", click_invalid_save)
+
+    qtbot.mouseClick(launcher.renameNodeButton, Qt.LeftButton)
+
+    assert observed == {
+        "save_enabled": True,
+        "cancel_enabled": True,
+        "save_text": "Save",
+    }
+    assert launcher.toast.notifications[-1] == (
+        NotificationType.ERROR,
+        "Node name can only contain letters (a-z, A-Z), numbers (0-9), hyphens (-), and underscores (_)",
+    )
+
+
+def test_rename_dialog_error_reenables_save(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    observed = {}
+
+    def fail_update_node_name(new_name, on_success, on_error):
+        on_error("Error: timeout")
+
+    fake_handler.update_node_name = fail_update_node_name
+
+    def click_save(dialog):
+        name_input = dialog.findChild(QLineEdit, "renameNodeNameInput")
+        save_button = dialog.findChild(QPushButton, "renameNodeSaveButton")
+        cancel_button = dialog.findChild(QPushButton, "renameNodeCancelButton")
+        assert name_input is not None
+        assert save_button is not None
+        assert cancel_button is not None
+
+        name_input.setText("renamed")
+        save_button.click()
+        observed["save_enabled"] = save_button.isEnabled()
+        observed["cancel_enabled"] = cancel_button.isEnabled()
+        observed["save_text"] = save_button.text()
+        return QDialog.Rejected
+
+    monkeypatch.setattr(QDialog, "exec_", click_save)
+
+    qtbot.mouseClick(launcher.renameNodeButton, Qt.LeftButton)
+
+    assert observed == {
+        "save_enabled": True,
+        "cancel_enabled": True,
+        "save_text": "Save",
+    }
+    assert launcher.toast.notifications[-1] == (
+        NotificationType.ERROR,
+        "Failed to rename node: Operation timed out. Please check your connection and try again.",
+    )
 
 
 def test_rename_restart_does_not_override_active_lifecycle(qtbot, monkeypatch):
@@ -808,6 +920,56 @@ def test_close_event_disables_metric_plot_updates(qtbot, monkeypatch):
         plot = getattr(launcher, plot_attr)
         assert not plot.updatesEnabled()
         assert not plot.isVisible()
+        assert plot._ignore_late_paints
+
+
+def test_metric_plot_widget_ignores_paint_after_shutdown(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+
+    class FakePaintEvent:
+        def __init__(self):
+            self.accepted = False
+
+        def accept(self):
+            self.accepted = True
+
+    event = FakePaintEvent()
+    launcher.cpu_plot.disable_late_paints()
+    launcher.cpu_plot.paintEvent(event)
+
+    assert event.accepted
+
+
+def test_metric_plot_widget_ignores_paint_when_hidden(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+
+    class FakePaintEvent:
+        def __init__(self):
+            self.accepted = False
+
+        def accept(self):
+            self.accepted = True
+
+    event = FakePaintEvent()
+    launcher.cpu_plot.hide()
+    launcher.cpu_plot.paintEvent(event)
+
+    assert event.accepted
+
+
+def test_metric_plot_widgets_keep_strong_axis_references(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+
+    assert set(launcher._metric_axis_items) == {
+        "cpu_plot",
+        "memory_plot",
+        "gpu_plot",
+        "gpu_memory_plot",
+    }
+    for plot_attr, axis in launcher._metric_axis_items.items():
+        plot = getattr(launcher, plot_attr)
+        assert plot._r1_bottom_axis is axis
+        assert plot.getAxis("bottom") is axis
 
 
 def test_late_launch_success_does_not_update_ui_during_shutdown(qtbot, monkeypatch):

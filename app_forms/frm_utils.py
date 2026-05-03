@@ -7,7 +7,7 @@ import subprocess
 import math
 
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QAbstractButton, QCheckBox, QRadioButton, QLabel
-from PyQt5.QtCore import Qt, QRect, QPropertyAnimation, QTimer, QSize
+from PyQt5.QtCore import Qt, QRect, QRectF, QPropertyAnimation, QTimer, QSize
 from PyQt5.QtGui import QFont, QPixmap, QIcon, QPainter, QColor, QBrush, QPen
 from pyqtgraph import AxisItem
 
@@ -106,6 +106,18 @@ class DateAxisItem(AxisItem):
     self.timestamps = None  # Store actual timestamps from the data
     self.parent = None  # Store the parent widget for debugging
     return
+
+  def paint(self, painter, *args):
+    try:
+      return super().paint(painter, *args)
+    except RuntimeError:
+      return None
+
+  def boundingRect(self):
+    try:
+      return super().boundingRect()
+    except RuntimeError:
+      return QRectF()
 
   def setTimestamps(self, timestamps, parent):
     """Store the actual timestamps from the data to map axis values."""
@@ -264,4 +276,3 @@ class LoadingIndicator(QLabel):
             
             # Draw the line
             painter.drawLine(int(start_x), int(start_y), int(end_x), int(end_y))
-

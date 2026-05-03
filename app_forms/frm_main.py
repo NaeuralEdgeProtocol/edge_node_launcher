@@ -95,6 +95,29 @@ from ver import __VER__ as CURRENT_VERSION
 DASHBOARD_SPLITTER_DEFAULT_SIZES = [700, 180]
 
 
+class MetricPlotWidget(pg.PlotWidget):
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, **kwargs)
+    self._ignore_late_paints = False
+
+  def disable_late_paints(self) -> None:
+    self._ignore_late_paints = True
+    self.setUpdatesEnabled(False)
+    viewport = self.viewport() if hasattr(self, "viewport") else None
+    if viewport is not None and not sip.isdeleted(viewport):
+      viewport.setUpdatesEnabled(False)
+      viewport.hide()
+    self.hide()
+
+  def paintEvent(self, event):
+    if self._ignore_late_paints or not self.updatesEnabled() or not self.isVisible():
+      if hasattr(event, "accept"):
+        event.accept()
+      return
+
+    return super().paintEvent(event)
+
+
 def get_platform_and_os_info():
   platform_info = platform.platform()
   os_name = platform.system()
@@ -626,8 +649,12 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       ("gpu_memory_plot", "gpuMemoryPlotContainer", 1, 1),
     )
 
+    self._metric_axis_items = {}
     for plot_attr, container_name, row, column in plot_specs:
-      plot_widget = pg.PlotWidget(axisItems={"bottom": DateAxisItem(orientation="bottom")})
+      bottom_axis = DateAxisItem(orientation="bottom")
+      plot_widget = MetricPlotWidget(axisItems={"bottom": bottom_axis})
+      plot_widget._r1_bottom_axis = bottom_axis
+      self._metric_axis_items[plot_attr] = bottom_axis
       setattr(self, plot_attr, plot_widget)
       graph_layout.addWidget(
         self._create_plot_container(container_name, plot_widget),
@@ -1141,12 +1168,15 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         continue
       try:
         plot_widget.clear()
-        plot_widget.setUpdatesEnabled(False)
-        viewport = plot_widget.viewport() if hasattr(plot_widget, "viewport") else None
-        if viewport is not None and not self._qt_object_deleted(viewport):
-          viewport.setUpdatesEnabled(False)
-          viewport.hide()
-        plot_widget.hide()
+        if hasattr(plot_widget, "disable_late_paints"):
+          plot_widget.disable_late_paints()
+        else:
+          plot_widget.setUpdatesEnabled(False)
+          viewport = plot_widget.viewport() if hasattr(plot_widget, "viewport") else None
+          if viewport is not None and not self._qt_object_deleted(viewport):
+            viewport.setUpdatesEnabled(False)
+            viewport.hide()
+          plot_widget.hide()
       except RuntimeError:
         continue
 
@@ -2642,19 +2672,53 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     dialog.setLayout(layout)
     dialog.setStyleSheet(self._current_stylesheet)  # Apply current theme
     
+    def reset_save_controls():
+      save_btn.setEnabled(True)
+      cancel_btn.setEnabled(True)
+      save_btn.setText("Save")
+
+    def handle_save_clicked():
+      if not save_btn.isEnabled():
+        return
+
+      validation_error = self._validate_node_alias(name_input.text().strip())
+      if validation_error:
+        self.toast.show_notification(NotificationType.ERROR, validation_error)
+        return
+
+      save_btn.setEnabled(False)
+      cancel_btn.setEnabled(False)
+      save_btn.setText("Saving...")
+
+      submitted = self.validate_and_save_node_name(
+        name_input.text(),
+        dialog,
+        container_name,
+        on_error_callback=reset_save_controls,
+      )
+      if not submitted:
+        reset_save_controls()
+
     # Connect buttons
-    save_btn.clicked.connect(lambda: self.validate_and_save_node_name(name_input.text(), dialog, container_name))
+    save_btn.clicked.connect(handle_save_clicked)
     cancel_btn.clicked.connect(dialog.reject)
     
     dialog.exec_()
 
-  def validate_and_save_node_name(self, new_name: str, dialog: QDialog, container_name: str = None):
+  def validate_and_save_node_name(
+    self,
+    new_name: str,
+    dialog: QDialog,
+    container_name: str = None,
+    on_error_callback=None,
+  ) -> bool:
     """Validate and save a new node name.
     
     Args:
         new_name: The new name to save
         dialog: The dialog to close on success
         container_name: Optional container name. If not provided, will use current selection.
+        on_error_callback: Optional callback used by dialogs to re-enable submit controls.
     """
     # Strip whitespace
     new_name = new_name.strip()
@@ -2664,14 +2728,14 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         selection = self._selected_container()
         if selection is None:
             self.toast.show_notification(NotificationType.ERROR, "No container selected")
-            return
+            return False
         container_name = selection.name
     
     # Validate the new name
     validation_error = self._validate_node_alias(new_name)
     if validation_error:
         self.toast.show_notification(NotificationType.ERROR, validation_error)
-        return
+        return False
     
     def on_success(data: dict) -> None:
         self.add_log('Successfully renamed node, restarting container...', debug=True)
@@ -2698,8 +2762,11 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             NotificationType.ERROR,
             f'Failed to rename node: {error_message}'
         )
+        if on_error_callback is not None:
+            on_error_callback()
 
     self.docker_handler.update_node_name(new_name, on_success, on_error)
+    return True
 
   def _restart_container_after_rename(self, container_name: str) -> None:
     """Restart a renamed container without using legacy modal message boxes."""
