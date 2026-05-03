@@ -266,6 +266,29 @@ def test_main_window_copy_buttons_copy_current_addresses(qtbot, monkeypatch):
     ]
 
 
+def test_status_card_address_rows_keep_text_visible_next_to_copy_buttons(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+
+    launcher._update_node_identity_display(
+        "0xnodeaddress",
+        "0xethaddress",
+        "alpha",
+        show_copy_buttons=True,
+    )
+    qtbot.wait(50)
+
+    assert launcher.addressDisplay.objectName() == "nodeAddressDisplay"
+    assert launcher.ethAddressDisplay.objectName() == "nodeEthAddressDisplay"
+    assert launcher.copyAddrButton.accessibleName() == "Copy node address"
+    assert launcher.copyEthButton.accessibleName() == "Copy ETH address"
+    assert launcher.addressDisplay.text() == "Address: 0xnodeaddress"
+    assert launcher.ethAddressDisplay.text() == "ETH Address: 0xethaddress"
+    assert launcher.copyAddrButton.isVisible()
+    assert launcher.copyEthButton.isVisible()
+    assert launcher.addressDisplay.width() > launcher.copyAddrButton.width()
+    assert launcher.ethAddressDisplay.width() > launcher.copyEthButton.width()
+
+
 def test_main_window_refresh_button_uses_limited_refresh_when_container_stopped(qtbot, monkeypatch):
     launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
     calls = []

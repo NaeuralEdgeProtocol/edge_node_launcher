@@ -701,6 +701,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
     return label
 
+  def _configure_sidebar_status_value(self, label: QLabel) -> QLabel:
+    return self._configure_sidebar_status_label(label)
+
   def _create_sidebar_panel(self) -> QWidget:
     """Create the left navigation and status sidebar."""
     menu_widget = QWidget()
@@ -833,12 +836,14 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     addr_layout = QHBoxLayout()
     self.addressDisplay = QLabel('')
     self.addressDisplay.setFont(QFont("Courier New"))
-    self.addressDisplay.setObjectName("infoBoxText")
-    self._configure_sidebar_status_label(self.addressDisplay)
-    addr_layout.addWidget(self.addressDisplay)
+    self.addressDisplay.setObjectName("nodeAddressDisplay")
+    self.addressDisplay.setAccessibleName("Node address")
+    self._configure_sidebar_status_value(self.addressDisplay)
+    addr_layout.addWidget(self.addressDisplay, 1)
 
     self.copyAddrButton = QPushButton()
     self.copyAddrButton.setToolTip(COPY_ADDRESS_TOOLTIP)
+    self.copyAddrButton.setAccessibleName("Copy node address")
     self.copyAddrButton.clicked.connect(self.copy_address)
     self.copyAddrButton.setFixedSize(28, 28)
     self.copyAddrButton.setObjectName("copyAddrButton")
@@ -849,13 +854,15 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     eth_addr_layout = QHBoxLayout()
     self.ethAddressDisplay = QLabel('')
-    self.ethAddressDisplay.setObjectName("infoBoxText")
+    self.ethAddressDisplay.setObjectName("nodeEthAddressDisplay")
+    self.ethAddressDisplay.setAccessibleName("ETH address")
     self.ethAddressDisplay.setFont(QFont("Courier New"))
-    self._configure_sidebar_status_label(self.ethAddressDisplay)
-    eth_addr_layout.addWidget(self.ethAddressDisplay)
+    self._configure_sidebar_status_value(self.ethAddressDisplay)
+    eth_addr_layout.addWidget(self.ethAddressDisplay, 1)
 
     self.copyEthButton = QPushButton()
     self.copyEthButton.setToolTip(COPY_ETH_ADDRESS_TOOLTIP)
+    self.copyEthButton.setAccessibleName("Copy ETH address")
     self.copyEthButton.clicked.connect(self.copy_eth_address)
     self.copyEthButton.setFixedSize(28, 28)
     self.copyEthButton.setObjectName("copyEthButton")
@@ -866,30 +873,35 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     self.nameDisplay = QLabel('')
     self.nameDisplay.setFont(QFont("Courier New"))
-    self.nameDisplay.setObjectName("infoBoxText")
+    self.nameDisplay.setObjectName("nodeNameDisplay")
+    self.nameDisplay.setAccessibleName("Node name")
     self._configure_sidebar_status_label(self.nameDisplay)
     info_box_layout.addWidget(self.nameDisplay)
 
     self.node_uptime = QLabel(UPTIME_LABEL)
-    self.node_uptime.setObjectName("infoBoxText")
+    self.node_uptime.setObjectName("nodeUptimeDisplay")
+    self.node_uptime.setAccessibleName("Node uptime")
     self.node_uptime.setFont(QFont("Courier New"))
     self._configure_sidebar_status_label(self.node_uptime)
     info_box_layout.addWidget(self.node_uptime)
 
     self.node_epoch = QLabel(EPOCH_LABEL)
-    self.node_epoch.setObjectName("infoBoxText")
+    self.node_epoch.setObjectName("nodeEpochDisplay")
+    self.node_epoch.setAccessibleName("Node epoch")
     self.node_epoch.setFont(QFont("Courier New"))
     self._configure_sidebar_status_label(self.node_epoch)
     info_box_layout.addWidget(self.node_epoch)
 
     self.node_epoch_avail = QLabel(EPOCH_AVAIL_LABEL)
-    self.node_epoch_avail.setObjectName("infoBoxText")
+    self.node_epoch_avail.setObjectName("nodeEpochAvailabilityDisplay")
+    self.node_epoch_avail.setAccessibleName("Node epoch availability")
     self.node_epoch_avail.setFont(QFont("Courier New"))
     self._configure_sidebar_status_label(self.node_epoch_avail)
     info_box_layout.addWidget(self.node_epoch_avail)
 
     self.node_version = QLabel()
-    self.node_version.setObjectName("infoBoxText")
+    self.node_version.setObjectName("nodeVersionDisplay")
+    self.node_version.setAccessibleName("Node version")
     self.node_version.setFont(QFont("Courier New"))
     self._configure_sidebar_status_label(self.node_version)
     info_box_layout.addWidget(self.node_version)
