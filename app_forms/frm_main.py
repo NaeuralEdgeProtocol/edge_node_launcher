@@ -1570,6 +1570,12 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.add_log(f"Failed to start metrics request for {container_name}: {str(e)}", debug=True, color="red")
         on_error(str(e))
 
+  def _clear_metric_plots(self) -> None:
+    for plot_attr in ("cpu_plot", "memory_plot", "gpu_plot", "gpu_memory_plot"):
+      plot_widget = getattr(self, plot_attr, None)
+      if plot_widget is not None:
+        plot_widget.clear()
+
   def plot_graphs(self, history: Optional[NodeHistory] = None, limit: int = 100) -> None:
     """Plot the graphs with the given history data.
     
@@ -1577,9 +1583,10 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         history: The history data to plot. If None, use the last data.
         limit: The maximum number of points to plot.
     """
-    # Get the currently selected container
-    container_name = self.container_combo.currentText()
+    # Use combo item data for Docker identity; currentText may be a display alias.
+    container_name = self._selected_container_name()
     if not container_name:
+        self._clear_metric_plots()
         self.add_log("No container selected, cannot plot graphs", debug=True)
         return
      
@@ -1588,11 +1595,13 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
        history = self.__last_plot_data
      
     if history is None:
+        self._clear_metric_plots()
         self.add_log(f"No history data available for container {container_name}", debug=True)
         return
     
     # Make sure we have timestamps
     if not history.timestamps or len(history.timestamps) == 0:
+        self._clear_metric_plots()
         self.add_log(f"No timestamps in history data for container {container_name}", debug=True)
         return
     
@@ -1603,6 +1612,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
      
     # Get colors based on theme
     colors = DARK_COLORS if self._current_stylesheet == DARK_STYLESHEET else LIGHT_COLORS
+
+    self._clear_metric_plots()
     
     # Helper function to update a plot
     def update_plot(plot_widget, timestamps, data, name, color):

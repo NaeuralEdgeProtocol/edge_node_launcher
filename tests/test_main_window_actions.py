@@ -6,12 +6,14 @@ from PyQt5.QtCore import QRect, Qt
 from PyQt5.QtWidgets import QApplication, QDialog, QGroupBox, QLabel, QLineEdit, QPushButton, QScrollArea, QSplitter, QTextEdit, QVBoxLayout, QWidget
 
 import app_forms.frm_main as frm_main
+from models.NodeHistory import NodeHistory
 from models.NodeInfo import NodeInfo
 from utils.config_manager import ContainerConfig
 from widgets.ToastWidget import NotificationType
 
 
 REAL_PLOT_DATA = frm_main.EdgeNodeLauncher.plot_data
+REAL_PLOT_GRAPHS = frm_main.EdgeNodeLauncher.plot_graphs
 REAL_REFRESH_NODE_INFO = frm_main.EdgeNodeLauncher.refresh_node_info
 
 
@@ -443,6 +445,61 @@ def test_plot_data_targets_selected_container_id_not_display_alias(qtbot, monkey
 
     assert fake_handler.history_container_requests == ["r1node"]
     assert fake_handler.container_names[-1] == "r1node"
+
+
+def _history_with_optional_gpu(gpu_load=None, gpu_occupied_memory=None):
+    return NodeHistory(
+        address="0xnode",
+        alias="alpha",
+        cpu_load=[10.0, 20.0],
+        cpu_temp=[40.0, 41.0],
+        current_epoch=1,
+        current_epoch_avail=0.5,
+        eth_address="0xeth",
+        gpu_load=gpu_load,
+        gpu_occupied_memory=gpu_occupied_memory,
+        gpu_temp=None,
+        gpu_total_memory=None,
+        last_epochs=[1, 2],
+        last_save_time="2026-05-03T01:00:10",
+        occupied_memory=[512.0, 768.0],
+        timestamps=["2026-05-03T01:00:00", "2026-05-03T01:00:10"],
+        total_memory=[1024.0, 1024.0],
+        uptime="1m",
+        version="test-version",
+    )
+
+
+def test_plot_graphs_uses_selected_container_id_not_display_alias(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    launcher.plot_graphs = REAL_PLOT_GRAPHS.__get__(launcher, frm_main.EdgeNodeLauncher)
+    log_messages = []
+    launcher.add_log = lambda message, **kwargs: log_messages.append(message)
+
+    assert launcher.container_combo.currentText() == "alpha"
+    assert launcher._selected_container_name() == "r1node"
+
+    launcher.plot_graphs(_history_with_optional_gpu())
+
+    assert any("Updated graphs for container r1node" in message for message in log_messages)
+    assert not any("Updated graphs for container alpha" in message for message in log_messages)
+
+
+def test_plot_graphs_clears_stale_gpu_plots_when_history_has_no_gpu(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    launcher.plot_graphs = REAL_PLOT_GRAPHS.__get__(launcher, frm_main.EdgeNodeLauncher)
+    launcher.add_log = lambda *args, **kwargs: None
+
+    launcher.plot_graphs(_history_with_optional_gpu(gpu_load=[30.0, 40.0], gpu_occupied_memory=[1024.0, 2048.0]))
+    assert len(launcher.gpu_plot.listDataItems()) == 1
+    assert len(launcher.gpu_memory_plot.listDataItems()) == 1
+
+    launcher.plot_graphs(_history_with_optional_gpu())
+
+    assert len(launcher.cpu_plot.listDataItems()) == 1
+    assert len(launcher.memory_plot.listDataItems()) == 1
+    assert len(launcher.gpu_plot.listDataItems()) == 0
+    assert len(launcher.gpu_memory_plot.listDataItems()) == 0
 
 
 def test_refresh_node_info_targets_selected_container_id_not_display_alias(qtbot, monkeypatch):
