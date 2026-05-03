@@ -530,29 +530,127 @@ def test_config_editor_button_opens_dialog_with_named_actions(qtbot, monkeypatch
     assert widget.btn_edit_config.objectName() == "configEditorEditButton"
     assert widget.objectName() == "configEditorWidget"
     assert widget.accessibleName() == "Configuration editor"
+    assert widget.config_group.objectName() == "configEditorGroup"
+    assert widget.config_group.accessibleName() == "Configuration files"
+    assert widget.config_group.property("role") == "configEditorPanel"
     assert widget.btn_edit_config.accessibleName() == "Edit configuration"
+    assert widget.btn_edit_config.property("actionRole") == "primary"
     assert widget.btn_edit_config.toolTip() == "Edit configuration"
+    assert widget.btn_edit_config.minimumHeight() == 36
+    assert "QGroupBox#configEditorGroup" in widget.config_group.styleSheet()
 
     qtbot.mouseClick(widget.btn_edit_config, Qt.LeftButton)
 
     assert len(opened_dialogs) == 1
     dialog = opened_dialogs[0]
     button_box = dialog.findChild(QDialogButtonBox, "configEditorDialogButtons")
+    tabs = dialog.findChild(QTabWidget, "configEditorTabs")
+    startup_label = dialog.findChild(QLabel, "startupConfigLabel")
+    app_label = dialog.findChild(QLabel, "appConfigLabel")
+    startup_text = dialog.findChild(QTextEdit, "startupConfigText")
+    app_text = dialog.findChild(QTextEdit, "appConfigText")
 
     assert dialog.objectName() == "configEditorDialog"
     assert dialog.accessibleName() == "Edit Configuration Files"
-    assert dialog.findChild(QTabWidget, "configEditorTabs").accessibleName() == "Configuration tabs"
+    assert dialog.minimumWidth() == 720
+    assert dialog.minimumHeight() == 520
+    assert "QDialog#configEditorDialog" in dialog.styleSheet()
+    assert tabs.accessibleName() == "Configuration tabs"
+    assert tabs.documentMode()
     assert dialog.findChild(QWidget, "startupConfigTab").accessibleName() == "Startup configuration tab"
     assert dialog.findChild(QWidget, "appConfigTab").accessibleName() == "App configuration tab"
-    assert dialog.findChild(QLabel, "startupConfigLabel").accessibleName() == "Startup configuration label"
-    assert dialog.findChild(QLabel, "appConfigLabel").accessibleName() == "App configuration label"
-    assert dialog.findChild(QTextEdit, "startupConfigText").accessibleName() == "Startup configuration text"
-    assert dialog.findChild(QTextEdit, "appConfigText").accessibleName() == "App configuration text"
+    assert startup_label.accessibleName() == "Startup configuration label"
+    assert startup_label.property("role") == "configEditorLabel"
+    assert app_label.accessibleName() == "App configuration label"
+    assert app_label.property("role") == "configEditorLabel"
+    assert startup_text.accessibleName() == "Startup configuration text"
+    assert startup_text.property("role") == "configEditorText"
+    assert not startup_text.acceptRichText()
+    assert startup_text.lineWrapMode() == QTextEdit.NoWrap
+    assert startup_text.placeholderText() == "Startup configuration is empty"
+    assert app_text.accessibleName() == "App configuration text"
+    assert app_text.property("role") == "configEditorText"
+    assert not app_text.acceptRichText()
+    assert app_text.lineWrapMode() == QTextEdit.NoWrap
+    assert app_text.placeholderText() == "App configuration is empty"
     assert button_box is not None
     assert button_box.accessibleName() == "Configuration editor actions"
     assert button_box.button(QDialogButtonBox.Ok).objectName() == "configEditorSaveButton"
+    assert button_box.button(QDialogButtonBox.Ok).text() == "Save"
     assert button_box.button(QDialogButtonBox.Ok).accessibleName() == "Save configuration"
+    assert button_box.button(QDialogButtonBox.Ok).property("actionRole") == "primary"
     assert button_box.button(QDialogButtonBox.Ok).toolTip() == "Save configuration"
     assert button_box.button(QDialogButtonBox.Cancel).objectName() == "configEditorCancelButton"
     assert button_box.button(QDialogButtonBox.Cancel).accessibleName() == "Cancel configuration editing"
+    assert button_box.button(QDialogButtonBox.Cancel).property("actionRole") == "secondary"
     assert button_box.button(QDialogButtonBox.Cancel).toolTip() == "Cancel configuration editing"
+
+
+def test_config_editor_save_emits_current_plain_text(qtbot, monkeypatch):
+    widget = ConfigEditorWidget()
+    qtbot.addWidget(widget)
+
+    def capture_exec(dialog):
+        dialog.findChild(QTextEdit, "startupConfigText").setPlainText("startup=true")
+        dialog.findChild(QTextEdit, "appConfigText").setPlainText("log_level=debug")
+        dialog.findChild(QDialogButtonBox, "configEditorDialogButtons").button(QDialogButtonBox.Ok).click()
+        return dialog.result()
+
+    monkeypatch.setattr(QDialog, "exec_", capture_exec)
+
+    with qtbot.waitSignal(widget.config_saved) as blocker:
+        result = widget.open_config_editor("startup=false", "log_level=info")
+
+    assert result == QDialog.Accepted
+    assert blocker.args == [{"startup_config": "startup=true", "app_config": "log_level=debug"}]
+
+
+def test_config_editor_cancel_does_not_emit(qtbot, monkeypatch):
+    widget = ConfigEditorWidget()
+    qtbot.addWidget(widget)
+    emitted = []
+    widget.config_saved.connect(emitted.append)
+
+    def capture_exec(dialog):
+        dialog.findChild(QDialogButtonBox, "configEditorDialogButtons").button(QDialogButtonBox.Cancel).click()
+        return dialog.result()
+
+    monkeypatch.setattr(QDialog, "exec_", capture_exec)
+
+    result = widget.open_config_editor("startup=false", "log_level=info")
+
+    assert result == QDialog.Rejected
+    assert emitted == []
+
+
+def test_config_editor_theme_styles_are_switchable(qtbot, monkeypatch):
+    widget = ConfigEditorWidget()
+    qtbot.addWidget(widget)
+    opened_dialogs = []
+
+    def capture_exec(dialog):
+        opened_dialogs.append(dialog)
+        return QDialog.Rejected
+
+    monkeypatch.setattr(QDialog, "exec_", capture_exec)
+
+    widget.apply_theme(True)
+    assert "#E8EEF8" in widget.styleSheet()
+    assert "#122033" in widget.config_group.styleSheet()
+    widget.open_config_editor()
+    assert "#0B1626" in opened_dialogs[-1].styleSheet()
+    assert "#122033" in opened_dialogs[-1].findChild(QTabWidget, "configEditorTabs").styleSheet()
+    assert "#0F1B2B" in opened_dialogs[-1].findChild(QTextEdit, "startupConfigText").styleSheet()
+    assert "#1B47F7" in opened_dialogs[-1].findChild(QDialogButtonBox, "configEditorDialogButtons").button(
+        QDialogButtonBox.Ok
+    ).styleSheet()
+    assert "#E8EEF8" in opened_dialogs[-1].styleSheet()
+
+    widget.apply_theme(False)
+    assert "#1F2937" in widget.styleSheet()
+    assert "#FFFFFF" in widget.config_group.styleSheet()
+    widget.open_config_editor()
+    assert "#F8FAFC" in opened_dialogs[-1].styleSheet()
+    assert "#FFFFFF" in opened_dialogs[-1].findChild(QTabWidget, "configEditorTabs").styleSheet()
+    assert "#FFFFFF" in opened_dialogs[-1].findChild(QTextEdit, "startupConfigText").styleSheet()
+    assert "#1F2937" in opened_dialogs[-1].styleSheet()
