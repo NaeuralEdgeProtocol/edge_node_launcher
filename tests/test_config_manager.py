@@ -53,3 +53,20 @@ def test_config_manager_updates_existing_container_without_losing_addresses(tmp_
     assert container.volume == "new_vol"
     assert container.node_address == "0xnode"
     assert container.eth_address == "0xeth"
+
+
+def test_config_manager_persists_dashboard_splitter_sizes(tmp_path):
+    manager = ConfigManager(config_dir=str(tmp_path))
+
+    assert manager.set_dashboard_splitter_sizes([640, 180])
+
+    reloaded = ConfigManager(config_dir=str(tmp_path))
+
+    assert reloaded.get_dashboard_splitter_sizes() == [640, 180]
+
+
+def test_config_manager_ignores_invalid_dashboard_splitter_sizes(tmp_path):
+    manager = ConfigManager(config_dir=str(tmp_path))
+    manager.settings["dashboard_splitter_sizes"] = ["wide", -10]
+
+    assert manager.get_dashboard_splitter_sizes() is None

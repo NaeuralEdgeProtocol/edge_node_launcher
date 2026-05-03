@@ -91,6 +91,8 @@ from widgets.LoadingDialog import LoadingDialog
 from ver import __VER__ as CURRENT_VERSION
 
 
+DASHBOARD_SPLITTER_DEFAULT_SIZES = [700, 180]
+
 
 def get_platform_and_os_info():
   platform_info = platform.platform()
@@ -121,6 +123,7 @@ def log_with_color(message, color="gray"):
 class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourcesMixin):
   def __init__(self, app_icon=None):
     self.logView = None
+    self.dashboard_splitter = None
     self.log_buffer = []
     self.__force_debug = False
     super().__init__()
@@ -574,6 +577,15 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       self.logView.append(line)
     self.log_buffer = []
 
+  def _dashboard_splitter_initial_sizes(self) -> list:
+    saved_sizes = self.config_manager.get_dashboard_splitter_sizes()
+    return saved_sizes if saved_sizes else list(DASHBOARD_SPLITTER_DEFAULT_SIZES)
+
+  def _save_dashboard_splitter_sizes(self) -> None:
+    if self.dashboard_splitter is None:
+      return
+    self.config_manager.set_dashboard_splitter_sizes(self.dashboard_splitter.sizes())
+
   def _create_dashboard_panel(self) -> QWidget:
     """Create the right-side metrics and activity panel."""
     dashboard_panel = QWidget()
@@ -583,20 +595,21 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     dashboard_layout.setContentsMargins(10, 0, 10, 10)
     dashboard_layout.setSpacing(10)
 
-    dashboard_splitter = QSplitter(Qt.Vertical)
-    dashboard_splitter.setObjectName("dashboardSplitter")
-    dashboard_splitter.setChildrenCollapsible(False)
-    dashboard_splitter.setHandleWidth(8)
+    self.dashboard_splitter = QSplitter(Qt.Vertical)
+    self.dashboard_splitter.setObjectName("dashboardSplitter")
+    self.dashboard_splitter.setChildrenCollapsible(False)
+    self.dashboard_splitter.setHandleWidth(8)
 
     self.graphView = self._create_metrics_graph_grid()
     self.logView = self._create_activity_log_view()
-    dashboard_splitter.addWidget(self.graphView)
-    dashboard_splitter.addWidget(self.logView)
-    dashboard_splitter.setStretchFactor(0, 4)
-    dashboard_splitter.setStretchFactor(1, 1)
-    dashboard_splitter.setSizes([700, 180])
+    self.dashboard_splitter.addWidget(self.graphView)
+    self.dashboard_splitter.addWidget(self.logView)
+    self.dashboard_splitter.setStretchFactor(0, 4)
+    self.dashboard_splitter.setStretchFactor(1, 1)
+    self.dashboard_splitter.setSizes(self._dashboard_splitter_initial_sizes())
+    self.dashboard_splitter.splitterMoved.connect(lambda _pos, _index: self._save_dashboard_splitter_sizes())
 
-    dashboard_layout.addWidget(dashboard_splitter)
+    dashboard_layout.addWidget(self.dashboard_splitter)
     self._flush_log_buffer_to_view()
 
     return dashboard_panel

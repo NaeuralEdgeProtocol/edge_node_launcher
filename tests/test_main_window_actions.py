@@ -36,12 +36,20 @@ class FakeConfigManager:
         ]
         self.force_debug_values = []
         self.node_alias_updates = []
+        self.dashboard_splitter_sizes = None
 
     def get_force_debug(self):
         return False
 
     def set_force_debug(self, value):
         self.force_debug_values.append(value)
+        return True
+
+    def get_dashboard_splitter_sizes(self):
+        return self.dashboard_splitter_sizes
+
+    def set_dashboard_splitter_sizes(self, sizes):
+        self.dashboard_splitter_sizes = list(sizes)
         return True
 
     def get_all_containers(self):
@@ -152,9 +160,11 @@ class FakeDockerHandler:
         callback(self.history)
 
 
-def _build_launcher(monkeypatch, qtbot, running=False):
+def _build_launcher(monkeypatch, qtbot, running=False, config_setup=None):
     fake_config = FakeConfigManager()
     fake_handler = FakeDockerHandler(frm_main.DOCKER_CONTAINER_NAME, running=running)
+    if config_setup is not None:
+        config_setup(fake_config)
 
     monkeypatch.setattr(frm_main, "ConfigManager", lambda: fake_config)
     monkeypatch.setattr(frm_main, "DockerCommandHandler", lambda container_name: fake_handler)
@@ -665,6 +675,36 @@ def test_main_window_log_view_has_stable_identity_and_dimensions(qtbot, monkeypa
     launcher.add_log("log view identity smoke", debug=True)
 
     assert "log view identity smoke" in launcher.logView.toPlainText()
+
+
+def test_dashboard_splitter_restores_saved_sizes(qtbot, monkeypatch):
+    set_sizes_calls = []
+    original_set_sizes = frm_main.QSplitter.setSizes
+
+    def record_set_sizes(splitter, sizes):
+        if splitter.objectName() == "dashboardSplitter":
+            set_sizes_calls.append(list(sizes))
+        return original_set_sizes(splitter, sizes)
+
+    monkeypatch.setattr(frm_main.QSplitter, "setSizes", record_set_sizes)
+
+    _launcher, _fake_config, _fake_handler = _build_launcher(
+        monkeypatch,
+        qtbot,
+        config_setup=lambda config: setattr(config, "dashboard_splitter_sizes", [420, 160]),
+    )
+
+    assert [420, 160] in set_sizes_calls
+
+
+def test_dashboard_splitter_saves_current_sizes(qtbot, monkeypatch):
+    launcher, fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+    splitter = launcher.findChild(QSplitter, "dashboardSplitter")
+
+    splitter.setSizes([480, 180])
+    launcher._save_dashboard_splitter_sizes()
+
+    assert fake_config.dashboard_splitter_sizes == splitter.sizes()
 
 
 def test_main_window_sidebar_sections_group_controls(qtbot, monkeypatch):

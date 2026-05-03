@@ -326,4 +326,30 @@ class ConfigManager:
         Returns:
             bool: True if force debug is enabled, False otherwise
         """
-        return self.settings.get('force_debug', False) 
+        return self.settings.get('force_debug', False)
+
+    def set_dashboard_splitter_sizes(self, sizes: list) -> bool:
+        """Persist dashboard splitter sizes."""
+        try:
+            normalized = [int(size) for size in sizes]
+            if len(normalized) != 2 or any(size <= 0 for size in normalized):
+                return False
+            self.settings['dashboard_splitter_sizes'] = normalized
+            return self.save_settings()
+        except Exception as e:
+            logging.error(f"Error setting dashboard splitter sizes: {str(e)}")
+            return False
+
+    def get_dashboard_splitter_sizes(self):
+        """Get saved dashboard splitter sizes, or None when invalid/missing."""
+        try:
+            sizes = self.settings.get('dashboard_splitter_sizes')
+            if not isinstance(sizes, list) or len(sizes) != 2:
+                return None
+            normalized = [int(size) for size in sizes]
+            if any(size <= 0 for size in normalized):
+                return None
+            return normalized
+        except Exception as e:
+            logging.error(f"Error getting dashboard splitter sizes: {str(e)}")
+            return None
