@@ -244,7 +244,7 @@ def capture_visual_evidence(launcher, screenshot_dir, label):
 
 
 def dialog_visual_snapshot(dialog):
-    from PyQt5.QtWidgets import QLabel, QLineEdit, QPushButton
+    from PyQt5.QtWidgets import QLabel, QLineEdit, QProgressBar, QPushButton
 
     return {
         "title": dialog.windowTitle(),
@@ -281,6 +281,17 @@ def dialog_visual_snapshot(dialog):
                 "rect": widget_global_rect(button),
             }
             for button in dialog.findChildren(QPushButton)
+        ],
+        "progress_bars": [
+            {
+                "object_name": progress_bar.objectName(),
+                "value": progress_bar.value(),
+                "minimum": progress_bar.minimum(),
+                "maximum": progress_bar.maximum(),
+                "visible": progress_bar.isVisible(),
+                "rect": widget_global_rect(progress_bar),
+            }
+            for progress_bar in dialog.findChildren(QProgressBar)
         ],
     }
 
@@ -432,6 +443,7 @@ def run_scenarios(args):
     import app_forms.frm_main as frm_main
     from utils.config_manager import ConfigManager, ContainerConfig
     from widgets.dialogs.DockerCheckDialog import DockerCheckDialog
+    from widgets.DockerPullDialog import DockerPullDialog
     from widgets.LoadingDialog import LoadingDialog
 
     log = {
@@ -529,6 +541,19 @@ def run_scenarios(args):
             args.output,
             args.screenshot_dir,
             "startup_loading",
+        )
+
+        docker_pull_dialog = DockerPullDialog(launcher)
+        docker_pull_dialog.update_pull_progress("ratio1/edge_node: Pulling from ratio1/edge_node")
+        docker_pull_dialog.update_pull_progress("abcdef123456: Downloading 50%")
+        docker_pull_dialog.update_pull_progress("123456abcdef: Pull complete")
+        show_and_capture_dialog(
+            app,
+            docker_pull_dialog,
+            log,
+            args.output,
+            args.screenshot_dir,
+            "docker_pull_progress",
         )
 
         record_step(log, args.output, {"step": click_button(app, launcher.themeToggleButton, "toggle light theme")})

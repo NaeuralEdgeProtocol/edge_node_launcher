@@ -14,6 +14,7 @@ import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
+import re
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -69,6 +70,42 @@ def record_step(log, output_path, step):
     log["steps"].append(step)
     write_log(log, output_path)
     print(f"E2E_STEP: {step}", flush=True)
+
+
+def safe_filename(value):
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", value).strip("_") or "dialog"
+
+
+def save_widget_screenshot(widget, screenshot_dir, filename):
+    if not screenshot_dir:
+        return ""
+    target_dir = Path(screenshot_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_path = target_dir / filename
+    pixmap = widget.grab()
+    if not pixmap.save(str(target_path)):
+        raise RuntimeError(f"Could not save screenshot to {target_path}")
+    return str(target_path)
+
+
+def capture_visible_dialog_screenshots(app, screenshot_dir, label):
+    if not screenshot_dir:
+        return []
+
+    from PyQt5.QtWidgets import QDialog
+
+    screenshots = []
+    for index, widget in enumerate(app.topLevelWidgets()):
+        if not isinstance(widget, QDialog) or not widget.isVisible():
+            continue
+        filename = f"{safe_filename(label)}_{index}_{safe_filename(widget.windowTitle())}.png"
+        screenshots.append(
+            {
+                "title": widget.windowTitle(),
+                "path": save_widget_screenshot(widget, screenshot_dir, filename),
+            }
+        )
+    return screenshots
 
 
 def collect_container_diagnostics(container_name):
@@ -258,7 +295,7 @@ def wait_until(app, predicate, timeout, label, interval=0.5):
     raise TimeoutError(f"Timed out waiting for {label}: {last_error}")
 
 
-def wait_for_launch_activity(app, launcher, log, output_path, timeout, label):
+def wait_for_launch_activity(app, launcher, log, output_path, timeout, label, screenshot_dir=""):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         app.processEvents()
@@ -284,6 +321,7 @@ def wait_for_launch_activity(app, launcher, log, output_path, timeout, label):
                     "step": "launch activity observed",
                     "label": label,
                     "visible_dialogs": visible_dialog_titles(app),
+                    "dialog_screenshots": capture_visible_dialog_screenshots(app, screenshot_dir, label),
                     "docker_pull_in_progress": getattr(launcher, "_EdgeNodeLauncher__docker_pull_in_progress", None),
                     "pending_launch_context": getattr(launcher, "_EdgeNodeLauncher__pending_launch_context", None),
                 },
@@ -463,6 +501,7 @@ def run_scenarios(args):
         "image_removed_for_loader": args.remove_image,
         "offline_config": args.offline_config,
         "startup_template": str(args.startup_template),
+        "screenshot_dir": args.screenshot_dir,
         "setup": [],
         "steps": [],
         "cleanup": [],
@@ -543,6 +582,7 @@ def run_scenarios(args):
             args.output,
             45,
             "primary launch activity",
+            screenshot_dir=args.screenshot_dir,
         )
         wait_for_container_running(
             app,
@@ -742,6 +782,7 @@ def main():
     parser.add_argument("--stability-window", type=int, default=20)
     parser.add_argument("--ui-stall-timeout", type=int, default=120)
     parser.add_argument("--output", default="")
+    parser.add_argument("--screenshot-dir", default="")
     args = parser.parse_args()
     log = run_scenarios(args)
     if log.get("result") != "passed":

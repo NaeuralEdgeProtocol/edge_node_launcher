@@ -1,14 +1,10 @@
 from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QApplication, QProgressBar, QFrame,
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar, QFrame,
     QScrollArea, QWidget
 )
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
-from PyQt5.QtGui import QColor, QPalette
-import platform
 import re
 import logging
-from app_forms.frm_utils import LoadingIndicator
-from utils.const import DARK_STYLESHEET, LIGHT_COLORS, DARK_COLORS
 
 class DockerPullDialog(QDialog):
     """Dialog for Docker image pull progress."""
@@ -24,8 +20,9 @@ class DockerPullDialog(QDialog):
         """
         super().__init__(parent)
         self.setWindowTitle("Pulling Docker Image")
-        self.setMinimumWidth(600)  # Increased width
-        self.setMinimumHeight(500)  # Increased height
+        self.setObjectName("dockerPullDialog")
+        self.setMinimumWidth(600)
+        self.setMinimumHeight(500)
         
         # Set up the dialog UI
         self._setup_ui()
@@ -33,24 +30,27 @@ class DockerPullDialog(QDialog):
     def _setup_ui(self):
         """Set up the dialog UI."""
         layout = QVBoxLayout()
-        layout.setSpacing(15)  # Increased spacing
-        layout.setContentsMargins(25, 25, 25, 25)  # Increased margins
+        layout.setSpacing(14)
+        layout.setContentsMargins(24, 24, 24, 24)
         
         # Title
         title_label = QLabel("Pulling Docker Image")
-        title_label.setStyleSheet("font-size: 20px; font-weight: bold;")  # Larger font
+        title_label.setObjectName("dockerPullTitleLabel")
+        title_label.setStyleSheet("font-size: 20px; font-weight: bold;")
         title_label.setAlignment(Qt.AlignCenter)
         
         # Info label
         self.info_label = QLabel("Preparing to pull Docker image...")
+        self.info_label.setObjectName("dockerPullInfoLabel")
         self.info_label.setStyleSheet("font-size: 14px;")
         self.info_label.setWordWrap(True)
         
         # Overall progress
         self.overall_progress = QProgressBar()
+        self.overall_progress.setObjectName("dockerPullOverallProgress")
         self.overall_progress.setRange(0, 100)
         self.overall_progress.setValue(0)
-        self.overall_progress.setMinimumHeight(25)  # Taller progress bar
+        self.overall_progress.setMinimumHeight(25)
         self.overall_progress.setStyleSheet("""
             QProgressBar {
                 border: 1px solid #555;
@@ -68,17 +68,19 @@ class DockerPullDialog(QDialog):
         
         # Layer progress section
         layer_frame = QFrame()
+        layer_frame.setObjectName("dockerPullLayerFrame")
         layer_frame.setFrameShape(QFrame.StyledPanel)
         layer_frame.setStyleSheet("""
             QFrame {
                 background-color: #1e293b;
-                border-radius: 10px;
+                border-radius: 8px;
                 padding: 15px;
             }
         """)
         
         # Create a scroll area for layers
         scroll_area = QScrollArea()
+        scroll_area.setObjectName("dockerPullLayerScrollArea")
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.NoFrame)
         scroll_area.setStyleSheet("""
@@ -103,18 +105,26 @@ class DockerPullDialog(QDialog):
         
         # Container widget for the scroll area
         scroll_content = QWidget()
+        scroll_content.setObjectName("dockerPullLayerScrollContent")
         scroll_layout = QVBoxLayout(scroll_content)
-        scroll_layout.setSpacing(12)  # Increased spacing between layers
+        scroll_layout.setSpacing(12)
         scroll_layout.setContentsMargins(15, 15, 15, 15)
         
         # Layer label
         layer_label = QLabel("Layer Progress:")
+        layer_label.setObjectName("dockerPullLayerHeaderLabel")
         layer_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #f8fafc;")
         scroll_layout.addWidget(layer_label)
         
         # Layer progress container
         self.layer_layout = QVBoxLayout()
         self.layer_layout.setSpacing(10)
+        self.empty_layer_label = QLabel("Waiting for Docker layer output...")
+        self.empty_layer_label.setObjectName("dockerPullLayerEmptyState")
+        self.empty_layer_label.setStyleSheet("color: #cbd5e1; font-size: 13px;")
+        self.empty_layer_label.setAlignment(Qt.AlignCenter)
+        self.empty_layer_label.setWordWrap(True)
+        self.layer_layout.addWidget(self.empty_layer_label)
         scroll_layout.addLayout(self.layer_layout)
         scroll_layout.addStretch()
         
@@ -137,6 +147,11 @@ class DockerPullDialog(QDialog):
         self.layers = {}
         self.layer_widgets = {}
         self.total_layers = 0
+
+    @staticmethod
+    def _layer_object_suffix(layer_id):
+        safe_layer_id = re.sub(r"[^A-Za-z0-9_]", "_", layer_id)
+        return safe_layer_id[:48]
     
     @pyqtSlot(str)
     def update_pull_progress(self, line):
@@ -166,6 +181,7 @@ class DockerPullDialog(QDialog):
             
             # Initialize layer if not seen before
             if layer_id not in self.layers:
+                self.empty_layer_label.hide()
                 self.layers[layer_id] = {
                     'id': layer_id,
                     'status': status,
@@ -176,19 +192,24 @@ class DockerPullDialog(QDialog):
                 
                 # Create progress bar for this layer
                 layer_layout = QHBoxLayout()
-                layer_layout.setSpacing(12)  # Increased spacing
+                layer_layout.setSpacing(12)
+                object_suffix = self._layer_object_suffix(layer_id)
                 
                 layer_label = QLabel(f"{layer_id[:8]}...")
-                layer_label.setFixedWidth(90)  # Slightly wider for better readability
+                layer_label.setObjectName(f"dockerPullLayerLabel_{object_suffix}")
+                layer_label.setFixedWidth(90)
                 layer_label.setStyleSheet("color: #60a5fa; font-weight: bold; font-family: monospace; font-size: 13px;")
                 
                 status_label = QLabel(status)
+                status_label.setObjectName(f"dockerPullLayerStatus_{object_suffix}")
                 status_label.setStyleSheet("color: #e2e8f0; font-family: monospace; font-size: 13px;")
+                status_label.setWordWrap(True)
                 
                 layer_progress = QProgressBar()
+                layer_progress.setObjectName(f"dockerPullLayerProgress_{object_suffix}")
                 layer_progress.setRange(0, 100)
                 layer_progress.setValue(0)
-                layer_progress.setMinimumHeight(20)  # Taller progress bars
+                layer_progress.setMinimumHeight(20)
                 layer_progress.setStyleSheet("""
                     QProgressBar {
                         border: 1px solid #475569;
@@ -262,6 +283,7 @@ class DockerPullDialog(QDialog):
             
             # Initialize layer if not seen before
             if line_hash not in self.layers:
+                self.empty_layer_label.hide()
                 self.layers[line_hash] = {
                     'id': line_hash,
                     'status': status,
@@ -272,19 +294,24 @@ class DockerPullDialog(QDialog):
                 
                 # Create progress bar for this status
                 layer_layout = QHBoxLayout()
-                layer_layout.setSpacing(12)  # Increased spacing
+                layer_layout.setSpacing(12)
+                object_suffix = self._layer_object_suffix(line_hash)
                 
                 layer_label = QLabel("Layer")
-                layer_label.setFixedWidth(90)  # Slightly wider for better readability
+                layer_label.setObjectName(f"dockerPullLayerLabel_{object_suffix}")
+                layer_label.setFixedWidth(90)
                 layer_label.setStyleSheet("color: #60a5fa; font-weight: bold; font-family: monospace; font-size: 13px;")
                 
                 status_label = QLabel(status)
+                status_label.setObjectName(f"dockerPullLayerStatus_{object_suffix}")
                 status_label.setStyleSheet("color: #e2e8f0; font-family: monospace; font-size: 13px;")
+                status_label.setWordWrap(True)
                 
                 layer_progress = QProgressBar()
+                layer_progress.setObjectName(f"dockerPullLayerProgress_{object_suffix}")
                 layer_progress.setRange(0, 100)
                 layer_progress.setValue(0)
-                layer_progress.setMinimumHeight(20)  # Taller progress bars
+                layer_progress.setMinimumHeight(20)
                 layer_progress.setStyleSheet("""
                     QProgressBar {
                         border: 1px solid #475569;
@@ -374,16 +401,11 @@ class DockerPullDialog(QDialog):
     
     def closeEvent(self, event):
         """Handle the dialog close event."""
-        if hasattr(self, 'loading_indicator'):
-            self.loading_indicator.stop()
         event.accept()
     
     @pyqtSlot()
     def safe_close(self):
         """Safely close the dialog with a timer to prevent direct deletion."""
-        if hasattr(self, 'loading_indicator'):
-            self.loading_indicator.stop()
-        
         # Close immediately and then use a timer to ensure proper cleanup
         self.close()
         # Use a short timer to ensure proper cleanup

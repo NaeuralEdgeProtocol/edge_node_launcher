@@ -1,9 +1,10 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QShowEvent
-from PyQt5.QtWidgets import QApplication, QDialog, QDialogButtonBox, QWidget
+from PyQt5.QtWidgets import QApplication, QDialog, QDialogButtonBox, QLabel, QProgressBar, QWidget
 
 from models.NodeHistory import NodeHistory
 from models.NodeInfo import NodeInfo
+from widgets.DockerPullDialog import DockerPullDialog
 from widgets.LoadingDialog import LoadingDialog
 from widgets.app_widgets.config_editor import ConfigEditorWidget
 from widgets.app_widgets.container_list import ContainerListWidget
@@ -79,6 +80,44 @@ def test_loading_dialog_progress_does_not_process_events_synchronously(qtbot, mo
 
     assert dialog.message_label.text() == "Working"
     assert process_event_calls == []
+
+
+def test_loading_dialog_exposes_visual_snapshot_targets(qtbot):
+    dialog = LoadingDialog(title="Launching Node", message="Please wait")
+    qtbot.addWidget(dialog)
+
+    assert dialog.objectName() == "loadingDialog"
+    assert dialog.title_label.objectName() == "loadingDialogTitleLabel"
+    assert dialog.title_label.text() == "Launching Node"
+    assert dialog.message_label.objectName() == "loadingDialogMessageLabel"
+    assert dialog.loading_indicator.objectName() == "loadingDialogIndicator"
+
+
+def test_docker_pull_dialog_exposes_stable_visual_targets(qtbot):
+    dialog = DockerPullDialog()
+    qtbot.addWidget(dialog)
+
+    assert dialog.objectName() == "dockerPullDialog"
+    assert dialog.findChild(QLabel, "dockerPullTitleLabel").text() == "Pulling Docker Image"
+    assert dialog.findChild(QLabel, "dockerPullInfoLabel") is dialog.info_label
+    assert dialog.findChild(QProgressBar, "dockerPullOverallProgress") is dialog.overall_progress
+    assert dialog.findChild(QWidget, "dockerPullLayerFrame") is not None
+    assert dialog.findChild(QWidget, "dockerPullLayerScrollArea") is not None
+    assert dialog.findChild(QWidget, "dockerPullLayerScrollContent") is not None
+    assert dialog.findChild(QLabel, "dockerPullLayerEmptyState").text() == "Waiting for Docker layer output..."
+
+
+def test_docker_pull_dialog_updates_layer_progress_with_named_children(qtbot):
+    dialog = DockerPullDialog()
+    qtbot.addWidget(dialog)
+
+    dialog.update_pull_progress("abcdef123456: Downloading 50%")
+
+    assert not dialog.empty_layer_label.isVisible()
+    assert dialog.overall_progress.value() == 50
+    assert dialog.findChild(QLabel, "dockerPullLayerLabel_abcdef123456").text() == "abcdef12..."
+    assert dialog.findChild(QLabel, "dockerPullLayerStatus_abcdef123456").text() == "Downloading 50%"
+    assert dialog.findChild(QProgressBar, "dockerPullLayerProgress_abcdef123456").value() == 50
 
 
 def test_node_info_widget_baseline_clear_and_uptime_format(qtbot):

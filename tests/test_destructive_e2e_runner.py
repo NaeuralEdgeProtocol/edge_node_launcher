@@ -116,6 +116,36 @@ def test_wait_for_launch_activity_records_existing_activity(monkeypatch, tmp_pat
 
     assert log["steps"][-1]["step"] == "launch activity observed"
     assert log["steps"][-1]["visible_dialogs"] == ["Pulling Docker Image"]
+    assert log["steps"][-1]["dialog_screenshots"] == []
+
+
+def test_capture_visible_dialog_screenshots_records_dialog_image(qtbot, tmp_path):
+    from PyQt5.QtWidgets import QDialog, QLabel
+
+    dialog = QDialog()
+    dialog.setWindowTitle("Pulling Docker Image")
+    QLabel("Downloading layer", dialog)
+    qtbot.addWidget(dialog)
+    dialog.show()
+    qtbot.waitUntil(dialog.isVisible)
+
+    class FakeQtApp:
+        def topLevelWidgets(self):
+            return [dialog]
+
+    screenshots = e2e.capture_visible_dialog_screenshots(
+        FakeQtApp(),
+        str(tmp_path),
+        "primary launch activity",
+    )
+
+    assert screenshots == [
+        {
+            "title": "Pulling Docker Image",
+            "path": str(tmp_path / "primary_launch_activity_0_Pulling_Docker_Image.png"),
+        }
+    ]
+    assert (tmp_path / "primary_launch_activity_0_Pulling_Docker_Image.png").exists()
 
 
 def test_find_dialog_matches_any_supported_title(qtbot):

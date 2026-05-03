@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 import webbrowser
 
-from PyQt5.QtWidgets import QDialog, QLabel, QLineEdit, QPushButton
+from PyQt5.QtWidgets import QDialog, QLabel, QLineEdit, QProgressBar, QPushButton
 
 import tools.run_smoke_e2e as smoke
 from widgets.ToastWidget import NotificationType, ToastWidget
@@ -153,6 +153,10 @@ def test_dialog_visual_snapshot_records_dialog_content(qtbot):
     line_edit.setObjectName("dialogInput")
     line_edit.setText("alpha")
     line_edit.setPlaceholderText("Alias")
+    progress_bar = QProgressBar(dialog)
+    progress_bar.setObjectName("dialogProgress")
+    progress_bar.setRange(0, 100)
+    progress_bar.setValue(42)
     button = QPushButton("Save", dialog)
     button.setObjectName("dialogSaveButton")
     qtbot.addWidget(dialog)
@@ -172,6 +176,8 @@ def test_dialog_visual_snapshot_records_dialog_content(qtbot):
     assert snapshot["line_edits"][0]["placeholder"] == "Alias"
     assert snapshot["buttons"][0]["object_name"] == "dialogSaveButton"
     assert snapshot["buttons"][0]["text"] == "Save"
+    assert snapshot["progress_bars"][0]["object_name"] == "dialogProgress"
+    assert snapshot["progress_bars"][0]["value"] == 42
 
 
 def test_capture_dialog_visual_evidence_omits_screenshot_without_dir(qtbot):
