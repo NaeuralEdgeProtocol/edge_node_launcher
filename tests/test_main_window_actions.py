@@ -1,7 +1,7 @@
 import webbrowser
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QDialog, QPushButton, QWidget
+from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QPushButton, QWidget
 
 import app_forms.frm_main as frm_main
 from models.NodeInfo import NodeInfo
@@ -128,6 +128,7 @@ def _build_launcher(monkeypatch, qtbot, running=False):
     monkeypatch.setattr(frm_main.EdgeNodeLauncher, "refresh_node_info", lambda self: None)
     monkeypatch.setattr(frm_main.EdgeNodeLauncher, "post_launch_setup", lambda self: None)
     monkeypatch.setattr(frm_main.EdgeNodeLauncher, "show_initial_window", lambda self: self.show())
+    monkeypatch.setattr(frm_main.QTimer, "singleShot", lambda *args, **kwargs: None)
 
     launcher = frm_main.EdgeNodeLauncher()
     qtbot.addWidget(launcher)
@@ -323,3 +324,20 @@ def test_main_window_graph_plots_stay_inside_styled_containers(qtbot, monkeypatc
         assert container is not None
         assert plot.parent() is container
         assert container.layout().count() == 1
+
+
+def test_main_window_sidebar_sections_group_controls(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+    expected_sections = {
+        "nodeControlsSectionLabel": "Node",
+        "networkActionsSectionLabel": "Network",
+        "statusSectionLabel": "Status",
+        "settingsSectionLabel": "Settings",
+    }
+
+    for object_name, text in expected_sections.items():
+        label = launcher.findChild(QLabel, object_name)
+
+        assert label is not None
+        assert label.text() == text
+        assert label.property("role") == "sidebarSection"

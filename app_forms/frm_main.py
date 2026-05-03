@@ -319,6 +319,14 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         {hover_css}
     """)
 
+  def create_sidebar_section_label(self, text, object_name):
+    label = QLabel(text)
+    label.setObjectName(object_name)
+    label.setProperty("role", "sidebarSection")
+    label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+    label.setFont(QFont("Courier New", 9, QFont.Bold))
+    return label
+
   def check_docker_with_ui(self):
     """Check Docker status and handle UI interactions.
     
@@ -509,6 +517,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     top_button_area = QVBoxLayout()
     top_button_area.setObjectName("topButtonArea")
     top_button_area.setContentsMargins(5, 0, 5, 4)  # Add left and right margins (5px)
+    top_button_area.addWidget(self.create_sidebar_section_label("Node", "nodeControlsSectionLabel"))
 
     # Container selector area
     container_selector_layout = QVBoxLayout()  # Changed to QVBoxLayout
@@ -539,6 +548,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.toggleButton.clicked.connect(self.toggle_container)
     self.apply_button_style(self.toggleButton, 'toggle_start')
     top_button_area.addWidget(self.toggleButton)
+
+    top_button_area.addWidget(self.create_sidebar_section_label("Network", "networkActionsSectionLabel"))
 
     # Docker download button right under Launch Edge Node
     self.docker_download_button = QPushButton(DOWNLOAD_DOCKER_BUTTON_TEXT)
@@ -571,6 +582,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     
     # Add some spacing between the refresh button and info box
     top_button_area.addSpacing(7)
+    top_button_area.addWidget(self.create_sidebar_section_label("Status", "statusSectionLabel"))
     
     # Info box
     info_box = QGroupBox()
@@ -701,6 +713,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     bottom_button_area = QVBoxLayout()
     bottom_button_area.setObjectName("bottomButtonArea")
     bottom_button_area.setContentsMargins(5, 4, 5, 0)  # Add left and right margins (5px)
+    bottom_button_area.addWidget(self.create_sidebar_section_label("Settings", "settingsSectionLabel"))
     
     ## buttons
     # Add Rename Node button

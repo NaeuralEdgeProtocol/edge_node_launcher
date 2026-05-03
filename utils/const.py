@@ -306,6 +306,8 @@ DARK_COLORS = {
     "combobox_popup_item_selected_text": "white",
     "combobox_text_color": "#333333",
     "combo_rectangle_text_color": "white",
+    "section_label_text": "#9DB6D8",
+    "section_label_border": "#10386A",
 }
 
 # Color definitions for light theme
@@ -389,6 +391,8 @@ LIGHT_COLORS = {
     "combobox_popup_item_selected_text": "white",
     "combobox_text_color": "#333333",
     "combo_rectangle_text_color": "#1B47F7",
+    "section_label_text": "#5F6B7A",
+    "section_label_border": "#D8DEE8",
 }
 
 # Merge common styles with theme-specific colors
@@ -559,6 +563,15 @@ COMMON_STYLESHEET_TEMPLATE = """
   }}
   QComboBox QAbstractItemView::item:selected {{
     background-color: {combo_dropdown_select_bg};
+  }}
+  QLabel[role="sidebarSection"] {{
+    color: {section_label_text};
+    background-color: transparent;
+    border-bottom: 1px solid {section_label_border};
+    font-size: 11px;
+    font-weight: bold;
+    padding: 10px 8px 2px 8px;
+    margin: 8px 6px 0px 6px;
   }}
   QPushButton {{
     background-color: {button_bg}; 
