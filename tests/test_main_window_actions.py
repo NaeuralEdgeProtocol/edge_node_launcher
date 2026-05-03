@@ -1141,6 +1141,40 @@ def test_main_window_add_node_dialog_create_action_is_clickable(qtbot, monkeypat
     assert display_name is None
 
 
+def test_add_node_dialog_capacity_copy_is_readable(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    observed = {}
+
+    monkeypatch.setattr(
+        launcher,
+        "check_ram_for_new_node",
+        lambda existing_node_count: {
+            "can_add_node": True,
+            "total_ram_gb": 32.0,
+            "max_nodes_supported": 4,
+            "current_node_count": existing_node_count,
+            "min_required_gb": frm_main.MIN_NODE_RAM_GB,
+        },
+    )
+
+    def inspect_dialog(dialog):
+        labels = [label.text() for label in dialog.findChildren(QLabel)]
+        observed["copy"] = "\n".join(labels)
+        return QDialog.Rejected
+
+    monkeypatch.setattr(QDialog, "exec_", inspect_dialog)
+
+    qtbot.mouseClick(launcher.add_node_button, Qt.LeftButton)
+
+    assert "System Capacity:" in observed["copy"]
+    assert "- Total RAM: 32.0 GB" in observed["copy"]
+    assert f"- RAM per node: {frm_main.MIN_NODE_RAM_GB} GB" in observed["copy"]
+    assert "- Max nodes supported: 4" in observed["copy"]
+    assert "- Current nodes: 1" in observed["copy"]
+    assert "â" not in observed["copy"]
+    assert "Ã" not in observed["copy"]
+
+
 def test_add_node_dialog_double_click_creates_once(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
     created_nodes = []

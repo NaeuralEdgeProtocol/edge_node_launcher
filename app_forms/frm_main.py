@@ -3126,10 +3126,10 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     if 'error' not in ram_check:
         info_text = (f"This action will create a new Edge Node.\n\n"
                     f"System Capacity:\n"
-                    f"• Total RAM: {ram_check['total_ram_gb']:.1f} GB\n"
-                    f"• RAM per node: {ram_check['min_required_gb']} GB\n"
-                    f"• Max nodes supported: {ram_check['max_nodes_supported']}\n"
-                    f"• Current nodes: {existing_node_count}\n\n"
+                    f"- Total RAM: {ram_check['total_ram_gb']:.1f} GB\n"
+                    f"- RAM per node: {ram_check['min_required_gb']} GB\n"
+                    f"- Max nodes supported: {ram_check['max_nodes_supported']}\n"
+                    f"- Current nodes: {existing_node_count}\n\n"
                     f"Do you want to proceed?")
     else:
         info_text = f"This action will create a new Edge Node. \n\nDo you want to proceed?"
