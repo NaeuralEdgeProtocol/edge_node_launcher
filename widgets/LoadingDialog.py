@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QApplication
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel
 )
 from PyQt5.QtCore import Qt, QTimer, pyqtSlot
 from PyQt5.QtGui import QColor
@@ -132,6 +132,10 @@ class LoadingDialog(QDialog):
         # Use a short timer to ensure proper context for closing
         # This must be called from the main thread
         QTimer.singleShot(100, self.deleteLater)
+
+    def _queue_refresh(self):
+        """Queue a repaint without synchronously pumping the Qt event loop."""
+        QTimer.singleShot(0, self.update)
     
     @pyqtSlot(str)
     def update_progress(self, message, process_events=True):
@@ -139,24 +143,22 @@ class LoadingDialog(QDialog):
         
         Args:
             message: Progress message to display
-            process_events: Whether to process Qt events after updating
+            process_events: Whether to queue a refresh after updating
         """
         self.set_message(message)
         if process_events:
-            # Process events to ensure UI remains responsive
-            QApplication.processEvents()
+            self._queue_refresh()
     
     @pyqtSlot()
     def keep_alive(self):
-        """Process events to ensure the dialog remains responsive.
+        """Queue a refresh to keep the dialog visually current.
         
         This method can be called periodically during long operations
         to ensure the UI doesn't freeze.
         """
-        QApplication.processEvents()
+        self._queue_refresh()
     
     def showEvent(self, event):
-        """Override show event to ensure dialog is processed and visible."""
+        """Override show event to queue an initial refresh."""
         super().showEvent(event)
-        # Process all pending events to make sure dialog appears immediately
-        QApplication.processEvents()
+        self._queue_refresh()

@@ -1,8 +1,10 @@
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QDialog, QDialogButtonBox
+from PyQt5.QtGui import QShowEvent
+from PyQt5.QtWidgets import QApplication, QDialog, QDialogButtonBox
 
 from models.NodeHistory import NodeHistory
 from models.NodeInfo import NodeInfo
+from widgets.LoadingDialog import LoadingDialog
 from widgets.app_widgets.config_editor import ConfigEditorWidget
 from widgets.app_widgets.container_list import ContainerListWidget
 from widgets.app_widgets.log_console import LogConsoleWidget
@@ -56,6 +58,26 @@ def test_log_console_adds_and_clears_text(qtbot):
     qtbot.mouseClick(widget.btn_clear, Qt.LeftButton)
 
     assert widget.text_console.toPlainText() == ""
+
+
+def test_loading_dialog_progress_does_not_process_events_synchronously(qtbot, monkeypatch):
+    dialog = LoadingDialog(title="Launching Node", message="Please wait")
+    qtbot.addWidget(dialog)
+    process_event_calls = []
+
+    with monkeypatch.context() as process_events_patch:
+        process_events_patch.setattr(
+            QApplication,
+            "processEvents",
+            lambda *args, **kwargs: process_event_calls.append("processEvents"),
+        )
+
+        dialog.update_progress("Working")
+        dialog.keep_alive()
+        dialog.showEvent(QShowEvent())
+
+    assert dialog.message_label.text() == "Working"
+    assert process_event_calls == []
 
 
 def test_node_info_widget_baseline_clear_and_uptime_format(qtbot):
