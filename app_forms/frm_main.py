@@ -739,6 +739,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.docker_download_button.setObjectName("downloadDockerButton")
     self.docker_download_button.setToolTip(DOCKER_DOWNLOAD_TOOLTIP)
     self.docker_download_button.clicked.connect(self.open_docker_download)
+    top_button_area.addWidget(self.docker_download_button)
 
     self.dapp_button = QPushButton(DAPP_BUTTON_TEXT)
     self.dapp_button.setObjectName("openDappButton")

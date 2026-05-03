@@ -860,6 +860,21 @@ def test_refresh_action_lives_with_status_section(qtbot, monkeypatch):
     assert top_button_area.indexOf(status_label) < top_button_area.indexOf(launcher.refreshButton)
 
 
+def test_docker_download_action_lives_with_network_actions(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+    top_button_area = launcher.findChild(QVBoxLayout, "topButtonArea")
+    network_label = launcher.findChild(QLabel, "networkActionsSectionLabel")
+
+    assert top_button_area is not None
+    assert network_label is not None
+    assert top_button_area.indexOf(network_label) < top_button_area.indexOf(
+        launcher.docker_download_button
+    )
+    assert top_button_area.indexOf(launcher.docker_download_button) < top_button_area.indexOf(
+        launcher.dapp_button
+    )
+
+
 def test_status_panels_have_semantic_roles(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
     info_box = launcher.findChild(QGroupBox, "infoBox")
