@@ -966,6 +966,19 @@ def test_main_window_add_node_dialog_create_action_is_clickable(qtbot, monkeypat
     assert display_name is None
 
 
+def test_add_new_node_does_not_override_active_lifecycle(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launcher._begin_lifecycle_operation("start", "r1node")
+
+    launcher.add_new_node("r1node2", "r1vol2", "beta")
+
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") == {
+        "operation": "start",
+        "container_name": "r1node",
+    }
+    assert getattr(launcher, "startup_dialog", None) is None
+
+
 def test_main_window_graph_plots_stay_inside_styled_containers(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
     layout = launcher.graphView.layout()

@@ -3103,7 +3103,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
        select it in the UI, and start it immediately."""
     try:
       from datetime import datetime
-      self._begin_lifecycle_operation("add_node", container_name)
+      if not self._try_begin_lifecycle_operation("add_node", container_name):
+        return
 
       # Show the loading dialog - now with blue background
       node_display_name = display_name if display_name else None
