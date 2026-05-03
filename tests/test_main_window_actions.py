@@ -1543,7 +1543,10 @@ def test_main_window_sidebar_sections_group_controls(qtbot, monkeypatch):
 
         assert label is not None
         assert label.text() == text
+        assert label.accessibleName() == f"{text} section"
         assert label.property("role") == "sidebarSection"
+        assert label.font().family() != "Courier New"
+        assert label.minimumHeight() == 30
 
 
 def test_rename_action_lives_with_node_controls(qtbot, monkeypatch):

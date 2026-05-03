@@ -615,10 +615,11 @@ COMMON_STYLESHEET_TEMPLATE = """
     color: {section_label_text};
     background-color: transparent;
     border-bottom: 1px solid {section_label_border};
-    font-size: 11px;
-    font-weight: bold;
-    padding: 10px 8px 2px 8px;
-    margin: 8px 6px 0px 6px;
+    font-family: "Segoe UI";
+    font-size: 9pt;
+    font-weight: 600;
+    padding: 12px 8px 4px 8px;
+    margin: 10px 6px 2px 6px;
   }}
   QScrollArea#sidebarScrollArea {{
     background-color: transparent;

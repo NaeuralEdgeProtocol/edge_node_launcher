@@ -23,6 +23,13 @@ def test_sidebar_action_buttons_are_styled_by_hierarchy_role():
         assert "action_button_border_radius" not in stylesheet
 
 
+def test_sidebar_section_labels_use_ui_typography():
+    for stylesheet in (DARK_STYLESHEET, LIGHT_STYLESHEET):
+        assert 'QLabel[role="sidebarSection"]' in stylesheet
+        assert 'font-family: "Segoe UI";' in stylesheet
+        assert "font-size: 9pt;" in stylesheet
+
+
 def test_stop_button_text_uses_readable_dark_color_on_yellow():
     for colors in (DARK_COLORS, LIGHT_COLORS):
         assert colors["toggle_button_stop_text"] == "#1F2937"

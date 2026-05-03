@@ -341,9 +341,11 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   def create_sidebar_section_label(self, text, object_name):
     label = QLabel(text)
     label.setObjectName(object_name)
+    label.setAccessibleName(f"{text} section")
     label.setProperty("role", "sidebarSection")
     label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-    label.setFont(QFont("Courier New", 9, QFont.Bold))
+    label.setFont(QFont("Segoe UI", 9, QFont.DemiBold))
+    label.setMinimumHeight(30)
     return label
 
   def check_docker_with_ui(self):
