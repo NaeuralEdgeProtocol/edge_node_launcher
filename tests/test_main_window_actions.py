@@ -182,7 +182,7 @@ def _build_launcher(monkeypatch, qtbot, running=False, config_setup=None):
     monkeypatch.setattr(frm_main.EdgeNodeLauncher, "container_exists_in_docker", lambda self, name: False)
     monkeypatch.setattr(frm_main.EdgeNodeLauncher, "update_resources_display", lambda self: None)
     monkeypatch.setattr(frm_main.EdgeNodeLauncher, "plot_graphs", lambda self: None)
-    monkeypatch.setattr(frm_main.EdgeNodeLauncher, "plot_data", lambda self: None)
+    monkeypatch.setattr(frm_main.EdgeNodeLauncher, "plot_data", lambda self, *args, **kwargs: None)
     monkeypatch.setattr(frm_main.EdgeNodeLauncher, "maybe_refresh_uptime", lambda self: None)
     monkeypatch.setattr(frm_main.EdgeNodeLauncher, "refresh_node_info", lambda self: None)
     monkeypatch.setattr(frm_main.EdgeNodeLauncher, "post_launch_setup", lambda self: None)
@@ -666,6 +666,31 @@ def test_launch_conflict_remove_failure_clears_lifecycle_and_reports_error(qtbot
     if launcher.logView is not None:
         log_text += launcher.logView.toPlainText()
     assert "Failed to remove conflicting container: permission denied" in log_text
+
+
+def test_launch_success_clears_dialog_reference_immediately(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+
+    def succeed_launch(volume_name=None, callback=None, error_callback=None):
+        fake_handler.launched_containers.append((fake_handler.container_name, volume_name))
+        callback(("", "", 0))
+
+    fake_handler.launch_container_threaded = succeed_launch
+    launcher.launcher_dialog = frm_main.LoadingDialog(
+        launcher,
+        title="Launching Node",
+        message="Please wait",
+    )
+    launcher._begin_lifecycle_operation("launch", "r1node")
+
+    launcher._perform_container_launch_after_pull("r1node", "r1vol")
+
+    assert fake_handler.launched_containers == [("r1node", "r1vol")]
+    assert launcher.launcher_dialog is None
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+    assert launcher.toast.notifications == [
+        (NotificationType.SUCCESS, "Node 'alpha' launched successfully")
+    ]
 
 
 def test_launch_preparation_does_not_run_blocking_docker_checks_on_ui_thread(qtbot, monkeypatch):

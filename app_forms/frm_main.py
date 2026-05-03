@@ -3472,6 +3472,12 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.toast.show_notification(NotificationType.ERROR, error_msg)
     self._end_lifecycle_operation(container_name)
 
+  def _close_launch_dialog_references(self) -> None:
+    for dialog_attr in ("launcher_dialog", "startup_dialog"):
+      self._close_dialog_reference(dialog_attr)
+      if hasattr(self, dialog_attr):
+        setattr(self, dialog_attr, None)
+
   def _perform_container_launch_after_pull(self, container_name, volume_name):
     """Perform the container launch operation after Docker pull is complete."""
     try:
@@ -3534,18 +3540,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             elif hasattr(self, 'startup_dialog') and self.startup_dialog is not None and self.startup_dialog.isVisible():
                 self.startup_dialog.update_progress("Container launched successfully!")
             
-            # Close the loading dialogs immediately
-            launcher_dialog_visible = hasattr(self, 'launcher_dialog') and self.launcher_dialog is not None 
-            if launcher_dialog_visible:
-                self.launcher_dialog.safe_close()
-                # Schedule removal of the reference after a delay
-                QTimer.singleShot(500, lambda: setattr(self, 'launcher_dialog', None) if hasattr(self, 'launcher_dialog') else None)
-            
-            startup_dialog_visible = hasattr(self, 'startup_dialog') and self.startup_dialog is not None and self.startup_dialog.isVisible()
-            if startup_dialog_visible:
-                self.startup_dialog.safe_close()
-                # Schedule removal of the reference after a delay
-                QTimer.singleShot(500, lambda: setattr(self, 'startup_dialog', None) if hasattr(self, 'startup_dialog') else None)
+            self._close_launch_dialog_references()
             
             # Show success notification
             # Get node alias from config if available
