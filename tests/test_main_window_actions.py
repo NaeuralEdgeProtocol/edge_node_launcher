@@ -556,6 +556,7 @@ def test_launch_preparation_does_not_run_blocking_docker_checks_on_ui_thread(qtb
     launcher._perform_container_launch("r1node", "r1vol")
 
     assert fake_handler.pull_requests == 1
+    assert fake_handler.launched_containers == []
     assert getattr(launcher, "_EdgeNodeLauncher__docker_pull_in_progress") is True
 
 
