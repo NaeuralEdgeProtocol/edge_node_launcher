@@ -66,6 +66,7 @@ from utils.docker_commands import DockerCommandHandler
 from utils.updater import _UpdaterMixin
 from utils.system_resources import _SystemResourcesMixin
 from utils.docker_utils import get_volume_name, generate_container_name
+from utils.docker_errors import extract_conflicting_container_id
 from utils.config_manager import ConfigManager, ContainerConfig
 from utils.container_selection import SelectedContainer, selected_container_from_combo, select_container_by_name
 from utils.lifecycle_state import LifecycleState
@@ -3545,10 +3546,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                 
                 # Try to forcefully remove the container and retry launch
                 try:
-                    # Extract container ID from error message if possible
-                    import re
-                    container_id_match = re.search(r'by container "([^"]+)"', error_msg)
-                    container_id = container_id_match.group(1) if container_id_match else None
+                    container_id = extract_conflicting_container_id(error_msg)
                     
                     if container_id:
                         self.add_log(f"Attempting to forcefully remove container with ID: {container_id}", color="yellow")
