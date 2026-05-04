@@ -1968,7 +1968,7 @@ def test_launch_preparation_does_not_run_blocking_docker_checks_on_ui_thread(qtb
 
 
 def test_launch_skipped_during_existing_pull_closes_launch_dialogs(qtbot, monkeypatch):
-    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
     launcher.launcher_dialog = frm_main.LoadingDialog(
         launcher,
         title="Launching Node",
@@ -1989,6 +1989,11 @@ def test_launch_skipped_during_existing_pull_closes_launch_dialogs(qtbot, monkey
     assert launcher.startup_dialog is None
     assert not launcher.loading_indicator.timer.isActive()
     assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+    assert fake_handler.pull_requests == 0
+    log_text = "\n".join(launcher.log_buffer)
+    if launcher.logView is not None:
+        log_text += launcher.logView.toPlainText()
+    assert "Docker pull already in progress, skipping launch of r1node" in log_text
 
 
 def test_launch_container_exception_closes_existing_launch_dialogs(qtbot, monkeypatch):

@@ -2901,13 +2901,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         
         # Check if Docker pull is already in progress
         if self._docker_pull_in_progress():
-            self.add_log(f"Docker pull already in progress, skipping launch of {container_name}", color="yellow")
-            self._end_lifecycle_operation(container_name)
-            
-            self._lifecycle_dialogs.schedule_safe_close_launch_references()
-            
-            # Stop loading indicator
-            self.loading_indicator.stop()
+            self._finalize_launch_skipped_for_active_pull(container_name)
             return
         
         self._start_docker_pull_for_launch(container_name, volume_name)
@@ -2938,6 +2932,13 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     self.add_log("Pulling latest Docker image before container launch...", color="blue")
     self.docker_handler.pull_image(on_pull_success, on_pull_error, on_pull_output)
+
+  def _finalize_launch_skipped_for_active_pull(self, container_name: str) -> None:
+    """Close launch UI after a stale launch continuation sees an active pull."""
+    self.add_log(f"Docker pull already in progress, skipping launch of {container_name}", color="yellow")
+    self._end_lifecycle_operation(container_name)
+    self._lifecycle_dialogs.schedule_safe_close_launch_references()
+    self.loading_indicator.stop()
 
   def _create_docker_pull_callbacks(self, container_name: str):
     """Create callbacks for Docker image pull progress and completion."""
