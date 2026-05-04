@@ -831,12 +831,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     """Return True when a Qt wrapper no longer owns a live C++ object."""
     return LifecycleDialogPresenter.qt_object_deleted(obj)
 
-  def _update_launch_dialog_progress(self, message: str, *, process_events: bool = True) -> bool:
-    return self._lifecycle_dialogs.update_launch_progress(
-      message,
-      process_events=process_events,
-    )
-
   def _is_shutting_down(self) -> bool:
     return getattr(self, "_EdgeNodeLauncher__shutting_down", False)
 
@@ -2862,7 +2856,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         else:
             # If we already have a dialog visible, just perform the launch
             # Update whichever launch dialog is currently active.
-            self._update_launch_dialog_progress("Launching Docker container...")
+            self._lifecycle_dialogs.update_launch_progress("Launching Docker container...")
                 
             # Perform the launch operation
             self._perform_container_launch(container_name, volume_name)
@@ -3032,7 +3026,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   def _finalize_launch_failure(self, container_name: str, error_msg: str) -> None:
     """Close launch UI state and report a terminal launch failure."""
     self.loading_indicator.stop()
-    self._update_launch_dialog_progress(f"Error: {error_msg}", process_events=False)
+    self._lifecycle_dialogs.update_launch_progress(f"Error: {error_msg}", process_events=False)
 
     self._lifecycle_dialogs.close_reference("launcher_dialog")
     self._lifecycle_dialogs.close_reference("startup_dialog")
@@ -3042,7 +3036,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
   def _finalize_launch_success(self, container_name: str, volume_name: str) -> None:
     """Persist launch state, refresh visible UI, and close launch dialogs."""
-    self._update_launch_dialog_progress("Container launched, updating configuration...")
+    self._lifecycle_dialogs.update_launch_progress("Container launched, updating configuration...")
 
     self.config_manager.update_last_used(container_name, datetime.now().isoformat())
 
@@ -3051,7 +3045,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       self.config_manager.update_volume(container_name, volume_name)
       self.add_log(f"Updated volume name in config: {volume_name}", debug=True)
 
-    self._update_launch_dialog_progress("Updating user interface...")
+    self._lifecycle_dialogs.update_launch_progress("Updating user interface...")
 
     self.post_launch_setup()
     self.refresh_node_info()
@@ -3059,7 +3053,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.update_toggle_button_text(assume_running=True)
 
     self.loading_indicator.stop()
-    self._update_launch_dialog_progress("Container launched successfully!")
+    self._lifecycle_dialogs.update_launch_progress("Container launched successfully!")
     self._lifecycle_dialogs.close_launch_references()
 
     container_config = self.config_manager.get_container(container_name)
@@ -3079,7 +3073,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     if "Conflict" not in error_msg or "is already in use" not in error_msg:
       return False
 
-    self._update_launch_dialog_progress(
+    self._lifecycle_dialogs.update_launch_progress(
       "Container name conflict detected. Trying again with container removal..."
     )
 
@@ -3176,7 +3170,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.loading_indicator.start()
         
         # Update loading dialog with progress
-        self._update_launch_dialog_progress("Launching Docker container...")
+        self._lifecycle_dialogs.update_launch_progress("Launching Docker container...")
         on_launch_success, on_launch_error = self._create_post_pull_launch_callbacks(
             container_name,
             volume_name,

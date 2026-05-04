@@ -603,11 +603,12 @@ def test_lifecycle_dialog_presenter_backs_launch_progress_helpers(qtbot, monkeyp
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
 
     assert isinstance(launcher._lifecycle_dialogs, LifecycleDialogPresenter)
+    assert not hasattr(launcher, "_update_launch_dialog_progress")
 
     dialog = launcher._lifecycle_dialogs.show_launch_loading("alpha")
 
     assert launcher._lifecycle_dialogs.reference("launcher_dialog") is dialog
-    assert launcher._update_launch_dialog_progress("Launching Docker container...")
+    assert launcher._lifecycle_dialogs.update_launch_progress("Launching Docker container...")
     assert dialog.message_label.text() == "Launching Docker container..."
 
 
@@ -1487,7 +1488,7 @@ def test_launch_conflict_remove_success_retries_and_finalizes(qtbot, monkeypatch
     fake_handler.launch_container_threaded = conflict_then_success
     fake_handler.remove_container_threaded = remove_success
     monkeypatch.setattr(frm_main.QTimer, "singleShot", lambda _delay, callback: callback())
-    launcher._update_launch_dialog_progress = (
+    launcher._lifecycle_dialogs.update_launch_progress = (
         lambda message, **_kwargs: progress_messages.append(message) or True
     )
     launcher.post_launch_setup = lambda: ui_updates.append("post_launch_setup")
@@ -1608,7 +1609,7 @@ def test_finalize_launch_success_updates_config_ui_and_dialogs(qtbot, monkeypatc
         title="Launching Node",
         message="Please wait",
     )
-    launcher._update_launch_dialog_progress = (
+    launcher._lifecycle_dialogs.update_launch_progress = (
         lambda message, **_kwargs: progress_messages.append(message) or True
     )
     launcher.post_launch_setup = lambda: ui_updates.append("post_launch_setup")
