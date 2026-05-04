@@ -509,6 +509,25 @@ COMMON_STYLESHEET_TEMPLATE = """
   QTextEdit#logView QScrollBar::sub-page:horizontal {{
     background: transparent;
   }}
+  QLineEdit[role="dialogTextInput"] {{
+    background-color: {secondary_action_bg};
+    color: {text_color};
+    border: 1px solid {secondary_action_border};
+    border-radius: 6px;
+    padding: 6px 10px;
+    min-height: 30px;
+    selection-background-color: {primary_action_bg};
+    selection-color: {primary_action_text};
+  }}
+  QLineEdit[role="dialogTextInput"]:focus {{
+    background-color: {secondary_action_hover};
+    border: 1px solid {combo_hover_border};
+  }}
+  QLineEdit[role="dialogTextInput"]:disabled {{
+    color: {toggle_button_disabled_text};
+    background-color: {toggle_button_disabled_bg};
+    border-color: {toggle_button_disabled_border};
+  }}
   PlotWidget, QWidget[class="plot-container"] {{
     background-color: {graph_bg};
     border: 1px solid {graph_border};

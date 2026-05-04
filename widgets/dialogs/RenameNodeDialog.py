@@ -33,6 +33,8 @@ class RenameNodeDialog(QDialog):
         self.setMinimumWidth(450)
 
         layout = QVBoxLayout()
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(8)
 
         explanation = QLabel("Name this node for display in the launcher.")
         explanation.setObjectName("renameNodeExplanationLabel")
@@ -41,11 +43,14 @@ class RenameNodeDialog(QDialog):
 
         self.name_input = QLineEdit()
         self.name_input.setObjectName("renameNodeNameInput")
+        self.name_input.setProperty("role", "dialogTextInput")
         self.name_input.setAccessibleName("Node display name")
         self.name_input.setText(current_alias)
         self.name_input.setMaxLength(max_length)
         self.name_input.setPlaceholderText("Node display name")
-        self.name_input.setStyleSheet(f"color: {input_text_color};")
+        self.name_input.setMinimumHeight(38)
+        if not stylesheet:
+            self.name_input.setStyleSheet(f"color: {input_text_color};")
         layout.addWidget(self.name_input)
 
         restrictions_label = QLabel("Name restrictions:")
@@ -66,6 +71,7 @@ class RenameNodeDialog(QDialog):
         layout.addWidget(restrictions_text)
 
         button_layout = QHBoxLayout()
+        button_layout.setSpacing(12)
         self.save_button = QPushButton("Save")
         self.save_button.setObjectName("renameNodeSaveButton")
         self.save_button.setAccessibleName("Save node name")
