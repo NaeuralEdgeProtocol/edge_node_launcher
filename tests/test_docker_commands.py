@@ -379,3 +379,194 @@ def test_legacy_container_running_check_uses_bounded_inspect(monkeypatch):
         (["docker", "inspect", "r1node"], docker_utils.DOCKER_CHECK_TIMEOUT_SECONDS)
     ]
     assert post_launch_calls == ["post-launch"]
+
+
+def test_legacy_local_launch_stops_when_docker_is_not_ready(monkeypatch):
+    launcher = object.__new__(docker_utils._DockerUtilsMixin)
+    launcher.is_remote = False
+    launcher.check_docker = lambda: (True, False, "Docker daemon is not running")
+    logs = []
+    warnings = []
+    launcher.add_log = lambda message, *args, **kwargs: logs.append(message)
+    setattr(
+        launcher,
+        "_DockerUtilsMixin__check_env_keys",
+        lambda: (_ for _ in ()).throw(AssertionError("env check should not run")),
+    )
+
+    monkeypatch.setattr(
+        docker_utils.QMessageBox,
+        "warning",
+        lambda parent, title, message: warnings.append((title, message)),
+    )
+
+    launcher.launch_container()
+
+    assert logs == ["Docker is not ready: Docker daemon is not running"]
+    assert warnings == [("Docker Status", "Docker daemon is not running")]
+
+
+def test_legacy_remote_launch_skips_local_docker_check(monkeypatch):
+    launcher = object.__new__(docker_utils._DockerUtilsMixin)
+    launcher.is_remote = True
+    launcher.check_docker = lambda: (_ for _ in ()).throw(
+        AssertionError("remote launch should not check local Docker")
+    )
+    launcher.add_log = lambda *args, **kwargs: None
+    setattr(launcher, "_DockerUtilsMixin__check_env_keys", lambda: True)
+    post_launch_calls = []
+    launcher.post_launch_setup = lambda: post_launch_calls.append("post-launch")
+    messages = []
+
+    class FakeServiceManager:
+        def restart_service(self, service_name):
+            messages.append(("restart", service_name))
+            return True, None
+
+    launcher.service_manager = FakeServiceManager()
+    monkeypatch.setattr(
+        docker_utils.QMessageBox,
+        "information",
+        lambda parent, title, message: messages.append((title, message)),
+    )
+
+    launcher.launch_container()
+
+    assert messages == [
+        ("restart", "mnl_execution_engine"),
+        ("Service Restart", "Edge Node service restarted successfully."),
+    ]
+    assert post_launch_calls == ["post-launch"]
+
+
+def test_legacy_local_launch_uses_bounded_cleanup_and_run(monkeypatch):
+    launcher = object.__new__(docker_utils._DockerUtilsMixin)
+    launcher.is_remote = False
+    launcher.check_docker = lambda: (True, True, None)
+    launcher.add_log = lambda *args, **kwargs: None
+    setattr(launcher, "_DockerUtilsMixin__check_env_keys", lambda: True)
+    pull_calls = []
+    setattr(launcher, "_DockerUtilsMixin__maybe_docker_pull", lambda: pull_calls.append("pull"))
+    launcher.get_clean_cmd = lambda: ["docker", "rm", "r1node"]
+    launcher.get_cmd = lambda: ["docker", "run", "-d", "ratio1/edge_node:devnet"]
+    post_launch_calls = []
+    launcher.post_launch_setup = lambda: post_launch_calls.append("post-launch")
+    command_calls = []
+    messages = []
+
+    def fake_check_output(command, timeout):
+        command_calls.append((command, timeout))
+        return "ok"
+
+    monkeypatch.setattr(docker_utils, "check_output_no_window", fake_check_output)
+    monkeypatch.setattr(
+        docker_utils.QMessageBox,
+        "information",
+        lambda parent, title, message: messages.append((title, message)),
+    )
+
+    launcher.launch_container()
+
+    assert pull_calls == ["pull"]
+    assert command_calls == [
+        (["docker", "rm", "r1node"], docker_utils.DOCKER_CLEANUP_TIMEOUT_SECONDS),
+        (
+            ["docker", "run", "-d", "ratio1/edge_node:devnet"],
+            docker_utils.DOCKER_LAUNCH_TIMEOUT_SECONDS,
+        ),
+    ]
+    assert messages == [("Container Launch", "Container launched successfully.")]
+    assert post_launch_calls == ["post-launch"]
+
+
+def test_legacy_local_launch_reports_run_timeout(monkeypatch):
+    launcher = object.__new__(docker_utils._DockerUtilsMixin)
+    launcher.is_remote = False
+    launcher.check_docker = lambda: (True, True, None)
+    logs = []
+    launcher.add_log = lambda message, *args, **kwargs: logs.append(message)
+    setattr(launcher, "_DockerUtilsMixin__check_env_keys", lambda: True)
+    setattr(launcher, "_DockerUtilsMixin__maybe_docker_pull", lambda: None)
+    launcher.get_clean_cmd = lambda: ["docker", "rm", "r1node"]
+    launcher.get_cmd = lambda: ["docker", "run", "-d", "ratio1/edge_node:devnet"]
+    post_launch_calls = []
+    launcher.post_launch_setup = lambda: post_launch_calls.append("post-launch")
+    warnings = []
+
+    def fake_check_output(command, timeout):
+        if command[:2] == ["docker", "run"]:
+            raise docker_utils.subprocess.TimeoutExpired(command, timeout)
+        return "ok"
+
+    monkeypatch.setattr(docker_utils, "check_output_no_window", fake_check_output)
+    monkeypatch.setattr(
+        docker_utils.QMessageBox,
+        "warning",
+        lambda parent, title, message: warnings.append((title, message)),
+    )
+
+    launcher.launch_container()
+
+    assert warnings == [("Container Launch", "Failed to launch container")]
+    assert any("container start timed out" in message for message in logs)
+    assert post_launch_calls == []
+
+
+def test_legacy_stop_uses_bounded_stop_and_cleanup(monkeypatch):
+    launcher = object.__new__(docker_utils._DockerUtilsMixin)
+    launcher.docker_container_name = "r1node"
+    launcher.add_log = lambda *args, **kwargs: None
+    launcher.get_stop_command = lambda: ["docker", "stop"]
+    launcher.get_clean_cmd = lambda: ["docker", "rm", "r1node"]
+    command_calls = []
+    messages = []
+
+    def fake_check_output(command, timeout):
+        command_calls.append((command, timeout))
+        return ""
+
+    monkeypatch.setattr(docker_utils, "check_output_no_window", fake_check_output)
+    monkeypatch.setattr(docker_utils, "sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        docker_utils.QMessageBox,
+        "information",
+        lambda parent, title, message: messages.append((title, message)),
+    )
+
+    launcher.stop_container(container_name="r1node2")
+
+    assert command_calls == [
+        (["docker", "stop", "r1node2"], docker_utils.DOCKER_STOP_TIMEOUT_SECONDS),
+        (["docker", "rm", "r1node2"], docker_utils.DOCKER_CLEANUP_TIMEOUT_SECONDS),
+    ]
+    assert messages == [("Container Stop", "Container stopped successfully.")]
+
+
+def test_legacy_stop_reports_timeout_without_cleanup(monkeypatch):
+    launcher = object.__new__(docker_utils._DockerUtilsMixin)
+    launcher.docker_container_name = "r1node"
+    logs = []
+    launcher.add_log = lambda message, *args, **kwargs: logs.append(message)
+    launcher.get_stop_command = lambda: ["docker", "stop"]
+    launcher.get_clean_cmd = lambda: ["docker", "rm", "r1node"]
+    command_calls = []
+    warnings = []
+
+    def fake_check_output(command, timeout):
+        command_calls.append((command, timeout))
+        raise docker_utils.subprocess.TimeoutExpired(command, timeout)
+
+    monkeypatch.setattr(docker_utils, "check_output_no_window", fake_check_output)
+    monkeypatch.setattr(
+        docker_utils.QMessageBox,
+        "warning",
+        lambda parent, title, message: warnings.append((title, message)),
+    )
+
+    launcher.stop_container()
+
+    assert command_calls == [
+        (["docker", "stop", "r1node"], docker_utils.DOCKER_STOP_TIMEOUT_SECONDS)
+    ]
+    assert warnings == [("Container Stop", "Failed to stop container.")]
+    assert any("container stop timed out" in message for message in logs)

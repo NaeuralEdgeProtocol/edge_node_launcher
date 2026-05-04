@@ -23,6 +23,9 @@ from .ssh_command import split_ssh_args
 from widgets.dialogs.DockerCheckDialog import DockerCheckDialog
 
 DOCKER_CHECK_TIMEOUT_SECONDS = 10
+DOCKER_CLEANUP_TIMEOUT_SECONDS = 30
+DOCKER_STOP_TIMEOUT_SECONDS = 45
+DOCKER_LAUNCH_TIMEOUT_SECONDS = 120
 GPU_CHECK_TIMEOUT_SECONDS = 5
 WINDOWS_CREATE_NO_WINDOW = 0x08000000
 
@@ -425,8 +428,14 @@ class _DockerUtilsMixin:
 
   def launch_container(self):
     print('launch_container')
-    # Check Docker status first
-    if not self.check_docker():
+    # Check local Docker status before local launches. Remote mode restarts a
+    # service through SSH and must not depend on the workstation Docker daemon.
+    if not self.is_remote:
+      is_installed, is_running, error_message = self.check_docker()
+      if not (is_installed and is_running):
+        if error_message:
+          self.add_log(f'Docker is not ready: {error_message}')
+        QMessageBox.warning(self, 'Docker Status', error_message or 'Docker is not ready.')
         return
 
     is_env_ok = self.__check_env_keys()
@@ -461,21 +470,12 @@ class _DockerUtilsMixin:
     self.add_log("Attempting to clean up the container...")
     clean_cmd = self.get_clean_cmd()
     try:
-      if os.name == 'nt':
-        # subprocess.call(clean_cmd, creationflags=subprocess.CREATE_NO_WINDOW)
-        output = subprocess.check_output(
-          clean_cmd, 
-          stderr=subprocess.STDOUT, 
-          universal_newlines=True, 
-          creationflags=subprocess.CREATE_NO_WINDOW
-        )
-      else:
-        output = subprocess.check_output(
-          clean_cmd, 
-          stderr=subprocess.STDOUT
-        )
-      # endif windows or not
+      output = check_output_no_window(clean_cmd, timeout=DOCKER_CLEANUP_TIMEOUT_SECONDS)
       self.add_log('Container cleanup status: {}'.format(output))
+    except subprocess.TimeoutExpired:
+      self.add_log(
+        f'Edge Node container cleanup timed out after {DOCKER_CLEANUP_TIMEOUT_SECONDS} seconds'
+      )
     except subprocess.CalledProcessError as e:
       error_code = e.returncode
       error_output = e.output
@@ -486,26 +486,17 @@ class _DockerUtilsMixin:
     try:
       self.add_log('Starting Edge Node container...')
       run_cmd = self.get_cmd()
-      if os.name == 'nt':
-        # rc = subprocess.call(run_cmd, creationflags=subprocess.CREATE_NO_WINDOW, timeout=20)
-        output = subprocess.check_output(
-          run_cmd, 
-          stderr=subprocess.STDOUT, 
-          universal_newlines=True, 
-          creationflags=subprocess.CREATE_NO_WINDOW
-        )
-      else:
-        # rc = subprocess.call(run_cmd, timeout=20)
-        output = subprocess.check_output(
-          run_cmd, 
-          stderr=subprocess.STDOUT, 
-        )
-      # endif windows or not
+      output = check_output_no_window(run_cmd, timeout=DOCKER_LAUNCH_TIMEOUT_SECONDS)
       self.add_log('Container start status: {}'.format(output))
       QMessageBox.information(self, 'Container Launch', 'Container launched successfully.')
       self.add_log('Edge Node container launched successfully.')
       self.post_launch_setup()
       # endif container running
+    except subprocess.TimeoutExpired:
+      QMessageBox.warning(self, 'Container Launch', 'Failed to launch container')
+      self.add_log(
+        f'Edge Node container start timed out after {DOCKER_LAUNCH_TIMEOUT_SECONDS} seconds'
+      )
     except subprocess.CalledProcessError as e:
       error_code = e.returncode
       error_output = e.output
@@ -523,10 +514,7 @@ class _DockerUtilsMixin:
       self.add_log(f'Stopping Edge Node container {name_to_stop}...')
       stop_cmd = self.get_stop_command() + [name_to_stop]  # Append container name to stop command
       
-      if os.name == 'nt':
-        subprocess.check_call(stop_cmd, creationflags=subprocess.CREATE_NO_WINDOW)
-      else:
-        subprocess.check_call(stop_cmd)
+      check_output_no_window(stop_cmd, timeout=DOCKER_STOP_TIMEOUT_SECONDS)
       sleep(2)
       QMessageBox.information(self, 'Container Stop', 'Container stopped successfully.')      
       self.add_log('Edge Node container stopped successfully.')
@@ -536,13 +524,17 @@ class _DockerUtilsMixin:
         if container_name:
           # Replace the default container name with the provided one
           clean_cmd = clean_cmd[:-1] + [name_to_stop]
-        if os.name == 'nt':
-          subprocess.check_call(clean_cmd, creationflags=subprocess.CREATE_NO_WINDOW)
-        else:
-          subprocess.check_call(clean_cmd)
+        check_output_no_window(clean_cmd, timeout=DOCKER_CLEANUP_TIMEOUT_SECONDS)
         self.add_log('Edge Node container removed.')
+      except subprocess.TimeoutExpired:
+        self.add_log(
+          f'Edge Node container removal timed out after {DOCKER_CLEANUP_TIMEOUT_SECONDS} seconds'
+        )
       except subprocess.CalledProcessError:
         self.add_log('Edge Node container removal failed probably due to already being removed.')
+    except subprocess.TimeoutExpired:
+      QMessageBox.warning(self, 'Container Stop', 'Failed to stop container.')
+      self.add_log(f'Edge Node container stop timed out after {DOCKER_STOP_TIMEOUT_SECONDS} seconds.')
     except subprocess.CalledProcessError:
       QMessageBox.warning(self, 'Container Stop', 'Failed to stop container.')
       self.add_log('Edge Node container stop failed.')
