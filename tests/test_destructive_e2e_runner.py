@@ -101,6 +101,50 @@ def test_prepare_evidence_paths_resolves_before_launcher_changes_cwd(tmp_path, m
     assert not (changed_cwd / "evidence" / "result.json").exists()
 
 
+def test_destructive_window_snapshot_flags_hidden_title_bar():
+    class FakeRect:
+        def __init__(self, x, y, w, h):
+            self._x = x
+            self._y = y
+            self._w = w
+            self._h = h
+
+        def x(self):
+            return self._x
+
+        def y(self):
+            return self._y
+
+        def width(self):
+            return self._w
+
+        def height(self):
+            return self._h
+
+    launcher = SimpleNamespace(
+        windowTitle=lambda: "Ratio1 Edge Node Launcher",
+        geometry=lambda: FakeRect(10, 60, 300, 200),
+        frameGeometry=lambda: FakeRect(8, 20, 304, 240),
+        isVisible=lambda: True,
+        _available_screen_geometry=lambda: FakeRect(0, 40, 500, 400),
+    )
+
+    snapshot = e2e.window_snapshot(launcher)
+
+    assert snapshot["available"] == {
+        "x": 0,
+        "y": 40,
+        "w": 500,
+        "h": 400,
+        "left": 0,
+        "top": 40,
+        "right": 499,
+        "bottom": 439,
+    }
+    assert snapshot["title_bar_visible"] is False
+    assert snapshot["frame_inside_available"] is False
+
+
 def test_run_command_returns_timeout_diagnostics(monkeypatch):
     def timeout_run(*args, **kwargs):
         raise e2e.subprocess.TimeoutExpired(
