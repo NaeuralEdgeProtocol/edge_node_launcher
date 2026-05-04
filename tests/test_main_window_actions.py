@@ -1567,6 +1567,64 @@ def test_stale_node_info_failures_do_not_restart_other_nodes(qtbot, monkeypatch)
     assert launcher._should_restart_after_node_info_failure("r1node")
 
 
+def test_restart_pull_and_launch_reports_active_pull_skip(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    errors = []
+    successes = []
+    launcher._start_docker_pull("r1node2", "r1vol2")
+
+    launcher._restart_pull_and_launch(
+        "r1node",
+        "r1vol",
+        lambda: successes.append("success"),
+        errors.append,
+    )
+
+    assert errors == ["Another Docker pull is already in progress; restart skipped."]
+    assert successes == []
+    assert fake_handler.pull_requests == 0
+    assert launcher._pending_launch_context() == {
+        "container_name": "r1node2",
+        "volume_name": "r1vol2",
+    }
+    log_text = "\n".join(launcher.log_buffer)
+    if launcher.logView is not None:
+        log_text += launcher.logView.toPlainText()
+    assert "Another Docker pull is already in progress; restart skipped. Container: r1node" in log_text
+
+
+def test_auto_restart_active_pull_during_stop_clears_lifecycle(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+
+    def stop_then_activate_other_pull(container_name, callback, error_callback):
+        fake_handler.stopped_containers.append(container_name)
+        launcher._start_docker_pull("r1node2", "r1vol2")
+        callback(("", "", 0))
+
+    fake_handler.stop_container_threaded = stop_then_activate_other_pull
+
+    launcher._restart_container_after_failures("r1node")
+
+    assert fake_handler.stopped_containers == ["r1node"]
+    assert fake_handler.pull_requests == 0
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+    assert getattr(launcher, "_EdgeNodeLauncher__docker_pull_in_progress") is True
+    assert launcher._pending_launch_context() == {
+        "container_name": "r1node2",
+        "volume_name": "r1vol2",
+    }
+    assert launcher.toast.notifications == [
+        (
+            NotificationType.WARNING,
+            "Container r1node is not responding. Updating image and restarting...",
+        ),
+        (
+            NotificationType.ERROR,
+            "Failed to update and restart container r1node: Another Docker pull is already in progress; restart skipped.",
+        ),
+    ]
+
+
 def test_close_event_clears_deleted_dialog_reference(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
     dialog = frm_main.LoadingDialog(launcher, title="Launching Node", message="Please wait")

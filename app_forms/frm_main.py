@@ -1652,7 +1652,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     try:
       # Check if a main Docker pull is already in progress
       if self._docker_pull_in_progress():
-        self.add_log(f"Main Docker pull already in progress, skipping restart of {container_name}", color="yellow")
+        self._report_restart_skipped_for_active_pull(container_name, on_error)
         return
       
       def on_pull_success(result):
@@ -1677,6 +1677,14 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       
     except Exception as e:
       on_error(str(e))
+
+  def _report_restart_skipped_for_active_pull(self, container_name: str, on_error) -> None:
+    error_msg = "Another Docker pull is already in progress; restart skipped."
+    self.add_log(
+      f"{error_msg} Container: {container_name}",
+      color="yellow",
+    )
+    on_error(error_msg)
 
   def _restart_launch_container(self, container_name: str, volume_name: str, on_success, on_error):
     """Launch container during restart process.
