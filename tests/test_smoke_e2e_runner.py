@@ -336,6 +336,26 @@ def test_toast_long_messages_keep_readable_width_and_visible_position(qtbot):
     assert toast.y() + toast.height() <= parent.height() - ToastWidget.EDGE_MARGIN
 
 
+def test_toast_repeated_notifications_reset_dismiss_timer(qtbot):
+    parent = QDialog()
+    parent.resize(500, 300)
+    toast = ToastWidget(parent)
+    qtbot.addWidget(parent)
+    parent.show()
+    qtbot.waitUntil(parent.isVisible)
+
+    toast.show_notification(NotificationType.INFO, "First action", duration=60)
+    qtbot.waitUntil(toast.isVisible)
+    qtbot.wait(20)
+
+    toast.show_notification(NotificationType.SUCCESS, "Second action", duration=1000)
+    qtbot.wait(320)
+
+    assert toast.isVisible()
+    assert toast.message.text() == "Second action"
+    assert toast.dismiss_timer.isActive()
+
+
 def test_toast_notification_icons_are_ascii_safe():
     for style in ToastWidget.STYLES.values():
         assert style["icon"].isascii()

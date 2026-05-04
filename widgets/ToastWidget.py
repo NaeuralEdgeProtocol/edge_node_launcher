@@ -62,6 +62,9 @@ class ToastWidget(QWidget):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.raise_()  # Bring to front
         self.fade_animation = None
+        self.dismiss_timer = QTimer(self)
+        self.dismiss_timer.setSingleShot(True)
+        self.dismiss_timer.timeout.connect(self._fade_out)
         self.setMinimumWidth(self.MIN_WIDTH)
         self.setMaximumWidth(self.MAX_WIDTH)
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
@@ -217,9 +220,11 @@ class ToastWidget(QWidget):
 
         self.show()
         self.fade_animation.start()
-        QTimer.singleShot(duration, self._fade_out)
+        self.dismiss_timer.stop()
+        self.dismiss_timer.start(max(0, duration))
 
     def _fade_out(self):
+        self.dismiss_timer.stop()
         self.fade_animation = QPropertyAnimation(self, b"windowOpacity")
         self.fade_animation.setStartValue(1.0)
         self.fade_animation.setEndValue(0.0)
