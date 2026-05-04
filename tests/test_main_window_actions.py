@@ -1026,6 +1026,29 @@ def test_docker_pull_completion_uses_captured_launch_target(qtbot, monkeypatch):
     assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
 
 
+def test_docker_pull_context_finishes_as_typed_context_with_diagnostics(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+
+    launcher._start_docker_pull("r1node", "r1vol")
+
+    assert launcher._pending_launch_context() == {
+        "container_name": "r1node",
+        "volume_name": "r1vol",
+    }
+    assert launcher._pending_launch_context_object() == frm_main.LaunchContext("r1node", "r1vol")
+    assert getattr(launcher, "_EdgeNodeLauncher__pending_launch_context") == {
+        "container_name": "r1node",
+        "volume_name": "r1vol",
+    }
+
+    launch_context = launcher._finish_docker_pull()
+
+    assert launch_context == frm_main.LaunchContext("r1node", "r1vol")
+    assert launcher._pending_launch_context() is None
+    assert launcher._pending_launch_context_object() is None
+    assert getattr(launcher, "_EdgeNodeLauncher__pending_launch_context") is None
+
+
 def test_continue_launch_after_pull_restores_target_and_schedules_launch(qtbot, monkeypatch):
     launcher, fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
     fake_config.add_container(
@@ -1051,10 +1074,7 @@ def test_continue_launch_after_pull_restores_target_and_schedules_launch(qtbot, 
     )
 
     launcher._continue_launch_after_successful_pull(
-        {
-            "container_name": "r1node2",
-            "volume_name": "r1vol2",
-        }
+        frm_main.LaunchContext("r1node2", "r1vol2")
     )
 
     assert fake_handler.container_name == "r1node2"

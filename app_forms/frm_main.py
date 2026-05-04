@@ -76,7 +76,7 @@ from utils.lifecycle_copy import (
   new_node_success_notification,
   stop_success_notification,
 )
-from utils.lifecycle_state import LifecycleState
+from utils.lifecycle_state import LaunchContext, LifecycleState
 from utils.window_geometry import calculate_initial_window_geometry, calculate_restored_window_geometry, calculate_visible_frame_client_geometry, format_rect
 from widgets.app_widgets.lifecycle_dialog_presenter import LifecycleDialogPresenter
 
@@ -1464,6 +1464,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   def _pending_launch_context(self) -> Optional[dict]:
     return self.__lifecycle_state.pending_launch_context_dict()
 
+  def _pending_launch_context_object(self) -> Optional[LaunchContext]:
+    return self.__lifecycle_state.pending_launch_context
+
   def _docker_pull_in_progress(self) -> bool:
     return self.__lifecycle_state.docker_pull_in_progress
 
@@ -1516,10 +1519,10 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.__lifecycle_state.start_docker_pull(container_name, volume_name)
     self._sync_lifecycle_state_snapshot()
 
-  def _finish_docker_pull(self) -> Optional[dict]:
+  def _finish_docker_pull(self) -> Optional[LaunchContext]:
     context = self.__lifecycle_state.finish_docker_pull()
     self._sync_lifecycle_state_snapshot()
-    return context.to_dict() if context else None
+    return context
 
   def _should_restart_after_node_info_failure(self, container_name: str) -> bool:
     """Guard automatic restarts so stale callbacks cannot affect another node."""
@@ -2979,10 +2982,13 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         success: Whether the pull was successful
         message: Success or error message
     """
-    launch_context = self._pending_launch_context()
+    launch_context = self._pending_launch_context_object()
     if self._is_shutting_down():
         if launch_context:
-            self._skip_lifecycle_callback_if_shutting_down("Docker pull completion", launch_context["container_name"])
+            self._skip_lifecycle_callback_if_shutting_down(
+                "Docker pull completion",
+                launch_context.container_name,
+            )
         self._finish_docker_pull()
         return
 
@@ -3013,13 +3019,13 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     else:
         # Show error notification
         if launch_context:
-            self._end_lifecycle_operation(launch_context["container_name"])
+            self._end_lifecycle_operation(launch_context.container_name)
         self.toast.show_notification(NotificationType.ERROR, f"Failed to pull Docker image: {message}")
 
-  def _continue_launch_after_successful_pull(self, launch_context: dict) -> None:
+  def _continue_launch_after_successful_pull(self, launch_context: LaunchContext) -> None:
     """Restore the captured launch target and continue after Docker pull."""
-    container_name = launch_context["container_name"]
-    volume_name = launch_context["volume_name"]
+    container_name = launch_context.container_name
+    volume_name = launch_context.volume_name
     self.docker_handler.set_container_name(container_name)
     self._select_container_by_name(container_name)
     container_config = self.config_manager.get_container(container_name)
