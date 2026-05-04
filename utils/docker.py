@@ -1,6 +1,5 @@
 import os
 import sys
-import platform
 import subprocess
 import platform
 import base64
@@ -16,10 +15,7 @@ from PyQt5.QtWidgets import (QDialog, QInputDialog, QLabel,
 
 from .const import *
 from .docker_commands import DockerCommandHandler
-from .ssh_service import SSHService, SSHConfig
-from .service_manager import ServiceManager
 from .screen_geometry import screen_geometry
-from .ssh_command import split_ssh_args
 from widgets.dialogs.DockerCheckDialog import DockerCheckDialog
 
 DOCKER_CHECK_TIMEOUT_SECONDS = 10
@@ -187,8 +183,6 @@ class _DockerUtilsMixin:
     self.init_directories()
     
     self.docker_commands = DockerCommandHandler(DOCKER_CONTAINER_NAME)
-    self.ssh_service = SSHService()
-    self.service_manager = ServiceManager(self.ssh_service)
 
     self.node_addr = None
     self.node_eth_address = None
@@ -199,10 +193,6 @@ class _DockerUtilsMixin:
     self._dev_mode = False
     
     self.run_with_sudo = False
-    
-    # Remote connection settings
-    self.is_remote = False
-    self.remote_ssh_command = None
     
     return
   
@@ -242,7 +232,7 @@ class _DockerUtilsMixin:
     self.add_log('Setting up Docker run command...')
     self.docker_image = DOCKER_IMAGE + ":" + self.docker_tag
     
-    # Base commands without remote prefix
+    # Base Docker commands.
     base_clean = ['docker', 'rm', self.docker_container_name]
     base_stop = ['docker', 'stop']
     base_inspect = ['docker', 'inspect', '--format', '{{.State.Running}}', self.docker_container_name]
@@ -275,24 +265,14 @@ class _DockerUtilsMixin:
       base_inspect.insert(0, 'sudo')
       base_run.insert(0, 'sudo')
     
-    # Add remote prefix if needed
-    if self.is_remote and self.remote_ssh_command:
-      self.__CMD_CLEAN = self.remote_ssh_command + base_clean
-      self.__CMD_STOP = self.remote_ssh_command + base_stop
-      self.__CMD_INSPECT = self.remote_ssh_command + base_inspect
-      self.__CMD = self.remote_ssh_command + base_run
-    else:
-      self.__CMD_CLEAN = base_clean
-      self.__CMD_STOP = base_stop
-      self.__CMD_INSPECT = base_inspect
-      self.__CMD = base_run
+    self.__CMD_CLEAN = base_clean
+    self.__CMD_STOP = base_stop
+    self.__CMD_INSPECT = base_inspect
+    self.__CMD = base_run
     
     run_cmd = " ".join(self.get_cmd())
     
     self.add_log('Docker run command setup complete:')
-    self.add_log(f' - Remote mode: {self.is_remote}')
-    if self.is_remote:
-      self.add_log(f' - SSH command: {" ".join(self.remote_ssh_command)}')
     self.add_log(' - Run:     {}'.format(run_cmd))
     self.add_log(' - Clean:   {}'.format(" ".join(self.__CMD_CLEAN)))
     self.add_log(' - Stop:    {}'.format(" ".join(self.__CMD_STOP)))
@@ -428,42 +408,18 @@ class _DockerUtilsMixin:
 
   def launch_container(self):
     print('launch_container')
-    # Check local Docker status before local launches. Remote mode restarts a
-    # service through SSH and must not depend on the workstation Docker daemon.
-    if not self.is_remote:
-      is_installed, is_running, error_message = self.check_docker()
-      if not (is_installed and is_running):
-        if error_message:
-          self.add_log(f'Docker is not ready: {error_message}')
-        QMessageBox.warning(self, 'Docker Status', error_message or 'Docker is not ready.')
-        return
+    is_installed, is_running, error_message = self.check_docker()
+    if not (is_installed and is_running):
+      if error_message:
+        self.add_log(f'Docker is not ready: {error_message}')
+      QMessageBox.warning(self, 'Docker Status', error_message or 'Docker is not ready.')
+      return
 
     is_env_ok = self.__check_env_keys()
     if not is_env_ok:
         self.add_log('Environment is not ok. Could not start the container.')
         return
 
-    # If in multi-host mode, use the service command instead
-    if self.is_remote:
-        try:
-            self.add_log('Starting Edge Node service on remote host...')
-            
-            success, error = self.service_manager.restart_service('mnl_execution_engine')
-            
-            if not success:
-                raise Exception(error)
-            
-            self.add_log('Edge Node service restarted successfully.')
-            QMessageBox.information(self, 'Service Restart', 'Edge Node service restarted successfully.')
-            self.post_launch_setup()
-            return
-            
-        except Exception as e:
-            QMessageBox.warning(self, 'Service Restart', 'Failed to restart Edge Node service')
-            self.add_log(f'Edge Node service restart failed: {str(e)}')
-            return
-
-    # Regular Docker container launch for local mode
     self.add_log('Updating image...')
     self.__maybe_docker_pull()
     # first try to clean the container
@@ -539,44 +495,3 @@ class _DockerUtilsMixin:
       QMessageBox.warning(self, 'Container Stop', 'Failed to stop container.')
       self.add_log('Edge Node container stop failed.')
     return
-
-
-  def set_remote_connection(self, ssh_command: str):
-    """Set up remote connection using SSH command."""
-    if not ssh_command:
-      self.clear_remote_connection()
-      return
-
-    # Get current host configuration
-    current_host = self.host_selector.get_current_host()
-    host_config = self.host_selector.hosts_manager.get_host(current_host)
-    
-    if not host_config:
-      return
-
-    # Configure SSH service
-    ssh_config = SSHConfig(
-      host=host_config.ansible_host,
-      user=host_config.ansible_user,
-      password=host_config.ansible_become_password,
-      private_key=host_config.ansible_ssh_private_key_file,
-      ssh_args=split_ssh_args(host_config.ansible_ssh_common_args) if host_config.ansible_ssh_common_args else None
-    )
-    
-    self.ssh_service.configure(ssh_config)
-    
-    # Update Docker settings
-    self.is_remote = True
-    self.remote_ssh_command = split_ssh_args(ssh_command)
-    self.__setup_docker_run()
-    
-    # Update Docker command handler
-    self.docker_commands.set_remote_connection(ssh_command)
-
-  def clear_remote_connection(self):
-    """Clear remote connection settings."""
-    self.is_remote = False
-    self.remote_ssh_command = None
-    self.ssh_service.clear_configuration()
-    self.docker_commands.clear_remote_connection()
-    self.__setup_docker_run()

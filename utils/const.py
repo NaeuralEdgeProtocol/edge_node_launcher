@@ -89,15 +89,11 @@ EMPTY_DASH_TEXT = '-'
 
 # Button states
 NO_CONTAINER_FOUND_TEXT = 'No Container Found'
-HOST_OFFLINE_TEXT = 'Host Offline'
-CHECKING_HOST_TEXT = 'Checking Host...'
-SSH_ERROR_TEXT = 'SSH Error'
 DOCKER_NOT_FOUND_TEXT = 'Docker Not Found'
 DOCKER_NOT_RUNNING_TEXT = 'Docker Not Running'
 DOCKER_CHECK_FAILED_TEXT = 'Docker Check Failed'
 CONTAINER_CHECK_FAILED_TEXT = 'Container Check Failed'
 CONNECTION_FAILED_TEXT = 'Connection Failed'
-SELECT_HOST_TEXT = 'Select Host...'
 
 # Plot titles
 CPU_LOAD_TITLE = 'CPU Load'

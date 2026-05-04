@@ -50,8 +50,6 @@ object name near construction.
 
 | Area | Object name | Control | Action | Current coverage |
 | --- | --- | --- | --- | --- |
-| Host selector | `hostSelectorModeCheckbox` | checkbox | Enables multi-host mode. | Static inventory, widget click |
-| Host selector | `hostSelectorRefreshButton` | button | Refreshes available hosts. | Static inventory, widget click |
 | Config editor | `configEditorEditButton` | button | Opens config editor dialog. | Static inventory, widget click |
 | Container list | `containerListToggleButton` | button | Emits start or stop request for selected container. | Static inventory, widget click |
 | Container list | `containerListAddNodeButton` | button | Emits add-container request. | Static inventory, widget click |

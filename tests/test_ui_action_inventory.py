@@ -7,7 +7,6 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 ACTION_SOURCE_FILES = [
     Path("app_forms/frm_main.py"),
     Path("ui/ProgressDialog.py"),
-    Path("widgets/HostSelector.py"),
     Path("widgets/dialogs/AuthorizedAddressedDialog.py"),
     Path("widgets/dialogs/AddNodeDialog.py"),
     Path("widgets/dialogs/DockerCheckDialog.py"),
@@ -51,8 +50,6 @@ ACTION_IDS = [
     "imagePullCancelButton",
     "configEditorSaveButton",
     "configEditorCancelButton",
-    "hostSelectorModeCheckbox",
-    "hostSelectorRefreshButton",
     "configEditorEditButton",
     "containerListToggleButton",
     "containerListAddNodeButton",

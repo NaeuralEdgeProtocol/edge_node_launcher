@@ -16,7 +16,6 @@ from models.NodeHistory import NodeHistory
 from models.StartupConfig import StartupConfig
 from models.ConfigApp import ConfigApp
 from utils.const import DOCKER_VOLUME_PATH
-from utils.ssh_command import split_ssh_args
 
 # Docker configuration
 DOCKER_IMAGE = "ratio1/edge_node:mainnet"
@@ -24,7 +23,6 @@ DOCKER_TAG = "latest"
 
 # Timeout configurations
 DEFAULT_TIMEOUT = 90  # Default timeout for commands in seconds
-REMOTE_TIMEOUT = 120   # Extended timeout for remote commands in seconds 
 THREAD_JOIN_TIMEOUT = 2  # Timeout for thread joining in seconds
 DOCKER_STATUS_TIMEOUT = 10  # Short timeout for UI refresh/status checks
 GPU_CHECK_TIMEOUT = 5  # Short timeout for nvidia-smi availability probes
@@ -117,12 +115,11 @@ class DockerCommandThread(QThread):
     command_finished = pyqtSignal(dict)
     command_error = pyqtSignal(str)
 
-    def __init__(self, container_name: str, command: str, input_data: str = None, remote_ssh_command: list = None):
+    def __init__(self, container_name: str, command: str, input_data: str = None):
         super().__init__()
         self.container_name = container_name
         self.command = command
         self.input_data = input_data
-        self.remote_ssh_command = remote_ssh_command
         # Store the result to be processed in the main thread
         self.result_data = None
         self.error_message = None
@@ -133,18 +130,11 @@ class DockerCommandThread(QThread):
             if self.input_data is not None:
                 full_command.extend(['-i'])  # Add interactive flag when input is provided
             full_command.extend([self.container_name] + self.command.split())
-
-            # Add remote prefix if needed
-            if self.remote_ssh_command:
-                full_command = self.remote_ssh_command + full_command
                 
             # Always log the command before executing it
             logging.info(f"Executing command: {' '.join(full_command)}")
             if self.input_data:
                 logging.info(f"With input data: {self.input_data[:100]}{'...' if len(self.input_data) > 100 else ''}")
-
-            # Use a longer timeout for remote commands
-            timeout = REMOTE_TIMEOUT if self.remote_ssh_command else DEFAULT_TIMEOUT  # Increased timeout for remote commands
 
             try:
                 if os.name == 'nt':
@@ -153,7 +143,7 @@ class DockerCommandThread(QThread):
                         input=self.input_data,
                         capture_output=True,
                         text=True,
-                        timeout=timeout,
+                        timeout=DEFAULT_TIMEOUT,
                         creationflags=subprocess.CREATE_NO_WINDOW
                     )
                 else:
@@ -162,7 +152,7 @@ class DockerCommandThread(QThread):
                         input=self.input_data,
                         capture_output=True,
                         text=True,
-                        timeout=timeout
+                        timeout=DEFAULT_TIMEOUT
                     )
                 if result.returncode != 0:
                     self.error_message = f"Command failed: {result.stderr}\nCommand: {' '.join(full_command)}\nInput data: {self.input_data}"
@@ -200,10 +190,9 @@ class DockerStreamingCommandThread(QThread):
     command_finished = pyqtSignal(object)
     command_error = pyqtSignal(str)
 
-    def __init__(self, command: list, remote_ssh_command: list = None):
+    def __init__(self, command: list):
         super().__init__()
         self.command = command
-        self.remote_ssh_command = remote_ssh_command
         # Store the result to be processed in the main thread
         self.result_data = None
         self.error_message = None
@@ -215,10 +204,6 @@ class DockerStreamingCommandThread(QThread):
         try:
             full_command = self.command
             is_docker_pull = len(self.command) >= 2 and self.command[0] == 'docker' and self.command[1] == 'pull'
-
-            # Add remote prefix if needed
-            if self.remote_ssh_command:
-                full_command = self.remote_ssh_command + full_command
                 
             # Always log the command before executing it
             logging.info(f"Executing streaming command: {' '.join(full_command)}")
@@ -328,10 +313,9 @@ class DockerDirectCommandThread(QThread):
     command_finished = pyqtSignal(object)
     command_error = pyqtSignal(str)
 
-    def __init__(self, command: DockerDirectCommand, remote_ssh_command: list = None):
+    def __init__(self, command: DockerDirectCommand):
         super().__init__()
         self.command = command
-        self.remote_ssh_command = remote_ssh_command
         # Store the result to be processed in the main thread
         self.result_data = None
         self.error_message = None
@@ -340,16 +324,9 @@ class DockerDirectCommandThread(QThread):
         try:
             full_command = self.command() if callable(self.command) else self.command
             is_docker_pull = len(full_command) >= 2 and full_command[0] == 'docker' and full_command[1] == 'pull'
-
-            # Add remote prefix if needed
-            if self.remote_ssh_command:
-                full_command = self.remote_ssh_command + full_command
                 
             # Always log the command before executing it
             logging.info(f"Executing direct command: {' '.join(full_command)}")
-            
-            # Use a longer timeout for remote commands
-            timeout = REMOTE_TIMEOUT if self.remote_ssh_command else DEFAULT_TIMEOUT
             
             try:
                 if os.name == 'nt':
@@ -359,13 +336,13 @@ class DockerDirectCommandThread(QThread):
                         full_command,
                         capture_output=True,
                         text=True,
-                        timeout=timeout,
+                        timeout=DEFAULT_TIMEOUT,
                         creationflags=subprocess.CREATE_NO_WINDOW
                     )
                 else:
                     if is_docker_pull:
                         logging.info(f"Starting Docker pull on {platform.system()} platform")
-                    result = subprocess.run(full_command, capture_output=True, text=True, timeout=timeout)
+                    result = subprocess.run(full_command, capture_output=True, text=True, timeout=DEFAULT_TIMEOUT)
 
                 if is_docker_pull:
                     logging.info(f"Docker pull command completed with return code: {result.returncode}")
@@ -398,7 +375,6 @@ class DockerCommandHandler:
         self.registry = ContainerRegistry()
         self._debug_mode = False
         self.threads = []
-        self.remote_ssh_command = None
 
     def set_debug_mode(self, enabled: bool) -> None:
         """Set debug mode for docker commands.
@@ -426,9 +402,7 @@ class DockerCommandHandler:
             if self._debug_mode:
                 print(f"Executing command: {' '.join(command)}")
 
-            command_timeout = timeout if timeout is not None else (
-                REMOTE_TIMEOUT if self.remote_ssh_command else DEFAULT_TIMEOUT
-            )
+            command_timeout = timeout if timeout is not None else DEFAULT_TIMEOUT
             kwargs = {
                 "capture_output": True,
                 "text": True,
@@ -483,7 +457,7 @@ class DockerCommandHandler:
         logging.info(f"Executing pull command: {' '.join(pull_command)}")
         
         # Use streaming thread for real-time updates
-        thread = DockerStreamingCommandThread(pull_command, self.remote_ssh_command)
+        thread = DockerStreamingCommandThread(pull_command)
         
         # Connect output signal to callback if provided
         if output_callback:
@@ -607,16 +581,8 @@ class DockerCommandHandler:
         
         return command
 
-    def set_remote_connection(self, ssh_command: str):
-        """Set up remote connection using SSH command."""
-        self.remote_ssh_command = split_ssh_args(ssh_command) if ssh_command else None
-
-    def clear_remote_connection(self):
-        """Clear remote connection settings."""
-        self.remote_ssh_command = None
-
     def _execute_threaded(self, command: str, callback, error_callback, input_data: str = None) -> None:
-        thread = DockerCommandThread(self.container_name, command, input_data, self.remote_ssh_command)
+        thread = DockerCommandThread(self.container_name, command, input_data)
         
         # Connect signals to slots that will safely emit signals in the main thread
         thread.finished.connect(lambda: self._handle_thread_finished(thread, callback, error_callback))
@@ -708,10 +674,6 @@ class DockerCommandHandler:
             try:
                 full_command = ['docker', 'exec', self.container_name, 'get_allowed']
                 
-                # Add remote prefix if needed
-                if self.remote_ssh_command:
-                    full_command = self.remote_ssh_command + full_command
-
                 stdout, stderr, return_code = self.execute_command(
                     full_command,
                     timeout=DEFAULT_TIMEOUT,
@@ -906,7 +868,7 @@ class DockerCommandHandler:
             callback: Success callback function
             error_callback: Error callback function
         """
-        thread = DockerDirectCommandThread(command, self.remote_ssh_command)
+        thread = DockerDirectCommandThread(command)
         
         # Connect finished signal
         thread.finished.connect(lambda: self._handle_direct_thread_finished(thread, callback, error_callback))

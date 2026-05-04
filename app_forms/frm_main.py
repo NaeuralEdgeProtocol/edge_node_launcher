@@ -95,7 +95,6 @@ from widgets.dialogs.AuthorizedAddressedDialog import AuthorizedAddressesDialog
 from models.AllowedAddress import AllowedAddress, AllowedAddressList
 from models.StartupConfig import StartupConfig
 from models.ConfigApp import ConfigApp
-from widgets.HostSelector import HostSelector
 from widgets.ModeSwitch import ModeSwitch
 from widgets.dialogs.DockerCheckDialog import DockerCheckDialog
 from widgets.LoadingDialog import LoadingDialog
@@ -1250,7 +1249,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         
         # If this is a timeout error, log it more prominently
         if "timed out" in error.lower():
-            self.add_log(f"Metrics request for {container_name} timed out. This may indicate network issues or high load on the remote host.", color="red")
+            self.add_log(f"Metrics request for {container_name} timed out. This may indicate Docker is busy or the local node is under high load.", color="red")
 
     try:
         self.add_log(f"Plotting data for container: {container_name}", debug=True)
@@ -2133,13 +2132,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         # Stop any stale loading indicator during regular refresh
         if hasattr(self, 'loading_indicator') and not self.is_container_running():
             self.loading_indicator.stop()
-        
-        # Clear any remote connection settings to ensure we're using local Docker
-        if hasattr(self, 'docker_handler'):
-            self.docker_handler.remote_ssh_command = None
-        
-        if hasattr(self, 'ssh_service'):
-            self.ssh_service.clear_configuration()
         
         # We don't need to refresh the container list on every refresh
         # The container list only changes when containers are added or removed

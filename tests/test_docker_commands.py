@@ -176,9 +176,8 @@ def test_active_gpu_probe_returns_false_after_lookup_timeout(monkeypatch):
     assert calls == [(["which", "nvidia-smi"], docker_commands.GPU_CHECK_TIMEOUT)]
 
 
-def test_allowed_addresses_uses_bounded_executor_with_remote_prefix(monkeypatch):
+def test_allowed_addresses_uses_bounded_executor(monkeypatch):
     handler = make_handler(monkeypatch)
-    handler.remote_ssh_command = ["ssh", "ratio@192.0.2.10"]
     calls = []
     results = []
 
@@ -192,7 +191,7 @@ def test_allowed_addresses_uses_bounded_executor_with_remote_prefix(monkeypatch)
 
     assert calls == [
         (
-            ["ssh", "ratio@192.0.2.10", "docker", "exec", "r1node", "get_allowed"],
+            ["docker", "exec", "r1node", "get_allowed"],
             docker_commands.DEFAULT_TIMEOUT,
         )
     ]
@@ -231,7 +230,7 @@ def test_inspect_container_uses_short_status_timeout(monkeypatch):
     ]
 
 
-def test_direct_command_thread_uses_remote_timeout_and_prefix(monkeypatch):
+def test_direct_command_thread_uses_default_timeout(monkeypatch):
     calls = []
 
     class FakeResult:
@@ -245,20 +244,17 @@ def test_direct_command_thread_uses_remote_timeout_and_prefix(monkeypatch):
 
     monkeypatch.setattr(docker_commands.os, "name", "posix")
     monkeypatch.setattr(docker_commands.subprocess, "run", fake_run)
-    thread = docker_commands.DockerDirectCommandThread(
-        ["docker", "container", "inspect", "r1node"],
-        remote_ssh_command=["ssh", "ratio@192.0.2.10"],
-    )
+    thread = docker_commands.DockerDirectCommandThread(["docker", "container", "inspect", "r1node"])
 
     thread.run()
 
     assert calls == [
         (
-            ["ssh", "ratio@192.0.2.10", "docker", "container", "inspect", "r1node"],
+            ["docker", "container", "inspect", "r1node"],
             {
                 "capture_output": True,
                 "text": True,
-                "timeout": docker_commands.REMOTE_TIMEOUT,
+                "timeout": docker_commands.DEFAULT_TIMEOUT,
             },
         )
     ]
@@ -277,81 +273,6 @@ def test_direct_command_thread_reports_timeout(monkeypatch):
 
     assert thread.result_data is None
     assert thread.error_message == f"Command timed out after {docker_commands.DEFAULT_TIMEOUT} seconds: docker ps"
-
-
-def test_remote_connection_preserves_quoted_ssh_args(monkeypatch):
-    handler = make_handler(monkeypatch)
-
-    handler.set_remote_connection(
-        'ssh -o ProxyCommand="ssh -W %h:%p bastion" -i "C:/Users/vital/.ssh/edge key" ratio@192.0.2.10'
-    )
-
-    assert handler.remote_ssh_command == [
-        "ssh",
-        "-o",
-        "ProxyCommand=ssh -W %h:%p bastion",
-        "-i",
-        "C:/Users/vital/.ssh/edge key",
-        "ratio@192.0.2.10",
-    ]
-
-
-def test_docker_mixin_remote_connection_preserves_structured_ssh_args():
-    class FakeHostConfig:
-        ansible_host = "192.0.2.10"
-        ansible_user = "ratio"
-        ansible_become_password = None
-        ansible_ssh_private_key_file = "C:/Users/vital/.ssh/edge key"
-        ansible_ssh_common_args = '-o ProxyCommand="ssh -W %h:%p bastion"'
-
-    class FakeHostsManager:
-        def get_host(self, host_name):
-            assert host_name == "edge-a"
-            return FakeHostConfig()
-
-    class FakeHostSelector:
-        hosts_manager = FakeHostsManager()
-
-        def get_current_host(self):
-            return "edge-a"
-
-    class FakeSSHService:
-        def __init__(self):
-            self.config = None
-
-        def configure(self, config):
-            self.config = config
-
-    class FakeDockerCommands:
-        def __init__(self):
-            self.ssh_command = None
-
-        def set_remote_connection(self, ssh_command):
-            self.ssh_command = ssh_command
-
-    launcher = object.__new__(docker_utils._DockerUtilsMixin)
-    launcher.host_selector = FakeHostSelector()
-    launcher.ssh_service = FakeSSHService()
-    launcher.docker_commands = FakeDockerCommands()
-    launcher._DockerUtilsMixin__setup_docker_run = lambda: None
-
-    launcher.set_remote_connection(
-        'ssh -o ProxyCommand="ssh -W %h:%p bastion" -i "C:/Users/vital/.ssh/edge key" ratio@192.0.2.10'
-    )
-
-    assert launcher.is_remote is True
-    assert launcher.ssh_service.config.ssh_args == [
-        "-o",
-        "ProxyCommand=ssh -W %h:%p bastion",
-    ]
-    assert launcher.remote_ssh_command == [
-        "ssh",
-        "-o",
-        "ProxyCommand=ssh -W %h:%p bastion",
-        "-i",
-        "C:/Users/vital/.ssh/edge key",
-        "ratio@192.0.2.10",
-    ]
 
 
 def test_legacy_check_output_helper_uses_timeout_and_hidden_windows(monkeypatch):
@@ -457,7 +378,6 @@ def test_legacy_container_running_check_uses_bounded_inspect(monkeypatch):
 
 def test_legacy_local_launch_stops_when_docker_is_not_ready(monkeypatch):
     launcher = object.__new__(docker_utils._DockerUtilsMixin)
-    launcher.is_remote = False
     launcher.check_docker = lambda: (True, False, "Docker daemon is not running")
     logs = []
     warnings = []
@@ -480,42 +400,8 @@ def test_legacy_local_launch_stops_when_docker_is_not_ready(monkeypatch):
     assert warnings == [("Docker Status", "Docker daemon is not running")]
 
 
-def test_legacy_remote_launch_skips_local_docker_check(monkeypatch):
-    launcher = object.__new__(docker_utils._DockerUtilsMixin)
-    launcher.is_remote = True
-    launcher.check_docker = lambda: (_ for _ in ()).throw(
-        AssertionError("remote launch should not check local Docker")
-    )
-    launcher.add_log = lambda *args, **kwargs: None
-    setattr(launcher, "_DockerUtilsMixin__check_env_keys", lambda: True)
-    post_launch_calls = []
-    launcher.post_launch_setup = lambda: post_launch_calls.append("post-launch")
-    messages = []
-
-    class FakeServiceManager:
-        def restart_service(self, service_name):
-            messages.append(("restart", service_name))
-            return True, None
-
-    launcher.service_manager = FakeServiceManager()
-    monkeypatch.setattr(
-        docker_utils.QMessageBox,
-        "information",
-        lambda parent, title, message: messages.append((title, message)),
-    )
-
-    launcher.launch_container()
-
-    assert messages == [
-        ("restart", "mnl_execution_engine"),
-        ("Service Restart", "Edge Node service restarted successfully."),
-    ]
-    assert post_launch_calls == ["post-launch"]
-
-
 def test_legacy_local_launch_uses_bounded_cleanup_and_run(monkeypatch):
     launcher = object.__new__(docker_utils._DockerUtilsMixin)
-    launcher.is_remote = False
     launcher.check_docker = lambda: (True, True, None)
     launcher.add_log = lambda *args, **kwargs: None
     setattr(launcher, "_DockerUtilsMixin__check_env_keys", lambda: True)
@@ -555,7 +441,6 @@ def test_legacy_local_launch_uses_bounded_cleanup_and_run(monkeypatch):
 
 def test_legacy_local_launch_reports_run_timeout(monkeypatch):
     launcher = object.__new__(docker_utils._DockerUtilsMixin)
-    launcher.is_remote = False
     launcher.check_docker = lambda: (True, True, None)
     logs = []
     launcher.add_log = lambda message, *args, **kwargs: logs.append(message)
