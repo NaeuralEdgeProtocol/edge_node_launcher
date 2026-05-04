@@ -831,21 +831,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     """Return True when a Qt wrapper no longer owns a live C++ object."""
     return LifecycleDialogPresenter.qt_object_deleted(obj)
 
-  def _update_dialog_progress(
-    self,
-    dialog_attr: str,
-    message: str,
-    *,
-    require_visible: bool = False,
-    process_events: bool = True,
-  ) -> bool:
-    return self._lifecycle_dialogs.update_progress(
-      dialog_attr,
-      message,
-      require_visible=require_visible,
-      process_events=process_events,
-    )
-
   def _update_launch_dialog_progress(self, message: str, *, process_events: bool = True) -> bool:
     return self._lifecycle_dialogs.update_launch_progress(
       message,
@@ -2903,7 +2888,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.loading_indicator.start()
         
         # Update loading dialog with progress
-        self._update_dialog_progress("launcher_dialog", "Preparing Docker command...")
+        self._lifecycle_dialogs.update_progress("launcher_dialog", "Preparing Docker command...")
         
         self.add_log(f"Preparing Docker launch for {container_name} with volume {volume_name}. Container cleanup and command preparation will run in the background.", color="blue")
         
