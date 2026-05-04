@@ -734,6 +734,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   def _create_dashboard_panel(self) -> QWidget:
     """Create the right-side metrics and activity panel."""
     self.graphView = self._create_metrics_graph_grid()
+    self._set_gpu_metric_availability(False)
     self.activityLogPanel = self._create_activity_log_panel()
     dashboard_panel = DashboardPanel(
         self.graphView,
@@ -1473,7 +1474,14 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         layout.setRowStretch(1, 1 if gpu_available else 0)
 
     for plot_widget in (getattr(self, "gpu_plot", None), getattr(self, "gpu_memory_plot", None)):
-        if plot_widget is None or getattr(plot_widget, "_ignore_late_paints", False):
+        if plot_widget is None:
+            continue
+        container = getattr(plot_widget, "_r1_plot_container", None)
+        if container is not None:
+            container.setVisible(gpu_available)
+        if not gpu_available and hasattr(plot_widget, "set_empty_state"):
+            plot_widget.set_empty_state(NO_GPU_METRIC_TEXT)
+        if getattr(plot_widget, "_ignore_late_paints", False):
             continue
         plot_widget.setVisible(gpu_available)
 
@@ -1488,6 +1496,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     container_name = self._selected_container_name()
     if not container_name:
         self._clear_metric_plots()
+        self._set_gpu_metric_availability(False)
         self.add_log("No container selected, cannot plot graphs", debug=True)
         return
      
@@ -1497,12 +1506,14 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
      
     if history is None:
         self._clear_metric_plots()
+        self._set_gpu_metric_availability(False)
         self.add_log(f"No history data available for container {container_name}", debug=True)
         return
     
     # Make sure we have timestamps
     if not history.timestamps or len(history.timestamps) == 0:
         self._clear_metric_plots()
+        self._set_gpu_metric_availability(False)
         self.add_log(f"No timestamps in history data for container {container_name}", debug=True)
         return
     

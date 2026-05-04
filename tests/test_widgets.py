@@ -921,6 +921,8 @@ def test_metric_plot_grid_builder_preserves_dashboard_contract(qtbot):
         assert plot.getPlotItem().ctrl.yGridCheck.isChecked()
         assert plot.getPlotItem().ctrl.gridAlphaSlider.value() == int(METRIC_GRID_ALPHA * 255)
         assert plot.parent() is container
+        assert plot._r1_plot_container is container
+        assert plot._r1_title_label is title_label
         assert plot._r1_bottom_axis is axis_items[plot_attr]
         assert plot.getAxis("bottom") is axis_items[plot_attr]
         assert title_label is not None

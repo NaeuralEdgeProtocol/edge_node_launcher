@@ -102,6 +102,8 @@ def create_plot_container(
     plot_widget.setAccessibleName(f"{title} plot")
     plot_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
     plot_widget._r1_empty_label = empty_label
+    plot_widget._r1_plot_container = container
+    plot_widget._r1_title_label = title_label
 
     layout = QVBoxLayout(container)
     layout.setContentsMargins(10, 8, 10, 10)

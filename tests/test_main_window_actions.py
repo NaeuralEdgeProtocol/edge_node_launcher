@@ -1699,6 +1699,8 @@ def test_plot_graphs_clears_stale_gpu_plots_when_history_has_no_gpu(qtbot, monke
     assert not launcher.memory_plot._r1_empty_label.isVisible()
     assert not launcher.gpu_plot._r1_empty_label.isVisible()
     assert not launcher.gpu_memory_plot._r1_empty_label.isVisible()
+    assert not launcher.gpu_plot._r1_plot_container.isHidden()
+    assert not launcher.gpu_memory_plot._r1_plot_container.isHidden()
     assert launcher.graphView.layout().rowStretch(0) == 1
     assert launcher.graphView.layout().rowStretch(1) == 1
 
@@ -1710,10 +1712,10 @@ def test_plot_graphs_clears_stale_gpu_plots_when_history_has_no_gpu(qtbot, monke
     assert len(launcher.gpu_memory_plot.listDataItems()) == 0
     assert not launcher.cpu_plot._r1_empty_label.isVisible()
     assert not launcher.memory_plot._r1_empty_label.isVisible()
-    assert launcher.gpu_plot._r1_empty_label.isVisible()
-    assert launcher.gpu_memory_plot._r1_empty_label.isVisible()
     assert launcher.gpu_plot._r1_empty_label.text() == frm_main.NO_GPU_METRIC_TEXT
     assert launcher.gpu_memory_plot._r1_empty_label.text() == frm_main.NO_GPU_METRIC_TEXT
+    assert launcher.gpu_plot._r1_plot_container.isHidden()
+    assert launcher.gpu_memory_plot._r1_plot_container.isHidden()
     assert launcher.graphView.layout().rowStretch(0) == 3
     assert launcher.graphView.layout().rowStretch(1) == 0
 
@@ -1732,6 +1734,8 @@ def test_plot_graphs_marks_single_sample_data_points(qtbot, monkeypatch):
     assert not launcher.cpu_plot._r1_empty_label.isVisible()
     assert not launcher.memory_plot._r1_empty_label.isVisible()
     assert launcher.gpu_plot._r1_empty_label.text() == frm_main.NO_GPU_METRIC_TEXT
+    assert launcher.gpu_plot._r1_plot_container.isHidden()
+    assert launcher.gpu_memory_plot._r1_plot_container.isHidden()
     assert launcher.graphView.layout().rowStretch(0) == 3
     assert launcher.graphView.layout().rowStretch(1) == 0
 
@@ -2821,19 +2825,19 @@ def test_main_window_graph_plots_stay_inside_styled_containers(qtbot, monkeypatc
     assert launcher.graphView.objectName() == "metricsGraphGrid"
     assert layout.count() == 4
     assert layout.spacing() == 10
-    assert layout.rowStretch(0) == 1
-    assert layout.rowStretch(1) == 1
+    assert layout.rowStretch(0) == 3
+    assert layout.rowStretch(1) == 0
     assert layout.columnStretch(0) == 1
     assert layout.columnStretch(1) == 1
 
     expected = {
-        "cpuPlotContainer": (launcher.cpu_plot, 0, 0),
-        "memoryPlotContainer": (launcher.memory_plot, 0, 1),
-        "gpuPlotContainer": (launcher.gpu_plot, 1, 0),
-        "gpuMemoryPlotContainer": (launcher.gpu_memory_plot, 1, 1),
+        "cpuPlotContainer": (launcher.cpu_plot, 0, 0, frm_main.METRIC_EMPTY_STATE_TEXT, False),
+        "memoryPlotContainer": (launcher.memory_plot, 0, 1, frm_main.METRIC_EMPTY_STATE_TEXT, False),
+        "gpuPlotContainer": (launcher.gpu_plot, 1, 0, frm_main.NO_GPU_METRIC_TEXT, True),
+        "gpuMemoryPlotContainer": (launcher.gpu_memory_plot, 1, 1, frm_main.NO_GPU_METRIC_TEXT, True),
     }
 
-    for container_name, (plot, row, column) in expected.items():
+    for container_name, (plot, row, column, empty_text, hidden) in expected.items():
         container = launcher.findChild(QWidget, container_name)
 
         assert container is not None
@@ -2847,8 +2851,9 @@ def test_main_window_graph_plots_stay_inside_styled_containers(qtbot, monkeypatc
         assert title_label is not None
         assert title_label.property("role") == "metricPlotTitle"
         assert empty_label is not None
-        assert empty_label.text() == frm_main.METRIC_EMPTY_STATE_TEXT
+        assert empty_label.text() == empty_text
         assert empty_label.alignment() == Qt.AlignCenter
+        assert container.isHidden() is hidden
         assert layout.itemAtPosition(row, column).widget() is container
         assert container.sizePolicy().verticalPolicy() == QSizePolicy.Expanding
         assert plot.sizePolicy().verticalPolicy() == QSizePolicy.Expanding
@@ -2871,11 +2876,30 @@ def test_main_window_metric_empty_states_remain_visible_without_history(qtbot, m
 
     launcher.plot_graphs(history=None)
 
-    for plot_attr in ("cpu_plot", "memory_plot", "gpu_plot", "gpu_memory_plot"):
+    for plot_attr in ("cpu_plot", "memory_plot"):
         plot = getattr(launcher, plot_attr)
 
         assert plot._r1_empty_label.isVisible()
         assert plot._r1_empty_label.text() == frm_main.METRIC_EMPTY_STATE_TEXT
+
+    for plot_attr in ("gpu_plot", "gpu_memory_plot"):
+        plot = getattr(launcher, plot_attr)
+
+        assert plot._r1_empty_label.text() == frm_main.NO_GPU_METRIC_TEXT
+        assert plot._r1_plot_container.isHidden()
+
+
+def test_main_window_hides_gpu_metric_cards_until_gpu_data_exists(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+
+    assert not launcher.cpu_plot._r1_plot_container.isHidden()
+    assert not launcher.memory_plot._r1_plot_container.isHidden()
+    assert launcher.gpu_plot._r1_plot_container.isHidden()
+    assert launcher.gpu_memory_plot._r1_plot_container.isHidden()
+    assert launcher.gpu_plot._r1_empty_label.text() == frm_main.NO_GPU_METRIC_TEXT
+    assert launcher.gpu_memory_plot._r1_empty_label.text() == frm_main.NO_GPU_METRIC_TEXT
+    assert launcher.graphView.layout().rowStretch(0) == 3
+    assert launcher.graphView.layout().rowStretch(1) == 0
 
 
 def test_main_window_log_view_has_stable_identity_and_dimensions(qtbot, monkeypatch):
