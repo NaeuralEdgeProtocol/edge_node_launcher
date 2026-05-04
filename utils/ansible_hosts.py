@@ -1,6 +1,7 @@
 import os
 import yaml
-from pathlib import Path
+
+from utils.ssh_command import split_ssh_args
 
 class AnsibleHostsManager:
     def __init__(self):
@@ -38,7 +39,7 @@ class AnsibleHostsManager:
         
         # Add common SSH arguments
         if 'ansible_ssh_common_args' in host_config:
-            cmd_parts.extend(host_config['ansible_ssh_common_args'].split())
+            cmd_parts.extend(split_ssh_args(host_config['ansible_ssh_common_args']))
 
         # Add private key if specified
         if 'ansible_ssh_private_key_file' in host_config:
@@ -55,4 +56,4 @@ class AnsibleHostsManager:
         else:
             return None
 
-        return cmd_parts 
+        return cmd_parts

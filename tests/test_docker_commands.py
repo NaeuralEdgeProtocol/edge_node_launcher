@@ -1,4 +1,5 @@
 from utils import docker_commands
+from utils import docker as docker_utils
 from utils.const import DOCKER_VOLUME_PATH
 
 
@@ -88,4 +89,79 @@ def test_list_containers_parses_docker_ps_output(monkeypatch):
     assert containers == [
         {"name": "r1node", "status": "Up 2 minutes", "id": "abc123", "running": True},
         {"name": "r1node2", "status": "Exited (0)", "id": "def456", "running": False},
+    ]
+
+
+def test_remote_connection_preserves_quoted_ssh_args(monkeypatch):
+    handler = make_handler(monkeypatch)
+
+    handler.set_remote_connection(
+        'ssh -o ProxyCommand="ssh -W %h:%p bastion" -i "C:/Users/vital/.ssh/edge key" ratio@192.0.2.10'
+    )
+
+    assert handler.remote_ssh_command == [
+        "ssh",
+        "-o",
+        "ProxyCommand=ssh -W %h:%p bastion",
+        "-i",
+        "C:/Users/vital/.ssh/edge key",
+        "ratio@192.0.2.10",
+    ]
+
+
+def test_docker_mixin_remote_connection_preserves_structured_ssh_args():
+    class FakeHostConfig:
+        ansible_host = "192.0.2.10"
+        ansible_user = "ratio"
+        ansible_become_password = None
+        ansible_ssh_private_key_file = "C:/Users/vital/.ssh/edge key"
+        ansible_ssh_common_args = '-o ProxyCommand="ssh -W %h:%p bastion"'
+
+    class FakeHostsManager:
+        def get_host(self, host_name):
+            assert host_name == "edge-a"
+            return FakeHostConfig()
+
+    class FakeHostSelector:
+        hosts_manager = FakeHostsManager()
+
+        def get_current_host(self):
+            return "edge-a"
+
+    class FakeSSHService:
+        def __init__(self):
+            self.config = None
+
+        def configure(self, config):
+            self.config = config
+
+    class FakeDockerCommands:
+        def __init__(self):
+            self.ssh_command = None
+
+        def set_remote_connection(self, ssh_command):
+            self.ssh_command = ssh_command
+
+    launcher = object.__new__(docker_utils._DockerUtilsMixin)
+    launcher.host_selector = FakeHostSelector()
+    launcher.ssh_service = FakeSSHService()
+    launcher.docker_commands = FakeDockerCommands()
+    launcher._DockerUtilsMixin__setup_docker_run = lambda: None
+
+    launcher.set_remote_connection(
+        'ssh -o ProxyCommand="ssh -W %h:%p bastion" -i "C:/Users/vital/.ssh/edge key" ratio@192.0.2.10'
+    )
+
+    assert launcher.is_remote is True
+    assert launcher.ssh_service.config.ssh_args == [
+        "-o",
+        "ProxyCommand=ssh -W %h:%p bastion",
+    ]
+    assert launcher.remote_ssh_command == [
+        "ssh",
+        "-o",
+        "ProxyCommand=ssh -W %h:%p bastion",
+        "-i",
+        "C:/Users/vital/.ssh/edge key",
+        "ratio@192.0.2.10",
     ]

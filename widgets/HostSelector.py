@@ -11,6 +11,7 @@ from PyQt5.QtCore import pyqtSignal, QThread, Qt, QTimer
 import subprocess
 
 from models.AnsibleHosts import AnsibleHostsManager
+from utils.ssh_command import split_ssh_args
 
 SSH_STATUS_TIMEOUT_SECONDS = 8
 
@@ -305,6 +306,13 @@ class HostSelector(QWidget):
             self._request_status_thread_stop(thread)
         self._request_status_thread_stop(self.status_thread)
 
+    def _get_ssh_command_parts(self, host_name: str):
+        if hasattr(self.hosts_manager, "get_ssh_command_parts"):
+            return self.hosts_manager.get_ssh_command_parts(host_name)
+
+        ssh_command_str = self.hosts_manager.get_ssh_command(host_name)
+        return split_ssh_args(ssh_command_str)
+
     def check_host_status(self, host_name: str):
         """Check if a host is online."""
         if not host_name:
@@ -325,9 +333,8 @@ class HostSelector(QWidget):
             if self.status_thread is not None:
                 self._request_status_thread_stop(self.status_thread)
                 
-            # Get SSH command for the host
-            ssh_command_str = self.hosts_manager.get_ssh_command(host_name)
-            if not ssh_command_str:
+            ssh_command = self._get_ssh_command_parts(host_name)
+            if not ssh_command:
                 print(f"No SSH command available for host: {host_name}")
                 self.current_status.setProperty("is_online", False)
                 self.current_status.set_status(False)
@@ -343,10 +350,6 @@ class HostSelector(QWidget):
                 self.host_status_updated.emit(host_name, False)
                 return
                 
-            # Convert the SSH command string to a list
-            # This is important because SSHCheckThread expects a list, not a string
-            ssh_command = ssh_command_str.split()
-            
             print(f"Using SSH command: {ssh_command}")
             
             # Start status check thread
@@ -426,6 +429,10 @@ class HostSelector(QWidget):
     def get_ssh_command(self, host_name: str) -> str:
         """Get SSH command for the selected host."""
         return self.hosts_manager.get_ssh_command(host_name)
+
+    def get_ssh_command_parts(self, host_name: str):
+        """Get structured SSH command arguments for the selected host."""
+        return self._get_ssh_command_parts(host_name)
 
     def apply_stylesheet(self, is_dark_theme: bool):
         """Apply theme-specific styles."""

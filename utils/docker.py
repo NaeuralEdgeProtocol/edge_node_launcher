@@ -19,6 +19,7 @@ from .docker_commands import DockerCommandHandler
 from .ssh_service import SSHService, SSHConfig
 from .service_manager import ServiceManager
 from .screen_geometry import screen_geometry
+from .ssh_command import split_ssh_args
 from widgets.dialogs.DockerCheckDialog import DockerCheckDialog
 
 def get_user_folder():
@@ -552,14 +553,14 @@ class _DockerUtilsMixin:
       user=host_config.ansible_user,
       password=host_config.ansible_become_password,
       private_key=host_config.ansible_ssh_private_key_file,
-      ssh_args=host_config.ansible_ssh_common_args.split() if host_config.ansible_ssh_common_args else None
+      ssh_args=split_ssh_args(host_config.ansible_ssh_common_args) if host_config.ansible_ssh_common_args else None
     )
     
     self.ssh_service.configure(ssh_config)
     
     # Update Docker settings
     self.is_remote = True
-    self.remote_ssh_command = ssh_command.split()
+    self.remote_ssh_command = split_ssh_args(ssh_command)
     self.__setup_docker_run()
     
     # Update Docker command handler

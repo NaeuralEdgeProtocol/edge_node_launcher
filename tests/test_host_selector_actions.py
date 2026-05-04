@@ -28,6 +28,21 @@ class FakeConfiguredHostsManager(FakeHostsManager):
         return object()
 
 
+class FakeStructuredHostsManager(FakeConfiguredHostsManager):
+    def get_ssh_command_parts(self, host_name):
+        return [
+            "ssh",
+            "-o",
+            "ProxyCommand=ssh -W %h:%p bastion",
+            "-i",
+            "C:/Users/vital/.ssh/edge key",
+            f"ratio@{host_name}",
+        ]
+
+    def get_ssh_command(self, host_name):
+        raise AssertionError("structured SSH managers should not be reparsed")
+
+
 class FakeSignal:
     def __init__(self):
         self.callbacks = []
@@ -182,6 +197,36 @@ def test_host_selector_requests_interruption_instead_of_terminating_status_threa
     assert "devnet" not in widget.status_threads
     assert widget.status_thread is None
     assert created_threads[0].deleted
+
+
+def test_host_selector_uses_structured_ssh_command_parts(qtbot, monkeypatch):
+    created_threads = []
+
+    def create_status_thread(host_name, ssh_command):
+        thread = FakeStatusThread(host_name, ssh_command)
+        created_threads.append(thread)
+        return thread
+
+    monkeypatch.setattr(host_selector_module, "SSHCheckThread", create_status_thread)
+    widget = HostSelector(
+        hosts_manager=FakeStructuredHostsManager(["devnet"]),
+        auto_refresh=False,
+        status_interval_ms=0,
+    )
+    qtbot.addWidget(widget)
+    widget._is_pro_mode = True
+
+    widget.check_host_status("devnet")
+
+    assert len(created_threads) == 1
+    assert created_threads[0].ssh_command == [
+        "ssh",
+        "-o",
+        "ProxyCommand=ssh -W %h:%p bastion",
+        "-i",
+        "C:/Users/vital/.ssh/edge key",
+        "ratio@devnet",
+    ]
 
 
 def test_host_selector_does_not_start_duplicate_status_thread(qtbot, monkeypatch):

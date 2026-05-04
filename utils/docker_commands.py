@@ -16,6 +16,7 @@ from models.NodeHistory import NodeHistory
 from models.StartupConfig import StartupConfig
 from models.ConfigApp import ConfigApp
 from utils.const import DOCKER_VOLUME_PATH
+from utils.ssh_command import split_ssh_args
 
 # Docker configuration
 DOCKER_IMAGE = "ratio1/edge_node:mainnet"
@@ -589,7 +590,7 @@ class DockerCommandHandler:
 
     def set_remote_connection(self, ssh_command: str):
         """Set up remote connection using SSH command."""
-        self.remote_ssh_command = ssh_command.split() if ssh_command else None
+        self.remote_ssh_command = split_ssh_args(ssh_command) if ssh_command else None
 
     def clear_remote_connection(self):
         """Clear remote connection settings."""
