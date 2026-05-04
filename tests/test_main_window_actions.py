@@ -1005,7 +1005,7 @@ def test_docker_pull_close_does_not_clear_replaced_dialog(qtbot, monkeypatch):
 
     original_dialog.safe_close = replace_during_close
 
-    assert launcher._close_docker_pull_dialog_reference() is True
+    assert launcher._lifecycle_dialogs.close_docker_pull_reference() is True
     assert launcher.docker_pull_dialog is replacement_dialog
 
 

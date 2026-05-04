@@ -891,15 +891,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       clear_delay_ms=clear_delay_ms,
     )
 
-  def _set_docker_pull_complete(self, success: bool, message: str) -> bool:
-    return self._lifecycle_dialogs.set_docker_pull_complete(success, message)
-
-  def _update_docker_pull_progress(self, line: str) -> bool:
-    return self._lifecycle_dialogs.update_docker_pull_progress(line)
-
-  def _close_docker_pull_dialog_reference(self) -> bool:
-    return self._lifecycle_dialogs.close_docker_pull_reference()
-
   def _close_dialog_reference(self, dialog_attr: str) -> bool:
     """Close a stored dialog reference, tolerating already-deleted Qt wrappers."""
     return self._lifecycle_dialogs.close_reference(dialog_attr)
@@ -3005,25 +2996,25 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             
             # If pull completed successfully
             if return_code == 0:
-                self._set_docker_pull_complete(True, "Docker image pulled successfully")
+                self._lifecycle_dialogs.set_docker_pull_complete(True, "Docker image pulled successfully")
             else:
                 error_msg = f"Failed to pull Docker image: {stderr}"
                 self.add_log(error_msg, color="red")
-                self._set_docker_pull_complete(False, error_msg)
+                self._lifecycle_dialogs.set_docker_pull_complete(False, error_msg)
         
         def on_pull_error(error_msg):
             if self._skip_lifecycle_callback_if_shutting_down("Docker pull error", container_name):
                 return
 
             self.add_log(f"Error pulling Docker image: {error_msg}", color="red")
-            self._set_docker_pull_complete(False, error_msg)
+            self._lifecycle_dialogs.set_docker_pull_complete(False, error_msg)
         
         def on_pull_output(line):
             if self._is_shutting_down():
                 return
 
             # Process each line of output in real-time to update the dialog
-            self._update_docker_pull_progress(line)
+            self._lifecycle_dialogs.update_docker_pull_progress(line)
         
         # Always pull the latest image to ensure we have the most recent version
         self.add_log("Pulling latest Docker image before container launch...", color="blue")
@@ -3070,7 +3061,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         
     # The dialog should already be closing itself via set_pull_complete, but make sure
     # the launcher reference is cleared immediately.
-    self._close_docker_pull_dialog_reference()
+    self._lifecycle_dialogs.close_docker_pull_reference()
     
     self._queue_ui_refresh()
     
