@@ -169,17 +169,29 @@ def launcher_log_tail(launcher, max_chars=5000):
     return text[-max_chars:]
 
 
+def launcher_lifecycle_diagnostics(launcher):
+    diagnostics = getattr(launcher, "lifecycle_diagnostics", None)
+    if callable(diagnostics):
+        return diagnostics()
+    return {
+        "lifecycle_operation": getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation", None),
+        "docker_pull_in_progress": getattr(launcher, "_EdgeNodeLauncher__docker_pull_in_progress", None),
+        "pending_launch_context": getattr(launcher, "_EdgeNodeLauncher__pending_launch_context", None),
+    }
+
+
 def collect_launcher_diagnostics(app, launcher, containers):
     current_index = launcher.container_combo.currentIndex()
     current_container = launcher.container_combo.itemData(current_index) if current_index >= 0 else None
+    lifecycle = launcher_lifecycle_diagnostics(launcher)
     return {
         "visible_dialogs": visible_dialog_titles(app),
         "dialog_details": visible_dialog_details(app),
         "current_container": current_container,
         "toggle_text": launcher.toggleButton.text(),
-        "lifecycle_operation": getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation", None),
-        "docker_pull_in_progress": getattr(launcher, "_EdgeNodeLauncher__docker_pull_in_progress", None),
-        "pending_launch_context": getattr(launcher, "_EdgeNodeLauncher__pending_launch_context", None),
+        "lifecycle_operation": lifecycle["lifecycle_operation"],
+        "docker_pull_in_progress": lifecycle["docker_pull_in_progress"],
+        "pending_launch_context": lifecycle["pending_launch_context"],
         "launcher_log_tail": launcher_log_tail(launcher),
         "containers": {
             container_name: collect_container_diagnostics(container_name)
@@ -209,6 +221,7 @@ def launch_progress_signature(app, launcher, container_name):
     current_index = launcher.container_combo.currentIndex()
     current_container = launcher.container_combo.itemData(current_index) if current_index >= 0 else None
     log_text = launcher_log_tail(launcher, max_chars=1000)
+    lifecycle = launcher_lifecycle_diagnostics(launcher)
     return {
         "container": container_name,
         "docker_exists": docker_exists(container_name),
@@ -218,9 +231,9 @@ def launch_progress_signature(app, launcher, container_name):
         "log_tail": log_text[-300:],
         "current_container": current_container,
         "toggle_text": launcher.toggleButton.text(),
-        "lifecycle_operation": getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation", None),
-        "docker_pull_in_progress": getattr(launcher, "_EdgeNodeLauncher__docker_pull_in_progress", None),
-        "pending_launch_context": getattr(launcher, "_EdgeNodeLauncher__pending_launch_context", None),
+        "lifecycle_operation": lifecycle["lifecycle_operation"],
+        "docker_pull_in_progress": lifecycle["docker_pull_in_progress"],
+        "pending_launch_context": lifecycle["pending_launch_context"],
     }
 
 
@@ -307,12 +320,13 @@ def wait_for_launch_activity(app, launcher, log, output_path, timeout, label, sc
             write_log(log, output_path)
             raise RuntimeError(log["error"])
 
+        lifecycle = launcher_lifecycle_diagnostics(launcher)
         if (
             docker_running(PRIMARY_CONTAINER)
             or docker_running(SECOND_CONTAINER)
             or visible_dialog_titles(app)
-            or getattr(launcher, "_EdgeNodeLauncher__docker_pull_in_progress", False)
-            or getattr(launcher, "_EdgeNodeLauncher__pending_launch_context", None)
+            or lifecycle["docker_pull_in_progress"]
+            or lifecycle["pending_launch_context"]
         ):
             record_step(
                 log,
@@ -322,8 +336,8 @@ def wait_for_launch_activity(app, launcher, log, output_path, timeout, label, sc
                     "label": label,
                     "visible_dialogs": visible_dialog_titles(app),
                     "dialog_screenshots": capture_visible_dialog_screenshots(app, screenshot_dir, label),
-                    "docker_pull_in_progress": getattr(launcher, "_EdgeNodeLauncher__docker_pull_in_progress", None),
-                    "pending_launch_context": getattr(launcher, "_EdgeNodeLauncher__pending_launch_context", None),
+                    "docker_pull_in_progress": lifecycle["docker_pull_in_progress"],
+                    "pending_launch_context": lifecycle["pending_launch_context"],
                 },
             )
             return

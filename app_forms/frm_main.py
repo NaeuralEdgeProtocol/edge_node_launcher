@@ -1458,6 +1458,15 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.__pending_launch_context = snapshot.pending_launch_context
     self.__docker_pull_in_progress = snapshot.docker_pull_in_progress
 
+  def lifecycle_diagnostics(self) -> dict:
+    """Return JSON-friendly lifecycle state for diagnostics and E2E tools."""
+    snapshot = self.__lifecycle_state.diagnostic_snapshot()
+    return {
+      "lifecycle_operation": snapshot.active_operation,
+      "docker_pull_in_progress": snapshot.docker_pull_in_progress,
+      "pending_launch_context": snapshot.pending_launch_context,
+    }
+
   def _active_lifecycle_operation(self) -> Optional[dict]:
     return self.__lifecycle_state.active_operation_dict()
 

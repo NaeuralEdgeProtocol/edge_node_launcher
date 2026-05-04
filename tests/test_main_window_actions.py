@@ -1049,6 +1049,33 @@ def test_docker_pull_context_finishes_as_typed_context_with_diagnostics(qtbot, m
     assert getattr(launcher, "_EdgeNodeLauncher__pending_launch_context") is None
 
 
+def test_lifecycle_diagnostics_exposes_json_friendly_snapshot(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launcher._begin_lifecycle_operation("launch", "r1node")
+    launcher._start_docker_pull("r1node", "r1vol")
+
+    assert launcher.lifecycle_diagnostics() == {
+        "lifecycle_operation": {
+            "operation": "launch",
+            "container_name": "r1node",
+        },
+        "docker_pull_in_progress": True,
+        "pending_launch_context": {
+            "container_name": "r1node",
+            "volume_name": "r1vol",
+        },
+    }
+
+    launcher._finish_docker_pull()
+    launcher._end_lifecycle_operation("r1node")
+
+    assert launcher.lifecycle_diagnostics() == {
+        "lifecycle_operation": None,
+        "docker_pull_in_progress": False,
+        "pending_launch_context": None,
+    }
+
+
 def test_continue_launch_after_pull_restores_target_and_schedules_launch(qtbot, monkeypatch):
     launcher, fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
     fake_config.add_container(

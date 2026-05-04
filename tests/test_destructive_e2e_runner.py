@@ -97,6 +97,55 @@ def test_run_command_returns_timeout_diagnostics(monkeypatch):
     assert result["stderr"] == "partial stderr"
 
 
+def test_launcher_lifecycle_diagnostics_uses_public_helper():
+    class DiagnosticLauncher(FakeLauncher):
+        def lifecycle_diagnostics(self):
+            return {
+                "lifecycle_operation": {"operation": "launch", "container_name": e2e.PRIMARY_CONTAINER},
+                "docker_pull_in_progress": True,
+                "pending_launch_context": {
+                    "container_name": e2e.PRIMARY_CONTAINER,
+                    "volume_name": e2e.PRIMARY_VOLUME,
+                },
+            }
+
+    assert e2e.launcher_lifecycle_diagnostics(DiagnosticLauncher()) == {
+        "lifecycle_operation": {"operation": "launch", "container_name": e2e.PRIMARY_CONTAINER},
+        "docker_pull_in_progress": True,
+        "pending_launch_context": {
+            "container_name": e2e.PRIMARY_CONTAINER,
+            "volume_name": e2e.PRIMARY_VOLUME,
+        },
+    }
+
+
+def test_launcher_lifecycle_diagnostics_falls_back_to_legacy_fields():
+    launcher = FakeLauncher()
+    setattr(
+        launcher,
+        "_EdgeNodeLauncher__active_lifecycle_operation",
+        {"operation": "launch", "container_name": e2e.PRIMARY_CONTAINER},
+    )
+    setattr(launcher, "_EdgeNodeLauncher__docker_pull_in_progress", True)
+    setattr(
+        launcher,
+        "_EdgeNodeLauncher__pending_launch_context",
+        {
+            "container_name": e2e.PRIMARY_CONTAINER,
+            "volume_name": e2e.PRIMARY_VOLUME,
+        },
+    )
+
+    assert e2e.launcher_lifecycle_diagnostics(launcher) == {
+        "lifecycle_operation": {"operation": "launch", "container_name": e2e.PRIMARY_CONTAINER},
+        "docker_pull_in_progress": True,
+        "pending_launch_context": {
+            "container_name": e2e.PRIMARY_CONTAINER,
+            "volume_name": e2e.PRIMARY_VOLUME,
+        },
+    }
+
+
 def test_wait_for_launch_activity_records_existing_activity(monkeypatch, tmp_path):
     output_path = tmp_path / "result.json"
     log = {"steps": []}
