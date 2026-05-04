@@ -278,3 +278,104 @@ def test_docker_mixin_remote_connection_preserves_structured_ssh_args():
         "C:/Users/vital/.ssh/edge key",
         "ratio@192.0.2.10",
     ]
+
+
+def test_legacy_check_output_helper_uses_timeout_and_hidden_windows(monkeypatch):
+    calls = []
+    create_no_window = 0x08000000
+
+    def fake_check_output(command, **kwargs):
+        calls.append((command, kwargs))
+        return "ok"
+
+    monkeypatch.setattr(docker_utils.os, "name", "nt")
+    monkeypatch.setattr(docker_utils.subprocess, "CREATE_NO_WINDOW", create_no_window, raising=False)
+    monkeypatch.setattr(docker_utils.subprocess, "check_output", fake_check_output)
+
+    assert docker_utils.check_output_no_window(["docker", "info"], timeout=11) == "ok"
+    assert calls == [
+        (
+            ["docker", "info"],
+            {
+                "stderr": docker_utils.subprocess.STDOUT,
+                "universal_newlines": True,
+                "timeout": 11,
+                "creationflags": create_no_window,
+            },
+        )
+    ]
+
+
+def test_legacy_check_docker_uses_bounded_status_checks(monkeypatch):
+    launcher = object.__new__(docker_utils._DockerUtilsMixin)
+    launcher.add_log = lambda *args, **kwargs: None
+    calls = []
+
+    def fake_check_output(command, timeout):
+        calls.append((command, timeout))
+        return "Docker version 1.0" if command == ["docker", "--version"] else "daemon ok"
+
+    monkeypatch.setattr(docker_utils, "check_output_no_window", fake_check_output)
+
+    assert launcher.check_docker() == (True, True, None)
+    assert calls == [
+        (["docker", "--version"], docker_utils.DOCKER_CHECK_TIMEOUT_SECONDS),
+        (["docker", "info"], docker_utils.DOCKER_CHECK_TIMEOUT_SECONDS),
+    ]
+
+
+def test_legacy_check_docker_reports_daemon_timeout(monkeypatch):
+    launcher = object.__new__(docker_utils._DockerUtilsMixin)
+    launcher.add_log = lambda *args, **kwargs: None
+
+    def fake_check_output(command, timeout):
+        if command == ["docker", "info"]:
+            raise docker_utils.subprocess.TimeoutExpired(command, timeout)
+        return "Docker version 1.0"
+
+    monkeypatch.setattr(docker_utils, "check_output_no_window", fake_check_output)
+
+    assert launcher.check_docker() == (
+        True,
+        False,
+        f"Docker daemon check timed out after {docker_utils.DOCKER_CHECK_TIMEOUT_SECONDS} seconds",
+    )
+
+
+def test_legacy_gpu_probe_uses_short_timeout(monkeypatch):
+    launcher = object.__new__(docker_utils._DockerUtilsMixin)
+    logs = []
+    launcher.add_log = lambda *args, **kwargs: logs.append(args[0])
+    calls = []
+
+    def fake_check_output(command, timeout):
+        calls.append((command, timeout))
+        return "GPU 0: Test"
+
+    monkeypatch.setattr(docker_utils, "check_output_no_window", fake_check_output)
+
+    assert launcher.check_nvidia_gpu_available() is True
+    assert calls == [(["nvidia-smi", "-L"], docker_utils.GPU_CHECK_TIMEOUT_SECONDS)]
+    assert "NVIDIA GPU available: True" in logs[0]
+
+
+def test_legacy_container_running_check_uses_bounded_inspect(monkeypatch):
+    launcher = object.__new__(docker_utils._DockerUtilsMixin)
+    launcher.container_last_run_status = False
+    launcher.get_inspect_command = lambda: ["docker", "inspect", "r1node"]
+    launcher.add_log = lambda *args, **kwargs: None
+    post_launch_calls = []
+    launcher.post_launch_setup = lambda: post_launch_calls.append("post-launch")
+    calls = []
+
+    def fake_check_output(command, timeout):
+        calls.append((command, timeout))
+        return "true\n"
+
+    monkeypatch.setattr(docker_utils, "check_output_no_window", fake_check_output)
+
+    assert launcher.is_container_running() is True
+    assert calls == [
+        (["docker", "inspect", "r1node"], docker_utils.DOCKER_CHECK_TIMEOUT_SECONDS)
+    ]
+    assert post_launch_calls == ["post-launch"]

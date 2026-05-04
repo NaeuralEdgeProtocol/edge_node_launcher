@@ -22,6 +22,22 @@ from .screen_geometry import screen_geometry
 from .ssh_command import split_ssh_args
 from widgets.dialogs.DockerCheckDialog import DockerCheckDialog
 
+DOCKER_CHECK_TIMEOUT_SECONDS = 10
+GPU_CHECK_TIMEOUT_SECONDS = 5
+WINDOWS_CREATE_NO_WINDOW = 0x08000000
+
+
+def check_output_no_window(command, timeout: int):
+  kwargs = {
+    "stderr": subprocess.STDOUT,
+    "universal_newlines": True,
+    "timeout": timeout,
+  }
+  if os.name == 'nt':
+    kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", WINDOWS_CREATE_NO_WINDOW)
+  return subprocess.check_output(command, **kwargs)
+
+
 def get_user_folder():
   """
   Returns the user folder.
@@ -209,10 +225,7 @@ class _DockerUtilsMixin:
   def check_nvidia_gpu_available(self):
     result = False
     try:
-      if os.name == 'nt':
-        output = subprocess.check_output(['nvidia-smi', '-L'], stderr=subprocess.STDOUT, universal_newlines=True, creationflags=subprocess.CREATE_NO_WINDOW)
-      else:
-        output = subprocess.check_output(['nvidia-smi', '-L'], stderr=subprocess.STDOUT, universal_newlines=True)
+      output = check_output_no_window(['nvidia-smi', '-L'], timeout=GPU_CHECK_TIMEOUT_SECONDS)
       result = 'GPU' in output
     except Exception as exc:
       result = False
@@ -366,33 +379,32 @@ class _DockerUtilsMixin:
     self.add_log('Checking Docker status...')
     try:
         # First check if Docker is installed
-        if os.name == 'nt':
-            output = subprocess.check_output(['docker', '--version'], stderr=subprocess.STDOUT, universal_newlines=True, creationflags=subprocess.CREATE_NO_WINDOW)
-        else:
-            output = subprocess.check_output(['docker', '--version'], stderr=subprocess.STDOUT, universal_newlines=True)
+        try:
+            output = check_output_no_window(['docker', '--version'], timeout=DOCKER_CHECK_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            return False, False, f"Docker version check timed out after {DOCKER_CHECK_TIMEOUT_SECONDS} seconds"
+        except subprocess.CalledProcessError as exc:
+            return False, False, f"Docker version check failed: {exc.output or exc}"
         self.add_log("Docker version: " + output.strip())
         
         # Then check if Docker daemon is running
-        if os.name == 'nt':
-            subprocess.check_output(['docker', 'info'], stderr=subprocess.STDOUT, universal_newlines=True, creationflags=subprocess.CREATE_NO_WINDOW)
-        else:
-            subprocess.check_output(['docker', 'info'], stderr=subprocess.STDOUT, universal_newlines=True)
+        try:
+            check_output_no_window(['docker', 'info'], timeout=DOCKER_CHECK_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            return True, False, f"Docker daemon check timed out after {DOCKER_CHECK_TIMEOUT_SECONDS} seconds"
+        except subprocess.CalledProcessError:
+            return True, False, "Docker daemon is not running"
         
         self.add_log("Docker daemon is running")
         return True, True, None
     except FileNotFoundError:
         return False, False, "Docker is not installed"
-    except subprocess.CalledProcessError:
-        return True, False, "Docker daemon is not running"
 
 
   def is_container_running(self):
     try:
       inspect_cmd = self.get_inspect_command()
-      if os.name == 'nt':
-        status = subprocess.check_output(inspect_cmd, stderr=subprocess.STDOUT, universal_newlines=True, creationflags=subprocess.CREATE_NO_WINDOW)
-      else:
-        status = subprocess.check_output(inspect_cmd, stderr=subprocess.STDOUT, universal_newlines=True)
+      status = check_output_no_window(inspect_cmd, timeout=DOCKER_CHECK_TIMEOUT_SECONDS)
 
       status = status.strip()
       container_running = status.split()[-1] == 'true'
@@ -404,6 +416,9 @@ class _DockerUtilsMixin:
         if container_running:
           self.post_launch_setup()
       return container_running
+    except subprocess.TimeoutExpired:
+      self.add_log(f'Container status check timed out after {DOCKER_CHECK_TIMEOUT_SECONDS} seconds', debug=True, color="red")
+      return False
     except:
       return False
 
