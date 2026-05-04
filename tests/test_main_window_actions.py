@@ -612,6 +612,17 @@ def test_lifecycle_dialog_presenter_backs_launcher_dialog_helpers(qtbot, monkeyp
     assert dialog.message_label.text() == "Launching Docker container..."
 
 
+def test_stop_loading_dialog_helper_sets_progress_message(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+
+    dialog = launcher._show_stop_loading_dialog("alpha")
+
+    assert launcher.toggle_dialog is dialog
+    assert launcher._lifecycle_dialogs.reference("toggle_dialog") is dialog
+    assert dialog.windowTitle() == "Stopping Node"
+    assert dialog.message_label.text() == "Preparing to stop Docker container..."
+
+
 def test_stop_return_code_failure_closes_dialog_and_clears_lifecycle(qtbot, monkeypatch):
     launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
 

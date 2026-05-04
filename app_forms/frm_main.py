@@ -74,7 +74,6 @@ from utils.container_selection import SelectedContainer, selected_container_from
 from utils.lifecycle_copy import (
   launch_success_notification,
   new_node_success_notification,
-  stop_dialog_copy,
   stop_success_notification,
 )
 from utils.lifecycle_state import LifecycleState
@@ -885,6 +884,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   def _show_new_node_loading_dialog(self, display_name: str = None):
     return self._lifecycle_dialogs.show_new_node_loading(display_name)
 
+  def _show_stop_loading_dialog(self, node_alias: str = None):
+    return self._lifecycle_dialogs.show_stop_loading(node_alias)
+
   def _safe_close_dialog_reference(self, dialog_attr: str, dialog=None) -> bool:
     return self._lifecycle_dialogs.safe_close_reference(dialog_attr, dialog)
 
@@ -1153,19 +1155,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         
         container_config = self.config_manager.get_container(container_name)
         node_alias = container_config.node_alias if container_config and container_config.node_alias else None
-        dialog_copy = stop_dialog_copy(node_alias)
-            
-        # Show loading dialog for stopping operation
-        self.toggle_dialog = LoadingDialog(
-            self,
-            title=dialog_copy.title,
-            message=dialog_copy.message,
-            size=50
-        )
-        self.toggle_dialog.show()
-        
-        # Update message to indicate starting the stop process
-        self.toggle_dialog.update_progress("Preparing to stop Docker container...")
+        self._show_stop_loading_dialog(node_alias)
         
         # Clear info displays
         self._clear_info_display()

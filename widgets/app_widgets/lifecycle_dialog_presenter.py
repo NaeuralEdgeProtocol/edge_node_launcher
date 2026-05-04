@@ -1,7 +1,7 @@
 from PyQt5 import sip
 from PyQt5.QtCore import QTimer
 
-from utils.lifecycle_copy import launch_dialog_copy
+from utils.lifecycle_copy import launch_dialog_copy, stop_dialog_copy
 from widgets.LoadingDialog import LoadingDialog
 
 
@@ -142,6 +142,15 @@ class LifecycleDialogPresenter:
             "startup_dialog",
             title=dialog_copy.title,
             message=dialog_copy.message,
+        )
+
+    def show_stop_loading(self, node_alias: str = None):
+        dialog_copy = stop_dialog_copy(node_alias)
+        return self.show_loading_reference(
+            "toggle_dialog",
+            title=dialog_copy.title,
+            message=dialog_copy.message,
+            progress_message="Preparing to stop Docker container...",
         )
 
     def safe_close_reference(self, dialog_attr: str, dialog=None) -> bool:
