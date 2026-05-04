@@ -1673,9 +1673,10 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
   def _sync_lifecycle_state_snapshot(self) -> None:
     """Keep legacy diagnostic fields in sync while lifecycle state is extracted."""
-    self.__active_lifecycle_operation = self.__lifecycle_state.active_operation_dict()
-    self.__pending_launch_context = self.__lifecycle_state.pending_launch_context_dict()
-    self.__docker_pull_in_progress = self.__lifecycle_state.docker_pull_in_progress
+    snapshot = self.__lifecycle_state.diagnostic_snapshot()
+    self.__active_lifecycle_operation = snapshot.active_operation
+    self.__pending_launch_context = snapshot.pending_launch_context
+    self.__docker_pull_in_progress = snapshot.docker_pull_in_progress
 
   def _active_lifecycle_operation(self) -> Optional[dict]:
     return self.__lifecycle_state.active_operation_dict()

@@ -88,6 +88,12 @@ def test_docker_pull_context_is_captured_and_cleared_together():
         "container_name": "r1node",
         "volume_name": "r1vol",
     }
+    assert state.diagnostic_snapshot().active_operation is None
+    assert state.diagnostic_snapshot().pending_launch_context == {
+        "container_name": "r1node",
+        "volume_name": "r1vol",
+    }
+    assert state.diagnostic_snapshot().docker_pull_in_progress is True
 
     context = state.finish_docker_pull()
 
@@ -95,6 +101,8 @@ def test_docker_pull_context_is_captured_and_cleared_together():
     assert context.volume_name == "r1vol"
     assert state.docker_pull_in_progress is False
     assert state.pending_launch_context_dict() is None
+    assert state.diagnostic_snapshot().pending_launch_context is None
+    assert state.diagnostic_snapshot().docker_pull_in_progress is False
 
 
 def test_auto_restart_blocker_reports_active_launch_and_user_stop_reasons():

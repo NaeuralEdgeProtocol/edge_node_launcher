@@ -34,6 +34,13 @@ class BeginOperationResult:
     superseded_operation: Optional[LifecycleOperation] = None
 
 
+@dataclass(frozen=True)
+class LifecycleSnapshot:
+    active_operation: Optional[dict]
+    pending_launch_context: Optional[dict]
+    docker_pull_in_progress: bool
+
+
 class LifecycleState:
     """Tracks user-visible lifecycle operation ownership."""
 
@@ -114,6 +121,13 @@ class LifecycleState:
 
     def pending_launch_context_dict(self) -> Optional[dict]:
         return self._pending_launch_context.to_dict() if self._pending_launch_context else None
+
+    def diagnostic_snapshot(self) -> LifecycleSnapshot:
+        return LifecycleSnapshot(
+            active_operation=self.active_operation_dict(),
+            pending_launch_context=self.pending_launch_context_dict(),
+            docker_pull_in_progress=self.docker_pull_in_progress,
+        )
 
     def auto_restart_blocker(
         self,
