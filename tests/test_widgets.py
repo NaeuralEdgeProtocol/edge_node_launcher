@@ -1,5 +1,5 @@
 from PyQt5.QtCore import QRect, Qt
-from PyQt5.QtGui import QShowEvent
+from PyQt5.QtGui import QColor, QShowEvent
 from PyQt5.QtWidgets import (
     QApplication,
     QComboBox,
@@ -21,7 +21,7 @@ from widgets.LoadingDialog import LoadingDialog
 from widgets.CenteredComboBox import CenteredComboBox
 from widgets.loading_indicator import LoadingIndicator
 from app_forms.frm_utils import LoadingIndicator as LegacyLoadingIndicator
-from widgets.app_widgets.activity_log import ActivityLogWidget
+from widgets.app_widgets.activity_log import ACTIVITY_LOG_COLOR_MAP, ActivityLogWidget
 from widgets.app_widgets.config_editor import ConfigEditorWidget
 from widgets.app_widgets.container_list import CONTAINER_LIST_EMPTY_TEXT, ContainerListWidget
 from widgets.app_widgets.dashboard_panel import DashboardPanel
@@ -208,6 +208,8 @@ def test_activity_log_widget_appends_copies_and_clears(qtbot):
     assert widget.log_view.objectName() == "logView"
     assert widget.log_view.accessibleName() == "Activity log output"
     assert widget.log_view.isReadOnly()
+    assert not widget.log_view.acceptRichText()
+    assert widget.log_view.placeholderText() == "No activity yet"
     assert widget.log_view.lineWrapMode() == QTextEdit.WidgetWidth
     assert widget.log_view.horizontalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
     assert widget.log_view.document().maximumBlockCount() == 42
@@ -234,6 +236,21 @@ def test_activity_log_widget_appends_copies_and_clears(qtbot):
     assert widget.text() == ""
     assert not widget.copy_button.isEnabled()
     assert not widget.clear_button.isEnabled()
+
+
+def test_activity_log_widget_applies_semantic_log_colors(qtbot):
+    widget = ActivityLogWidget()
+    qtbot.addWidget(widget)
+
+    widget.append_log_line("container stopped", color="green")
+
+    first_block = widget.log_view.document().firstBlock()
+    first_fragment = first_block.begin().fragment()
+
+    assert first_fragment.text() == "container stopped"
+    assert first_fragment.charFormat().foreground().color().name() == QColor(
+        ACTIVITY_LOG_COLOR_MAP["green"]
+    ).name()
 
 
 def test_dashboard_panel_owns_splitter_layout(qtbot):

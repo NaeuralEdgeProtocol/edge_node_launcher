@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from PyQt5 import sip
 from PyQt5.QtCore import QRect, Qt
+from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QApplication, QDialog, QGroupBox, QLabel, QLineEdit, QPushButton, QScrollArea, QSizePolicy, QSplitter, QTextEdit, QToolButton, QVBoxLayout, QWidget
 
 import app_forms.frm_main as frm_main
@@ -13,7 +14,7 @@ from utils.config_manager import ContainerConfig
 from widgets.DockerPullDialog import DockerPullDialog
 from widgets.ToastWidget import NotificationType
 import widgets.app_widgets.dashboard_panel as dashboard_panel_module
-from widgets.app_widgets.activity_log import ActivityLogWidget
+from widgets.app_widgets.activity_log import ACTIVITY_LOG_COLOR_MAP, ActivityLogWidget
 from widgets.app_widgets.lifecycle_dialog_presenter import LifecycleDialogPresenter
 from widgets.app_widgets.sidebar_controls import (
     SIDEBAR_ACTION_BUTTON_HEIGHTS,
@@ -295,6 +296,21 @@ def test_add_log_does_not_process_events_synchronously(qtbot, monkeypatch):
         launcher.add_log("visible log entry")
 
     assert "visible log entry" in launcher.logView.toPlainText()
+
+
+def test_add_log_forwards_semantic_color_to_activity_log(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+    launcher.clear_activity_log()
+
+    launcher.add_log("container stopped", color="green")
+
+    first_block = launcher.logView.document().firstBlock()
+    first_fragment = first_block.begin().fragment()
+
+    assert "container stopped" in first_fragment.text()
+    assert first_fragment.charFormat().foreground().color().name() == QColor(
+        ACTIVITY_LOG_COLOR_MAP["green"]
+    ).name()
 
 
 def test_main_window_does_not_process_events_synchronously():

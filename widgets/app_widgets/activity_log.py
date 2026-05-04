@@ -1,6 +1,6 @@
 from PyQt5 import sip
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QFont, QIcon, QTextCursor
+from PyQt5.QtGui import QColor, QFont, QIcon, QTextCharFormat, QTextCursor
 from PyQt5.QtWidgets import (
     QApplication,
     QLabel,
@@ -14,6 +14,14 @@ from PyQt5.QtWidgets import (
 
 
 DEFAULT_ACTIVITY_LOG_MAX_BLOCKS = 1000
+ACTIVITY_LOG_COLOR_MAP = {
+    "blue": "#2563EB",
+    "cyan": "#0891B2",
+    "green": "#059669",
+    "light": "#64748B",
+    "red": "#DC2626",
+    "yellow": "#B45309",
+}
 
 
 class ActivityLogWidget(QWidget):
@@ -88,6 +96,8 @@ class ActivityLogWidget(QWidget):
         log_view.setObjectName("logView")
         log_view.setAccessibleName("Activity log output")
         log_view.setReadOnly(True)
+        log_view.setAcceptRichText(False)
+        log_view.setPlaceholderText("No activity yet")
         log_view.setMinimumHeight(120)
         log_view.setLineWrapMode(QTextEdit.WidgetWidth)
         log_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -115,13 +125,23 @@ class ActivityLogWidget(QWidget):
     def text(self) -> str:
         return self.log_view.toPlainText()
 
-    def append_log_line(self, line: str, schedule_scroll: bool = True) -> None:
+    def append_log_line(
+        self,
+        line: str,
+        schedule_scroll: bool = True,
+        color: str | None = None,
+    ) -> None:
         document = self.log_view.document()
         cursor = QTextCursor(document)
         cursor.movePosition(QTextCursor.End)
         if not document.isEmpty():
             cursor.insertBlock()
-        cursor.insertText(line)
+
+        text_format = self._log_text_format(color)
+        if text_format is None:
+            cursor.insertText(line)
+        else:
+            cursor.insertText(line, text_format)
 
         visible_cursor = QTextCursor(document)
         visible_cursor.movePosition(QTextCursor.End)
@@ -144,6 +164,28 @@ class ActivityLogWidget(QWidget):
         has_log_text = bool(self.text().strip())
         self.copy_button.setEnabled(has_log_text)
         self.clear_button.setEnabled(has_log_text)
+
+    def _log_text_format(self, color: str | None) -> QTextCharFormat | None:
+        resolved_color = self._resolve_log_color(color)
+        if resolved_color is None:
+            return None
+
+        text_format = QTextCharFormat()
+        text_format.setForeground(resolved_color)
+        return text_format
+
+    @staticmethod
+    def _resolve_log_color(color: str | None) -> QColor | None:
+        if not color:
+            return None
+
+        normalized_color = color.strip().lower()
+        if normalized_color == "gray":
+            return None
+
+        mapped_color = ACTIVITY_LOG_COLOR_MAP.get(normalized_color, color)
+        resolved_color = QColor(mapped_color)
+        return resolved_color if resolved_color.isValid() else None
 
     def copy_to_clipboard(self) -> None:
         text = self.text()

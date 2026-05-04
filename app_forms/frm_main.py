@@ -423,17 +423,26 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       timestamp = datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
       line = f'{timestamp} {line}'
       if self.logView is not None:
-        self._append_log_line_to_view(line)
+        self._append_log_line_to_view(line, color=color)
       else:
         self.log_buffer.append(line)
       if debug or self.__force_debug:
         log_with_color(line, color=color)
     return  
 
-  def _append_log_line_to_view(self, line: str, schedule_scroll: bool = True) -> None:
+  def _append_log_line_to_view(
+      self,
+      line: str,
+      schedule_scroll: bool = True,
+      color: str | None = None,
+  ) -> None:
     if self.activityLogPanel is None:
       return
-    self.activityLogPanel.append_log_line(line, schedule_scroll=schedule_scroll)
+    self.activityLogPanel.append_log_line(
+      line,
+      schedule_scroll=schedule_scroll,
+      color=color,
+    )
 
   def _schedule_log_scroll(self) -> None:
     if self.activityLogPanel is None:
