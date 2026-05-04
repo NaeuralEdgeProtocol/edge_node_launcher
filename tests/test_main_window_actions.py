@@ -1028,6 +1028,40 @@ def test_docker_pull_output_clears_deleted_dialog_reference(qtbot, monkeypatch):
     assert launcher.docker_pull_dialog is None
 
 
+def test_docker_pull_callbacks_route_completion_and_output(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    completions = []
+    output_lines = []
+
+    launcher._lifecycle_dialogs.set_docker_pull_complete = (
+        lambda success, message: completions.append((success, message)) or True
+    )
+    launcher._lifecycle_dialogs.update_docker_pull_progress = (
+        lambda line: output_lines.append(line) or True
+    )
+
+    on_success, on_error, on_output = launcher._create_docker_pull_callbacks("r1node")
+
+    on_success(("pulled", "", 0))
+    on_success(("", "permission denied", 1))
+    on_error("network down")
+    on_output("abcdef123456: Downloading 50%")
+    setattr(launcher, "_EdgeNodeLauncher__shutting_down", True)
+    on_output("ignored while shutting down")
+
+    assert completions == [
+        (True, "Docker image pulled successfully"),
+        (False, "Failed to pull Docker image: permission denied"),
+        (False, "network down"),
+    ]
+    assert output_lines == ["abcdef123456: Downloading 50%"]
+    log_text = "\n".join(launcher.log_buffer)
+    if launcher.logView is not None:
+        log_text += launcher.logView.toPlainText()
+    assert "Failed to pull Docker image: permission denied" in log_text
+    assert "Error pulling Docker image: network down" in log_text
+
+
 def test_docker_pull_completion_without_launch_target_clears_lifecycle(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
     launcher._begin_lifecycle_operation("launch", "r1node")

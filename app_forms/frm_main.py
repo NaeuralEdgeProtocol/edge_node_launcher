@@ -2922,35 +2922,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         # Show the dialog
         self.docker_pull_dialog.show()
         
-        # Define callbacks for Docker pull
-        def on_pull_success(result):
-            if self._skip_lifecycle_callback_if_shutting_down("Docker pull success", container_name):
-                return
-
-            stdout, stderr, return_code = result
-            # No need to process lines here as they're processed in real-time by on_pull_output
-            
-            # If pull completed successfully
-            if return_code == 0:
-                self._lifecycle_dialogs.set_docker_pull_complete(True, "Docker image pulled successfully")
-            else:
-                error_msg = f"Failed to pull Docker image: {stderr}"
-                self.add_log(error_msg, color="red")
-                self._lifecycle_dialogs.set_docker_pull_complete(False, error_msg)
-        
-        def on_pull_error(error_msg):
-            if self._skip_lifecycle_callback_if_shutting_down("Docker pull error", container_name):
-                return
-
-            self.add_log(f"Error pulling Docker image: {error_msg}", color="red")
-            self._lifecycle_dialogs.set_docker_pull_complete(False, error_msg)
-        
-        def on_pull_output(line):
-            if self._is_shutting_down():
-                return
-
-            # Process each line of output in real-time to update the dialog
-            self._lifecycle_dialogs.update_docker_pull_progress(line)
+        on_pull_success, on_pull_error, on_pull_output = self._create_docker_pull_callbacks(
+            container_name,
+        )
         
         # Always pull the latest image to ensure we have the most recent version
         self.add_log("Pulling latest Docker image before container launch...", color="blue")
@@ -2969,6 +2943,36 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.add_log(error_msg, color="red")
         self.toast.show_notification(NotificationType.ERROR, error_msg)
         self._end_lifecycle_operation(container_name)
+
+  def _create_docker_pull_callbacks(self, container_name: str):
+    """Create callbacks for Docker image pull progress and completion."""
+    def on_pull_success(result):
+        if self._skip_lifecycle_callback_if_shutting_down("Docker pull success", container_name):
+            return
+
+        _stdout, stderr, return_code = result
+        if return_code == 0:
+            self._lifecycle_dialogs.set_docker_pull_complete(True, "Docker image pulled successfully")
+            return
+
+        error_msg = f"Failed to pull Docker image: {stderr}"
+        self.add_log(error_msg, color="red")
+        self._lifecycle_dialogs.set_docker_pull_complete(False, error_msg)
+
+    def on_pull_error(error_msg):
+        if self._skip_lifecycle_callback_if_shutting_down("Docker pull error", container_name):
+            return
+
+        self.add_log(f"Error pulling Docker image: {error_msg}", color="red")
+        self._lifecycle_dialogs.set_docker_pull_complete(False, error_msg)
+
+    def on_pull_output(line):
+        if self._is_shutting_down():
+            return
+
+        self._lifecycle_dialogs.update_docker_pull_progress(line)
+
+    return on_pull_success, on_pull_error, on_pull_output
 
   def _on_docker_pull_complete(self, success, message):
     """Handle Docker pull completion.
