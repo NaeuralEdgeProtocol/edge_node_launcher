@@ -44,6 +44,8 @@ class FakeConfigManager:
         ]
         self.force_debug_values = []
         self.node_alias_updates = []
+        self.last_used_updates = []
+        self.volume_updates = []
         self.dashboard_splitter_sizes = None
         self.main_window_geometry = None
 
@@ -101,9 +103,17 @@ class FakeConfigManager:
         return True
 
     def update_last_used(self, container_name, timestamp):
+        self.last_used_updates.append((container_name, timestamp))
+        container = self.get_container(container_name)
+        if container:
+            container.last_used = timestamp
         return True
 
     def update_volume(self, container_name, volume_name):
+        self.volume_updates.append((container_name, volume_name))
+        container = self.get_container(container_name)
+        if container:
+            container.volume = volume_name
         return True
 
     def volume_exists_in_docker(self, volume_name):
@@ -1419,6 +1429,53 @@ def test_finalize_launch_failure_clears_deleted_launch_dialogs(qtbot, monkeypatc
     assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
     assert launcher.toast.notifications == [
         (NotificationType.ERROR, "network down")
+    ]
+
+
+def test_finalize_launch_success_updates_config_ui_and_dialogs(qtbot, monkeypatch):
+    launcher, fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    fake_config.containers[0].volume = None
+    progress_messages = []
+    ui_updates = []
+
+    launcher.launcher_dialog = frm_main.LoadingDialog(
+        launcher,
+        title="Launching Node",
+        message="Please wait",
+    )
+    launcher._update_launch_dialog_progress = (
+        lambda message, **_kwargs: progress_messages.append(message) or True
+    )
+    launcher.post_launch_setup = lambda: ui_updates.append("post_launch_setup")
+    launcher.refresh_node_info = lambda: ui_updates.append("refresh_node_info")
+    launcher.plot_data = lambda assume_running=False: ui_updates.append(("plot_data", assume_running))
+    launcher.update_toggle_button_text = lambda assume_running=False: ui_updates.append(
+        ("update_toggle_button_text", assume_running)
+    )
+    launcher._begin_lifecycle_operation("launch", "r1node")
+
+    launcher._finalize_launch_success("r1node", "r1vol-new")
+
+    assert progress_messages == [
+        "Container launched, updating configuration...",
+        "Updating user interface...",
+        "Container launched successfully!",
+    ]
+    assert fake_config.last_used_updates
+    assert fake_config.last_used_updates[0][0] == "r1node"
+    assert "T" in fake_config.last_used_updates[0][1]
+    assert fake_config.volume_updates == [("r1node", "r1vol-new")]
+    assert fake_config.containers[0].volume == "r1vol-new"
+    assert ui_updates == [
+        "post_launch_setup",
+        "refresh_node_info",
+        ("plot_data", True),
+        ("update_toggle_button_text", True),
+    ]
+    assert launcher.launcher_dialog is None
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+    assert launcher.toast.notifications == [
+        (NotificationType.SUCCESS, "Node 'alpha' launched successfully")
     ]
 
 

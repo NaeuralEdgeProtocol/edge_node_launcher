@@ -3273,6 +3273,33 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.toast.show_notification(NotificationType.ERROR, error_msg)
     self._end_lifecycle_operation(container_name)
 
+  def _finalize_launch_success(self, container_name: str, volume_name: str) -> None:
+    """Persist launch state, refresh visible UI, and close launch dialogs."""
+    self._update_launch_dialog_progress("Container launched, updating configuration...")
+
+    self.config_manager.update_last_used(container_name, datetime.now().isoformat())
+
+    container_config = self.config_manager.get_container(container_name)
+    if container_config and not container_config.volume:
+      self.config_manager.update_volume(container_name, volume_name)
+      self.add_log(f"Updated volume name in config: {volume_name}", debug=True)
+
+    self._update_launch_dialog_progress("Updating user interface...")
+
+    self.post_launch_setup()
+    self.refresh_node_info()
+    self.plot_data(assume_running=True)
+    self.update_toggle_button_text(assume_running=True)
+
+    self.loading_indicator.stop()
+    self._update_launch_dialog_progress("Container launched successfully!")
+    self._close_launch_dialog_references()
+
+    container_config = self.config_manager.get_container(container_name)
+    node_alias = container_config.node_alias if container_config and container_config.node_alias else None
+    self.toast.show_notification(NotificationType.SUCCESS, launch_success_notification(node_alias))
+    self._end_lifecycle_operation(container_name)
+
   def _close_launch_dialog_references(self) -> None:
     for dialog_attr in ("launcher_dialog", "startup_dialog"):
       self._close_dialog_reference(dialog_attr)
@@ -3300,41 +3327,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             if return_code != 0:
                 self._finalize_launch_failure(container_name, f"Failed to launch container: {stderr}")
                 return
-            
-            # Update loading dialogs with progress
-            self._update_launch_dialog_progress("Container launched, updating configuration...")
-            
-            # Update last used timestamp in config
-            from datetime import datetime
-            self.config_manager.update_last_used(container_name, datetime.now().isoformat())
-            
-            # Update volume name in config if it's not already set
-            container_config = self.config_manager.get_container(container_name)
-            if container_config and not container_config.volume:
-                self.config_manager.update_volume(container_name, volume_name)
-                self.add_log(f"Updated volume name in config: {volume_name}", debug=True)
-            
-            # Update loading dialogs with progress
-            self._update_launch_dialog_progress("Updating user interface...")
-            
-            # Update UI after launch
-            self.post_launch_setup()
-            self.refresh_node_info()
-            self.plot_data(assume_running=True)
-            self.update_toggle_button_text(assume_running=True)
-            
-            # Stop loading indicator
-            self.loading_indicator.stop()
-            
-            # Update loading dialogs with completion message
-            self._update_launch_dialog_progress("Container launched successfully!")
-            
-            self._close_launch_dialog_references()
-            
-            container_config = self.config_manager.get_container(container_name)
-            node_alias = container_config.node_alias if container_config and container_config.node_alias else None
-            self.toast.show_notification(NotificationType.SUCCESS, launch_success_notification(node_alias))
-            self._end_lifecycle_operation(container_name)
+
+            self._finalize_launch_success(container_name, volume_name)
         
         # Define error callback for threaded operation
         def on_launch_error(error_msg):
