@@ -153,9 +153,11 @@ def test_dialog_visual_snapshot_records_dialog_content(qtbot):
     label.setWordWrap(True)
     line_edit = QLineEdit(dialog)
     line_edit.setObjectName("dialogInput")
+    line_edit.setProperty("role", "dialogTextInput")
     line_edit.setAccessibleName("Dialog input")
     line_edit.setText("alpha")
     line_edit.setPlaceholderText("Alias")
+    line_edit.setMinimumHeight(38)
     progress_bar = QProgressBar(dialog)
     progress_bar.setObjectName("dialogProgress")
     progress_bar.setAccessibleName("Dialog progress")
@@ -180,8 +182,10 @@ def test_dialog_visual_snapshot_records_dialog_content(qtbot):
     assert snapshot["labels"][0]["word_wrap"] is True
     assert snapshot["line_edits"][0]["object_name"] == "dialogInput"
     assert snapshot["line_edits"][0]["accessible_name"] == "Dialog input"
+    assert snapshot["line_edits"][0]["role"] == "dialogTextInput"
     assert snapshot["line_edits"][0]["text"] == "alpha"
     assert snapshot["line_edits"][0]["placeholder"] == "Alias"
+    assert snapshot["line_edits"][0]["minimum_height"] == 38
     assert snapshot["buttons"][0]["object_name"] == "dialogSaveButton"
     assert snapshot["buttons"][0]["accessible_name"] == "Save dialog"
     assert snapshot["buttons"][0]["text"] == "Save"

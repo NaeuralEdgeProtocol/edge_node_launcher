@@ -89,6 +89,7 @@ def test_rename_node_dialog_preserves_submit_guard(qtbot):
     assert name_input.placeholderText() == "Node display name"
     assert name_input.maxLength() == 15
     assert name_input.minimumHeight() == 38
+    assert "color: black" in name_input.styleSheet()
     assert explanation.accessibleName() == "Rename node explanation"
     assert restrictions_label.accessibleName() == "Name restrictions heading"
     assert restrictions_text.accessibleName() == "Name restrictions"

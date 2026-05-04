@@ -354,10 +354,12 @@ def dialog_visual_snapshot(dialog):
             {
                 "object_name": line_edit.objectName(),
                 "accessible_name": line_edit.accessibleName(),
+                "role": line_edit.property("role"),
                 "text": line_edit.text(),
                 "placeholder": line_edit.placeholderText(),
                 "visible": line_edit.isVisible(),
                 "enabled": line_edit.isEnabled(),
+                "minimum_height": line_edit.minimumHeight(),
                 "rect": widget_global_rect(line_edit),
             }
             for line_edit in dialog.findChildren(QLineEdit)
@@ -684,6 +686,31 @@ def run_scenarios(args):
             "docker_pull_progress",
         )
 
+        def open_and_cancel_rename_dialog(label, click_step):
+            original_running_check = launcher.is_container_running
+            launcher.is_container_running = lambda: True
+
+            def capture_and_cancel_rename_dialog():
+                dialog = find_dialog(app, "Rename Node")
+                if dialog is None:
+                    QTimer.singleShot(100, capture_and_cancel_rename_dialog)
+                    return
+                record_step(
+                    log,
+                    args.output,
+                    {
+                        "step": f"captured {label.replace('_', ' ')} dialog visual evidence",
+                        "visual": capture_dialog_visual_evidence(dialog, args.screenshot_dir, label),
+                    },
+                )
+                click_dialog_button(app, dialog, "renameNodeCancelButton")
+
+            try:
+                QTimer.singleShot(100, capture_and_cancel_rename_dialog)
+                record_step(log, args.output, {"step": click_button(app, launcher.renameNodeButton, click_step)})
+            finally:
+                launcher.is_container_running = original_running_check
+
         record_step(log, args.output, {"step": click_button(app, launcher.themeToggleButton, "toggle light theme")})
         wait_until(app, lambda: launcher.themeToggleButton.text() == frm_main.DARK_DASHBOARD_BUTTON_TEXT, args.timeout, "light theme")
         light_visual = capture_visual_evidence(launcher, args.screenshot_dir, "light_theme")
@@ -721,6 +748,8 @@ def run_scenarios(args):
                 ),
             },
         )
+
+        open_and_cancel_rename_dialog("light_rename_node", "open and cancel light rename dialog")
         record_step(log, args.output, {"step": click_button(app, launcher.themeToggleButton, "toggle dark theme")})
         wait_until(app, lambda: launcher.themeToggleButton.text() == frm_main.LIGHT_DASHBOARD_BUTTON_TEXT, args.timeout, "dark theme")
 
@@ -792,29 +821,7 @@ def run_scenarios(args):
         QTimer.singleShot(100, capture_and_cancel_add_node_dialog)
         record_step(log, args.output, {"step": click_button(app, launcher.add_node_button, "open and cancel add node dialog")})
 
-        original_is_container_running = launcher.is_container_running
-        launcher.is_container_running = lambda: True
-
-        def capture_and_cancel_rename_dialog():
-            dialog = find_dialog(app, "Rename Node")
-            if dialog is None:
-                QTimer.singleShot(100, capture_and_cancel_rename_dialog)
-                return
-            record_step(
-                log,
-                args.output,
-                {
-                    "step": "captured rename dialog visual evidence",
-                    "visual": capture_dialog_visual_evidence(dialog, args.screenshot_dir, "rename_node"),
-                },
-            )
-            click_dialog_button(app, dialog, "renameNodeCancelButton")
-
-        try:
-            QTimer.singleShot(100, capture_and_cancel_rename_dialog)
-            record_step(log, args.output, {"step": click_button(app, launcher.renameNodeButton, "open and cancel rename dialog")})
-        finally:
-            launcher.is_container_running = original_is_container_running
+        open_and_cancel_rename_dialog("rename_node", "open and cancel rename dialog")
 
         record_step(log, args.output, {"step": click_button(app, launcher.renameNodeButton, "rename stopped node guard")})
         wait_until(

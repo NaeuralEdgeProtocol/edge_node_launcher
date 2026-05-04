@@ -49,8 +49,9 @@ class RenameNodeDialog(QDialog):
         self.name_input.setMaxLength(max_length)
         self.name_input.setPlaceholderText("Node display name")
         self.name_input.setMinimumHeight(38)
-        if not stylesheet:
-            self.name_input.setStyleSheet(f"color: {input_text_color};")
+        self.name_input.setStyleSheet(
+            f"QLineEdit#renameNodeNameInput {{ color: {input_text_color}; }}"
+        )
         layout.addWidget(self.name_input)
 
         restrictions_label = QLabel("Name restrictions:")
