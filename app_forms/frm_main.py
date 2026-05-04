@@ -32,7 +32,6 @@ from PyQt5.QtWidgets import (
   QMenu,
   QAction,
   QProgressBar,
-  QDesktopWidget,
   QMainWindow,
   QScrollArea,
   QTextBrowser,

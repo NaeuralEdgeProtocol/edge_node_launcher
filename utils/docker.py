@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import (QDialog, QInputDialog, QLabel,
-                             QMessageBox, QProgressBar, QTextEdit, QVBoxLayout)
+                             QMessageBox, QProgressBar, QSizePolicy, QTextEdit, QVBoxLayout)
 
 from .const import *
 from .docker_commands import DockerCommandHandler
@@ -96,20 +96,37 @@ class ProgressBarWindow(QDialog):
     super().__init__()
     self.sender = sender
     self.setWindowTitle("Progress")
+    self.setObjectName("legacyDockerPullProgressDialog")
+    self.setAccessibleName("Docker pull progress")
     self.setWindowIcon(icon_object)
     self.setWindowModality(Qt.ApplicationModal)
-    self.setGeometry(300, 300, 600, 400)  # Larger size
+    self.resize(600, 400)
+    self.setMinimumSize(560, 360)
     layout = QVBoxLayout()
+    layout.setContentsMargins(18, 18, 18, 16)
+    layout.setSpacing(12)
 
     self.label = QLabel(message)
+    self.label.setObjectName("legacyDockerPullProgressMessage")
+    self.label.setAccessibleName("Docker pull progress message")
+    self.label.setWordWrap(True)
     layout.addWidget(self.label)
 
     self.output_edit = QTextEdit()
+    self.output_edit.setObjectName("legacyDockerPullOutput")
+    self.output_edit.setAccessibleName("Docker pull output")
     self.output_edit.setReadOnly(True)
+    self.output_edit.setMinimumHeight(190)
+    self.output_edit.setLineWrapMode(QTextEdit.WidgetWidth)
+    self.output_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
     layout.addWidget(self.output_edit)
 
     self.progress_bar = QProgressBar(self)
+    self.progress_bar.setObjectName("legacyDockerPullProgressBar")
+    self.progress_bar.setAccessibleName("Docker pull progress")
+    self.progress_bar.setRange(0, 100)
     self.progress_bar.setMaximum(100)
+    self.progress_bar.setMinimumHeight(24)
     layout.addWidget(self.progress_bar)
 
     self.setLayout(layout)
@@ -124,7 +141,7 @@ class ProgressBarWindow(QDialog):
   def update_progress(self, output, progress):
     self.output_edit.append(output)
     self.output_edit.verticalScrollBar().setValue(self.output_edit.verticalScrollBar().maximum())
-    self.progress_bar.setValue(progress)
+    self.progress_bar.setValue(max(0, min(100, progress)))
 
 
   def apply_stylesheet(self):

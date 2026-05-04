@@ -1,6 +1,6 @@
 from PyQt5.QtCore import QRect, Qt
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QLineEdit, QPushButton, QScrollArea, QSizePolicy
+from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QLineEdit, QPushButton, QScrollArea, QSizePolicy, QTextEdit
 
 import widgets.dialogs.DockerCheckDialog as docker_check_module
 from ui.ProgressDialog import ImagePullProgressDialog
@@ -134,6 +134,48 @@ def test_progress_bar_window_centers_on_screen_geometry(qtbot, monkeypatch):
     assert used_widgets == [window]
     assert abs(window_center.x() - screen_geometry.center().x()) <= 6
     assert abs(window_center.y() - screen_geometry.center().y()) <= 6
+
+
+def test_progress_bar_window_exposes_stable_visual_contract(qtbot):
+    class Sender:
+        _current_stylesheet = ""
+
+        def __init__(self):
+            self.logs = []
+
+        def add_log(self, message):
+            self.logs.append(message)
+
+    window = docker_module.ProgressBarWindow(
+        "Pulling Docker image with a long command that should wrap cleanly instead of forcing a wider dialog",
+        QIcon(),
+        Sender(),
+    )
+    qtbot.addWidget(window)
+
+    assert window.objectName() == "legacyDockerPullProgressDialog"
+    assert window.accessibleName() == "Docker pull progress"
+    assert window.minimumWidth() >= 560
+    assert window.minimumHeight() >= 360
+    assert window.label.objectName() == "legacyDockerPullProgressMessage"
+    assert window.label.accessibleName() == "Docker pull progress message"
+    assert window.label.wordWrap()
+    assert window.output_edit.objectName() == "legacyDockerPullOutput"
+    assert window.output_edit.accessibleName() == "Docker pull output"
+    assert window.output_edit.isReadOnly()
+    assert window.output_edit.lineWrapMode() == QTextEdit.WidgetWidth
+    assert window.output_edit.sizePolicy().horizontalPolicy() == QSizePolicy.Expanding
+    assert window.output_edit.sizePolicy().verticalPolicy() == QSizePolicy.Expanding
+    assert window.progress_bar.objectName() == "legacyDockerPullProgressBar"
+    assert window.progress_bar.accessibleName() == "Docker pull progress"
+    assert window.progress_bar.minimum() == 0
+    assert window.progress_bar.maximum() == 100
+    assert window.progress_bar.minimumHeight() >= 24
+
+    window.update_progress("Layer output line", 160)
+
+    assert "Layer output line" in window.output_edit.toPlainText()
+    assert window.progress_bar.value() == 100
 
 
 def test_image_pull_cancel_button_rejects_dialog(qtbot):
