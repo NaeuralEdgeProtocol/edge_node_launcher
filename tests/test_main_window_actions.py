@@ -23,6 +23,7 @@ REAL_PLOT_GRAPHS = frm_main.EdgeNodeLauncher.plot_graphs
 REAL_REFRESH_NODE_INFO = frm_main.EdgeNodeLauncher.refresh_node_info
 REAL_MAYBE_REFRESH_UPTIME = frm_main.EdgeNodeLauncher.maybe_refresh_uptime
 REAL_UPDATE_RESOURCES_DISPLAY = frm_main.EdgeNodeLauncher.update_resources_display
+REAL_CHECK_FOR_UPDATES = frm_main.EdgeNodeLauncher.check_for_updates
 
 
 class FakeToast:
@@ -31,6 +32,43 @@ class FakeToast:
 
     def show_notification(self, notification_type, message):
         self.notifications.append((notification_type, message))
+
+
+class FakeSignal:
+    def __init__(self):
+        self.callbacks = []
+
+    def connect(self, callback):
+        self.callbacks.append(callback)
+
+    def emit(self, *args):
+        for callback in list(self.callbacks):
+            callback(*args)
+
+
+class FakeUpdateCheckThread:
+    def __init__(self):
+        self.update_check_finished = FakeSignal()
+        self.update_check_failed = FakeSignal()
+        self.finished = FakeSignal()
+        self.started = False
+        self.deleted = False
+        self.interrupted = False
+
+    def start(self):
+        self.started = True
+
+    def isRunning(self):
+        return self.started and not self.interrupted
+
+    def requestInterruption(self):
+        self.interrupted = True
+
+    def wait(self, _timeout):
+        return True
+
+    def deleteLater(self):
+        self.deleted = True
 
 
 class FakeConfigManager:
@@ -259,6 +297,54 @@ def test_main_window_does_not_process_events_synchronously():
     source = Path(frm_main.__file__).read_text(encoding="utf-8")
 
     assert "QApplication.processEvents" not in source
+
+
+def test_check_for_updates_starts_worker_without_fetching_synchronously(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+    launcher.check_for_updates = REAL_CHECK_FOR_UPDATES.__get__(launcher)
+    launcher._EdgeNodeLauncher__update_in_progress = False
+    launcher._EdgeNodeLauncher__update_dialog_shown = False
+    fake_thread = FakeUpdateCheckThread()
+
+    launcher._create_update_check_thread = lambda: fake_thread
+    launcher.get_latest_release_version = lambda: (_ for _ in ()).throw(
+        AssertionError("update fetch should run only from the worker")
+    )
+
+    launcher.check_for_updates(verbose=True)
+
+    assert fake_thread.started
+    assert launcher._EdgeNodeLauncher__update_check_thread is fake_thread
+    assert launcher._EdgeNodeLauncher__update_in_progress
+
+
+def test_update_check_result_prompts_and_resets_state(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+    launcher._EdgeNodeLauncher__update_in_progress = True
+    launcher._compare_versions = lambda current, latest: True
+    proceeded_updates = []
+    prompts = []
+
+    def decline_update(parent, title, message, buttons, default_button):
+        prompts.append((parent, title, message, buttons, default_button))
+        return frm_main.QMessageBox.No
+
+    monkeypatch.setattr(frm_main.QMessageBox, "question", decline_update)
+    launcher._proceed_with_update = lambda version, urls: proceeded_updates.append((version, urls))
+
+    launcher._handle_update_check_result(
+        "v9.9.9",
+        {"Windows": "https://example.test/app.exe"},
+        verbose=True,
+    )
+
+    assert len(prompts) == 1
+    assert prompts[0][0] is launcher
+    assert prompts[0][1] == "Update Available"
+    assert "v9.9.9" in prompts[0][2]
+    assert proceeded_updates == []
+    assert not launcher._EdgeNodeLauncher__update_dialog_shown
+    assert not launcher._EdgeNodeLauncher__update_in_progress
 
 
 def test_main_window_copy_buttons_copy_current_addresses(qtbot, monkeypatch):

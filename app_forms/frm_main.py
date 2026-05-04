@@ -64,7 +64,7 @@ from widgets.app_widgets.sidebar_panel import SidebarPanel
 from utils.const import *
 from utils.docker import _DockerUtilsMixin
 from utils.docker_commands import DockerCommandHandler
-from utils.updater import _UpdaterMixin
+from utils.updater import _UpdaterMixin, UpdateCheckThread
 from utils.system_resources import _SystemResourcesMixin
 from utils.docker_utils import get_volume_name, generate_container_name
 from utils.docker_errors import extract_conflicting_container_id
@@ -161,6 +161,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     # Track update process state to prevent duplicate notifications
     self.__update_in_progress = False
     self.__update_dialog_shown = False
+    self.__update_check_thread = None
     
     # Track Docker pull state to prevent concurrent pulls
     self.__lifecycle_state = LifecycleState()
@@ -864,6 +865,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.__shutting_down = True
         self.add_log("Starting application shutdown sequence...", debug=True)
         self._save_main_window_geometry()
+        self._cancel_update_check_thread()
         
         # Stop any running timers first
         if hasattr(self, 'timer') and self.timer:
@@ -3328,61 +3330,98 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.storageDisplay.setText(f"{STORAGE_LABEL} {STORAGE_NOT_AVAILABLE}")
 
   def check_for_updates(self, verbose=True):
-    """Override the _UpdaterMixin check_for_updates method to manage update state and prevent multiple dialogs."""
-    # Don't check for updates if one is already in progress or dialog is shown
+    """Start a non-blocking update check and prevent duplicate dialogs."""
     if self.__update_in_progress or self.__update_dialog_shown:
         if verbose:
             self.add_log("Update check skipped - update already in progress or dialog is shown", debug=True)
         return
     
-    # Set the flags to indicate update process is starting
     self.__update_in_progress = True
-    
-    try:
-        # Implement the update check logic directly here to control dialog display
-        latest_version, download_urls = self.get_latest_release_version()
-        latest_version = latest_version.lstrip('v').strip().replace('"', '').replace("'", '')
-        
-        if verbose:
-            self.add_log(f'Obtained latest version: {latest_version}')
-        
-        # Compare versions using the parent method
-        if self._compare_versions(CURRENT_VERSION, latest_version):
-            # Only show dialog if one isn't already shown
-            if not self.__update_dialog_shown:
-                self.__update_dialog_shown = True
-                
-                try:
-                    from PyQt5.QtWidgets import QMessageBox
 
-                    reply = QMessageBox.question(
-                        self, 'Update Available',
-                        f'A new version v{latest_version} is available (current v{CURRENT_VERSION}). Do you want to update?',
-                        QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes
-                    )
-                    
-                    if reply == QMessageBox.Yes:
-                        # Continue with the update process by calling the parent's update logic
-                        self._proceed_with_update(latest_version, download_urls)
-                    else:
-                        self.add_log("Update declined by user")
-                        
-                finally:
-                    # Reset dialog flag when dialog is closed
-                    self.__update_dialog_shown = False
-            else:
-                self.add_log("Update dialog already shown, skipping duplicate", debug=True)
-        else:
-            if verbose:
-                self.add_log("You are already using the latest version. Current: {}, Online: {}".format(CURRENT_VERSION, latest_version))
-                
+    try:
+        if verbose:
+            self.add_log("Checking for launcher updates...")
+
+        thread = self._create_update_check_thread()
+        self.__update_check_thread = thread
+        thread.update_check_finished.connect(
+            lambda latest_version, download_urls, checked_verbose=verbose: self._handle_update_check_result(
+                latest_version,
+                download_urls,
+                checked_verbose,
+            )
+        )
+        thread.update_check_failed.connect(self._handle_update_check_error)
+        thread.finished.connect(lambda checked_thread=thread: self._cleanup_update_check_thread(checked_thread))
+        thread.start()
     except Exception as e:
-        self.add_log(f"Error during update check: {str(e)}", color="red")
-        # Reset dialog flag in case of error
-        self.__update_dialog_shown = False
+        self._handle_update_check_error(str(e))
+
+  def _create_update_check_thread(self):
+    """Create the worker used for network-bound update checks."""
+    return UpdateCheckThread(self.get_latest_release_version)
+
+  def _cleanup_update_check_thread(self, thread):
+    if self.__update_check_thread is thread:
+      self.__update_check_thread = None
+    try:
+      thread.deleteLater()
+    except RuntimeError:
+      pass
+
+  def _cancel_update_check_thread(self):
+    thread = self.__update_check_thread
+    if thread is None:
+      return
+
+    try:
+      if hasattr(thread, "isRunning") and thread.isRunning():
+        thread.requestInterruption()
+        thread.wait(100)
+      if not hasattr(thread, "isRunning") or not thread.isRunning():
+        self._cleanup_update_check_thread(thread)
+    except RuntimeError:
+      self.__update_check_thread = None
+
+  def _handle_update_check_error(self, error_message):
+    self.add_log(f"Error during update check: {error_message}", color="red")
+    self.__update_dialog_shown = False
+    self.__update_in_progress = False
+
+  def _handle_update_check_result(self, latest_version, download_urls, verbose=True):
+    try:
+      latest_version = latest_version.lstrip('v').strip().replace('"', '').replace("'", '')
+
+      if verbose:
+        self.add_log(f'Obtained latest version: {latest_version}')
+
+      if self._compare_versions(CURRENT_VERSION, latest_version):
+        if not self.__update_dialog_shown:
+          self.__update_dialog_shown = True
+
+          try:
+            reply = QMessageBox.question(
+              self, 'Update Available',
+              f'A new version v{latest_version} is available (current v{CURRENT_VERSION}). Do you want to update?',
+              QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes
+            )
+
+            if reply == QMessageBox.Yes:
+              self._proceed_with_update(latest_version, download_urls)
+            else:
+              self.add_log("Update declined by user")
+          finally:
+            self.__update_dialog_shown = False
+        else:
+          self.add_log("Update dialog already shown, skipping duplicate", debug=True)
+      else:
+        if verbose:
+          self.add_log("You are already using the latest version. Current: {}, Online: {}".format(CURRENT_VERSION, latest_version))
+    except Exception as e:
+      self.add_log(f"Error during update check: {str(e)}", color="red")
+      self.__update_dialog_shown = False
     finally:
-        # Always reset the progress flag when update check is complete
-        self.__update_in_progress = False
+      self.__update_in_progress = False
 
   def _proceed_with_update(self, latest_version, download_urls):
     """Handle the update process after user confirmation."""

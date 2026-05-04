@@ -5,18 +5,37 @@ import zipfile
 import shutil
 import platform
 import subprocess
+from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtWidgets import QMessageBox, QApplication
 
 from utils.const import GITHUB_API_URL
 from ver import __VER__ as CURRENT_VERSION
 
 DOWNLOAD_DIR = 'downloads'
+UPDATE_CHECK_TIMEOUT_SECONDS = 8
+UPDATE_DOWNLOAD_TIMEOUT_SECONDS = 30
+
+
+class UpdateCheckThread(QThread):
+  update_check_finished = pyqtSignal(str, dict)
+  update_check_failed = pyqtSignal(str)
+
+  def __init__(self, release_fetcher):
+    super().__init__()
+    self.release_fetcher = release_fetcher
+
+  def run(self):
+    try:
+      latest_version, download_urls = self.release_fetcher()
+      self.update_check_finished.emit(latest_version, download_urls)
+    except Exception as e:
+      self.update_check_failed.emit(str(e))
 
 class _UpdaterMixin:
 
   @staticmethod
   def get_latest_release_version():
-    response = requests.get(GITHUB_API_URL)
+    response = requests.get(GITHUB_API_URL, timeout=UPDATE_CHECK_TIMEOUT_SECONDS)
     response.raise_for_status()
     latest_release = response.json()
     latest_version = latest_release['tag_name']
@@ -65,11 +84,12 @@ class _UpdaterMixin:
       local_filename = os.path.join(download_dir, 'EdgeNodeLauncher.AppImage')
     
     self.add_log(f'Downloading to {local_filename}')
-    with requests.get(download_url, stream=True) as response:
+    with requests.get(download_url, stream=True, timeout=UPDATE_DOWNLOAD_TIMEOUT_SECONDS) as response:
       response.raise_for_status()
       with open(local_filename, 'wb') as file:
         for chunk in response.iter_content(chunk_size=8192):
-          file.write(chunk)
+          if chunk:
+            file.write(chunk)
     return local_filename
 
   def _extract_zip(self, zip_path, extract_to):
@@ -367,69 +387,57 @@ echo Done.
       subprocess.Popen(['sh', script_path])
       self.add_log(f'Shell script created and executed: {script_path}')
 
-    # Schedule application exit after a short delay to ensure UI updates are processed
     from PyQt5.QtCore import QTimer
-    
-    def delayed_exit():
-        """Exit the application after ensuring all UI operations are complete"""
+
+    def force_exit():
+        """Force-exit the GUI process if graceful shutdown did not complete."""
         try:
-            # Get the application instance
-            app = QApplication.instance()
-            
-            # First attempt: Graceful close
-            if app:
-                self.add_log("Attempting graceful application shutdown...", debug=True)
-                app.closeAllWindows()
-                app.processEvents()
-                
-                # Give a brief moment for graceful shutdown
-                import time
-                time.sleep(0.5)
-                app.processEvents()
-            
-            # Second attempt: Force quit with basic cleanup
+            import os
+            self.add_log("Using OS-level force exit for GUI application", debug=True)
+            if os.name == 'nt':
+                import subprocess
+                current_pid = os.getpid()
+                try:
+                    subprocess.run(['taskkill', '/F', '/PID', str(current_pid)],
+                                 capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+                except:
+                    pass
+            os._exit(0)
+        except:
+            import signal
+            os.kill(os.getpid(), signal.SIGTERM)
+
+    def final_exit():
+        """Quit the Qt application without pumping events recursively."""
+        try:
             self.add_log("Forcing application exit for update...", debug=True)
-            
-            # Stop only GUI timers (monitoring will stop naturally)
+
             try:
-                # Stop timers if they exist
                 if hasattr(self, 'timer') and self.timer:
                     self.timer.stop()
             except:
                 pass
-            
-            # Third attempt: System exit
-            try:
-                if app:
-                    app.quit()
-                    app.processEvents()
-                sys.exit(0)
-            except:
-                pass
-                
+
+            app = QApplication.instance()
+            if app:
+                app.quit()
+            sys.exit(0)
         except:
-            pass
-        
-        # Final fallback: Force exit at OS level (only the GUI process)
+            force_exit()
+
+    def delayed_exit():
+        """Begin graceful shutdown and let Qt deliver close events naturally."""
         try:
-            import os
-            self.add_log("Using OS-level force exit for GUI application", debug=True)
-            if os.name == 'nt':  # Windows
-                # On Windows, use taskkill to force close only our GUI process
-                import subprocess
-                current_pid = os.getpid()
-                try:
-                    # Kill only the current GUI process
-                    subprocess.run(['taskkill', '/F', '/PID', str(current_pid)], 
-                                 capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
-                except:
-                    pass
-            # Fallback for all platforms
-            os._exit(0)
+            app = QApplication.instance()
+
+            if app:
+                self.add_log("Attempting graceful application shutdown...", debug=True)
+                app.setQuitOnLastWindowClosed(False)
+                app.closeAllWindows()
+
+            QTimer.singleShot(500, final_exit)
         except:
-            # Last resort - this should never fail
-            import signal
-            os.kill(os.getpid(), signal.SIGTERM)
+            force_exit()
     
     # Show message to user
     QMessageBox.information(None, 'Update Ready', 
