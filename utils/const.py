@@ -483,6 +483,9 @@ COMMON_STYLESHEET_TEMPLATE = """
   QWidget[role="activityLogPanel"] {{
     background-color: transparent;
   }}
+  QWidget[role="activityLogHeader"] {{
+    background-color: transparent;
+  }}
   QLabel[role="dashboardSectionTitle"] {{
     color: {graph_text};
     background-color: transparent;
@@ -491,6 +494,21 @@ COMMON_STYLESHEET_TEMPLATE = """
     font-weight: 600;
     padding: 0px 4px 2px 4px;
     margin: 0px;
+  }}
+  QToolButton[role="activityLogToolButton"] {{
+    background-color: {secondary_action_bg};
+    color: {secondary_action_text};
+    border: 1px solid {secondary_action_border};
+    border-radius: 6px;
+    padding: 4px;
+  }}
+  QToolButton[role="activityLogToolButton"]:hover {{
+    background-color: {secondary_action_hover};
+  }}
+  QToolButton[role="activityLogToolButton"]:disabled {{
+    color: {toggle_button_disabled_text};
+    background-color: {toggle_button_disabled_bg};
+    border-color: {secondary_action_border};
   }}
   PlotWidget > * {{
     background-color: transparent;

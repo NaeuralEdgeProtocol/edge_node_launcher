@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from PyQt5 import sip
 from PyQt5.QtCore import QRect, Qt
-from PyQt5.QtWidgets import QApplication, QDialog, QGroupBox, QLabel, QLineEdit, QPushButton, QScrollArea, QSizePolicy, QSplitter, QTextEdit, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QApplication, QDialog, QGroupBox, QLabel, QLineEdit, QPushButton, QScrollArea, QSizePolicy, QSplitter, QTextEdit, QToolButton, QVBoxLayout, QWidget
 
 import app_forms.frm_main as frm_main
 from models.NodeHistory import NodeHistory
@@ -1489,11 +1489,21 @@ def test_main_window_log_view_has_stable_identity_and_dimensions(qtbot, monkeypa
     assert dashboard_panel is not None
     assert dashboard_splitter is not None
     assert activity_log_panel is launcher.activityLogPanel
+    assert launcher.activity_log_header.objectName() == "activityLogHeader"
+    assert launcher.activity_log_header.property("role") == "activityLogHeader"
     assert launcher.activity_log_title.objectName() == "activityLogTitle"
     assert launcher.activity_log_title.text() == "Activity Log"
     assert launcher.activity_log_title.property("role") == "dashboardSectionTitle"
     assert launcher.activity_log_title.accessibleName() == "Activity log section"
     assert launcher.activity_log_title.font().family() != "Courier New"
+    assert launcher.activity_log_copy_button.objectName() == "activityLogCopyButton"
+    assert launcher.activity_log_copy_button.property("role") == "activityLogToolButton"
+    assert launcher.activity_log_copy_button.accessibleName() == "Copy activity log"
+    assert launcher.activity_log_copy_button.toolTip() == "Copy activity log to clipboard"
+    assert launcher.activity_log_clear_button.objectName() == "activityLogClearButton"
+    assert launcher.activity_log_clear_button.property("role") == "activityLogToolButton"
+    assert launcher.activity_log_clear_button.accessibleName() == "Clear activity log"
+    assert launcher.activity_log_clear_button.toolTip() == "Clear activity log"
     assert dashboard_splitter.orientation() == Qt.Vertical
     assert dashboard_splitter.count() == 2
     assert dashboard_panel.layout().indexOf(dashboard_splitter) >= 0
@@ -1504,8 +1514,11 @@ def test_main_window_log_view_has_stable_identity_and_dimensions(qtbot, monkeypa
     assert launcher.logView.accessibleName() == "Activity log output"
     assert launcher.findChild(QTextEdit, "logView") is launcher.logView
     assert activity_log_panel.findChild(QTextEdit, "logView") is launcher.logView
-    assert activity_log_panel.layout().indexOf(launcher.activity_log_title) >= 0
+    assert activity_log_panel.findChild(QToolButton, "activityLogCopyButton") is launcher.activity_log_copy_button
+    assert activity_log_panel.findChild(QToolButton, "activityLogClearButton") is launcher.activity_log_clear_button
+    assert activity_log_panel.layout().indexOf(launcher.activity_log_header) >= 0
     assert activity_log_panel.layout().indexOf(launcher.logView) >= 0
+    assert activity_log_panel.layout().indexOf(launcher.activity_log_header) < activity_log_panel.layout().indexOf(launcher.logView)
     assert launcher.logView.isReadOnly()
     assert launcher.logView.minimumHeight() == 120
     assert launcher.logView.maximumHeight() > 150
@@ -1522,6 +1535,17 @@ def test_main_window_log_view_has_stable_identity_and_dimensions(qtbot, monkeypa
     qtbot.wait(20)
 
     assert launcher.logView.horizontalScrollBar().value() == launcher.logView.horizontalScrollBar().minimum()
+
+    QApplication.clipboard().clear()
+    qtbot.mouseClick(launcher.activity_log_copy_button, Qt.LeftButton)
+
+    assert "long operational line" in QApplication.clipboard().text()
+
+    qtbot.mouseClick(launcher.activity_log_clear_button, Qt.LeftButton)
+
+    assert launcher.logView.toPlainText() == ""
+    assert not launcher.activity_log_copy_button.isEnabled()
+    assert not launcher.activity_log_clear_button.isEnabled()
 
 
 def test_dashboard_splitter_restores_saved_sizes(qtbot, monkeypatch):

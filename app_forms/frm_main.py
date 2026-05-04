@@ -128,7 +128,10 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   def __init__(self, app_icon=None):
     self.logView = None
     self.activityLogPanel = None
+    self.activity_log_header = None
     self.activity_log_title = None
+    self.activity_log_copy_button = None
+    self.activity_log_clear_button = None
     self.dashboard_splitter = None
     self.log_buffer = []
     self.__force_debug = False
@@ -432,6 +435,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     visible_cursor.movePosition(QTextCursor.End)
     visible_cursor.movePosition(QTextCursor.StartOfLine)
     self.logView.setTextCursor(visible_cursor)
+    self._update_activity_log_actions()
     if schedule_scroll:
       self._schedule_log_scroll()
 
@@ -650,6 +654,41 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     label.setMinimumHeight(24)
     return label
 
+  def _create_activity_log_action_button(self, object_name: str, accessible_name: str, tooltip: str, icon) -> QToolButton:
+    button = QToolButton()
+    button.setObjectName(object_name)
+    button.setProperty("role", "activityLogToolButton")
+    button.setAccessibleName(accessible_name)
+    button.setToolTip(tooltip)
+    button.setIcon(self.style().standardIcon(icon))
+    button.setAutoRaise(False)
+    button.setFixedSize(30, 30)
+    button.setEnabled(False)
+    return button
+
+  def _activity_log_text(self) -> str:
+    if self.logView is None:
+      return ""
+    return self.logView.toPlainText()
+
+  def _update_activity_log_actions(self) -> None:
+    has_log_text = bool(self._activity_log_text().strip())
+    for button in (self.activity_log_copy_button, self.activity_log_clear_button):
+      if button is not None:
+        button.setEnabled(has_log_text)
+
+  def copy_activity_log(self) -> None:
+    text = self._activity_log_text()
+    if not text:
+      return
+    QApplication.clipboard().setText(text)
+
+  def clear_activity_log(self) -> None:
+    if self.logView is None:
+      return
+    self.logView.clear()
+    self._update_activity_log_actions()
+
   def _create_activity_log_panel(self) -> QWidget:
     """Create the titled activity-log panel while preserving ``self.logView``."""
     panel = QWidget()
@@ -660,12 +699,40 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(4)
 
+    self.activity_log_header = QWidget()
+    self.activity_log_header.setObjectName("activityLogHeader")
+    self.activity_log_header.setProperty("role", "activityLogHeader")
+    header_layout = QHBoxLayout(self.activity_log_header)
+    header_layout.setContentsMargins(0, 0, 0, 0)
+    header_layout.setSpacing(6)
+
     self.activity_log_title = self._create_dashboard_section_title(
       "Activity Log",
       "activityLogTitle",
       "Activity log section",
     )
-    layout.addWidget(self.activity_log_title)
+    header_layout.addWidget(self.activity_log_title)
+    header_layout.addStretch()
+
+    self.activity_log_copy_button = self._create_activity_log_action_button(
+      "activityLogCopyButton",
+      "Copy activity log",
+      "Copy activity log to clipboard",
+      QStyle.SP_FileDialogDetailedView,
+    )
+    self.activity_log_copy_button.clicked.connect(self.copy_activity_log)
+    header_layout.addWidget(self.activity_log_copy_button)
+
+    self.activity_log_clear_button = self._create_activity_log_action_button(
+      "activityLogClearButton",
+      "Clear activity log",
+      "Clear activity log",
+      QStyle.SP_DialogDiscardButton,
+    )
+    self.activity_log_clear_button.clicked.connect(self.clear_activity_log)
+    header_layout.addWidget(self.activity_log_clear_button)
+
+    layout.addWidget(self.activity_log_header)
 
     self.logView = self._create_activity_log_view()
     layout.addWidget(self.logView)
@@ -679,6 +746,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     for line in self.log_buffer:
       self._append_log_line_to_view(line, schedule_scroll=False)
     self.log_buffer = []
+    self._update_activity_log_actions()
     self._schedule_log_scroll()
 
   def _dashboard_splitter_initial_sizes(self) -> list:

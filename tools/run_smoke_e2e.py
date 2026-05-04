@@ -831,6 +831,31 @@ def run_scenarios(args):
                 "visual": capture_toast_visual_evidence(launcher, args.screenshot_dir, "rename_stopped_node"),
             },
         )
+        activity_log_text = launcher.logView.toPlainText()
+        record_step(
+            log,
+            args.output,
+            {
+                "step": click_visible_button(app, launcher.activity_log_copy_button, "copy activity log"),
+                "clipboard_matches_log": app.clipboard().text() == activity_log_text,
+            },
+        )
+        record_step(log, args.output, {"step": click_visible_button(app, launcher.activity_log_clear_button, "clear activity log")})
+        wait_until(
+            app,
+            lambda: launcher.logView.toPlainText() == "" and not launcher.activity_log_clear_button.isEnabled(),
+            args.timeout,
+            "activity log cleared",
+        )
+        record_step(
+            log,
+            args.output,
+            {
+                "step": "activity log cleared",
+                "copy_enabled": launcher.activity_log_copy_button.isEnabled(),
+                "clear_enabled": launcher.activity_log_clear_button.isEnabled(),
+            },
+        )
 
         log["result"] = "passed"
         return log
