@@ -1,4 +1,7 @@
+from datetime import datetime
+
 from models.AllowedAddress import AllowedAddressList
+from models.ContainerStats import ContainerStats
 from models.NodeHistory import NodeHistory
 from models.NodeInfo import NodeInfo
 
@@ -47,6 +50,47 @@ def test_node_history_from_dict_collapses_empty_gpu_metrics_to_none():
     assert history.gpu_occupied_memory is None
     assert history.gpu_temp is None
     assert history.gpu_total_memory is None
+
+
+def test_container_stats_parses_docker_stats_output():
+    sampled_at = datetime(2026, 5, 5, 1, 0, 0)
+    stats = ContainerStats.from_docker_stats(
+        {
+            "Container": "abc123",
+            "Name": "r1devnode",
+            "CPUPerc": "56.48%",
+            "MemUsage": "1.746GiB / 15.62GiB",
+            "MemPerc": "11.18%",
+            "NetIO": "151MB / 5.32MB",
+            "BlockIO": "2.1MB / 0B",
+            "PIDs": "162",
+        },
+        sampled_at=sampled_at,
+    )
+
+    assert stats.container == "abc123"
+    assert stats.name == "r1devnode"
+    assert stats.cpu_percent == 56.48
+    assert stats.memory_used_gib == 1.746
+    assert stats.memory_limit_gib == 15.62
+    assert stats.memory_percent == 11.18
+    assert stats.pids == 162
+    assert stats.sampled_at == sampled_at
+
+
+def test_container_stats_parses_binary_and_decimal_memory_units():
+    stats = ContainerStats.from_docker_stats(
+        {
+            "Name": "r1node",
+            "CPUPerc": "1.0%",
+            "MemUsage": "512MiB / 16GB",
+            "MemPerc": "3.2%",
+            "PIDs": "4",
+        }
+    )
+
+    assert stats.memory_used_gib == 0.5
+    assert round(stats.memory_limit_gib, 3) == 14.901
 
 
 def test_allowed_address_list_batch_format_matches_update_payload():

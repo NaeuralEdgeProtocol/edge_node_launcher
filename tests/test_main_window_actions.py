@@ -1,6 +1,6 @@
 import webbrowser
+from datetime import datetime
 from pathlib import Path
-from types import SimpleNamespace
 
 from PyQt5 import sip
 from PyQt5.QtCore import QRect, Qt
@@ -8,6 +8,7 @@ from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QApplication, QDialog, QGroupBox, QLabel, QLineEdit, QPushButton, QScrollArea, QSizePolicy, QSplitter, QTextEdit, QToolButton, QVBoxLayout, QWidget
 
 import app_forms.frm_main as frm_main
+from models.ContainerStats import ContainerStats
 from models.NodeHistory import NodeHistory
 from models.NodeInfo import NodeInfo
 from utils.config_manager import ContainerConfig
@@ -178,12 +179,41 @@ class FakeDockerHandler:
         self.launched_containers = []
         self.pull_requests = 0
         self.history_container_requests = []
-        self.history = SimpleNamespace(
-            uptime="1s",
+        self.stats_container_requests = []
+        now = datetime.now().isoformat(timespec="seconds")
+        self.history = NodeHistory(
+            address="0xnode",
+            alias="alpha",
+            cpu_load=[10.0, 20.0],
+            cpu_temp=[40.0, 41.0],
             current_epoch=1,
             current_epoch_avail=0.5,
+            eth_address="0xeth",
+            gpu_load=None,
+            gpu_occupied_memory=None,
+            gpu_temp=None,
+            gpu_total_memory=None,
+            last_epochs=[1, 2],
+            last_save_time=now,
+            occupied_memory=[0.9, 1.1],
+            timestamps=[now, now],
+            total_memory=[16.0, 16.0],
+            uptime="1s",
             version="test-version",
         )
+        self.stats = ContainerStats(
+            container="abc123",
+            name=container_name,
+            cpu_percent=56.48,
+            memory_used_gib=1.746,
+            memory_limit_gib=15.62,
+            memory_percent=11.18,
+            pids=162,
+            net_io="151MB / 5.32MB",
+            block_io="0B / 0B",
+            sampled_at=datetime.now(),
+        )
+        self.stats_error = None
 
     def set_container_name(self, container_name):
         self.container_name = container_name
@@ -230,6 +260,13 @@ class FakeDockerHandler:
     def get_node_history(self, callback, error_callback):
         self.history_container_requests.append(self.container_name)
         callback(self.history)
+
+    def get_container_stats(self, callback, error_callback):
+        self.stats_container_requests.append(self.container_name)
+        if self.stats_error is not None:
+            error_callback(self.stats_error)
+            return
+        callback(self.stats)
 
 
 def _build_launcher(monkeypatch, qtbot, running=False, config_setup=None):
@@ -1578,6 +1615,54 @@ def _history_with_optional_gpu(gpu_load=None, gpu_occupied_memory=None):
     )
 
 
+def _single_sample_history():
+    now = datetime.now().isoformat(timespec="seconds")
+    return NodeHistory(
+        address="0xnode",
+        alias="alpha",
+        cpu_load=[7.5],
+        cpu_temp=[40.0],
+        current_epoch=1,
+        current_epoch_avail=0.5,
+        eth_address="0xeth",
+        gpu_load=None,
+        gpu_occupied_memory=None,
+        gpu_temp=None,
+        gpu_total_memory=None,
+        last_epochs=[1],
+        last_save_time=now,
+        occupied_memory=[1.3],
+        timestamps=[now],
+        total_memory=[16.0],
+        uptime="1m",
+        version="test-version",
+    )
+
+
+def _empty_metric_history():
+    now = datetime.now().isoformat(timespec="seconds")
+    return NodeHistory(
+        address="0xnode",
+        alias="alpha",
+        cpu_load=[],
+        cpu_temp=[],
+        current_epoch=1,
+        current_epoch_avail=0.5,
+        eth_address="0xeth",
+        gpu_load=None,
+        gpu_occupied_memory=None,
+        gpu_temp=None,
+        gpu_total_memory=None,
+        last_epochs=[],
+        last_save_time=now,
+        occupied_memory=[],
+        timestamps=[],
+        total_memory=[],
+        uptime="1m",
+        version="test-version",
+    )
+
+
 def test_plot_graphs_uses_selected_container_id_not_display_alias(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
     launcher.plot_graphs = REAL_PLOT_GRAPHS.__get__(launcher, frm_main.EdgeNodeLauncher)
@@ -1609,6 +1694,8 @@ def test_plot_graphs_clears_stale_gpu_plots_when_history_has_no_gpu(qtbot, monke
     assert not launcher.memory_plot._r1_empty_label.isVisible()
     assert not launcher.gpu_plot._r1_empty_label.isVisible()
     assert not launcher.gpu_memory_plot._r1_empty_label.isVisible()
+    assert launcher.graphView.layout().rowStretch(0) == 1
+    assert launcher.graphView.layout().rowStretch(1) == 1
 
     launcher.plot_graphs(_history_with_optional_gpu())
 
@@ -1620,6 +1707,86 @@ def test_plot_graphs_clears_stale_gpu_plots_when_history_has_no_gpu(qtbot, monke
     assert not launcher.memory_plot._r1_empty_label.isVisible()
     assert launcher.gpu_plot._r1_empty_label.isVisible()
     assert launcher.gpu_memory_plot._r1_empty_label.isVisible()
+    assert launcher.gpu_plot._r1_empty_label.text() == frm_main.NO_GPU_METRIC_TEXT
+    assert launcher.gpu_memory_plot._r1_empty_label.text() == frm_main.NO_GPU_METRIC_TEXT
+    assert launcher.graphView.layout().rowStretch(0) == 3
+    assert launcher.graphView.layout().rowStretch(1) == 0
+
+
+def test_plot_graphs_marks_single_sample_data_points(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    launcher.plot_graphs = REAL_PLOT_GRAPHS.__get__(launcher, frm_main.EdgeNodeLauncher)
+    launcher.add_log = lambda *args, **kwargs: None
+
+    launcher.plot_graphs(_single_sample_history())
+
+    cpu_item = launcher.cpu_plot.listDataItems()[0]
+    memory_item = launcher.memory_plot.listDataItems()[0]
+    assert cpu_item.opts["symbol"] == "o"
+    assert memory_item.opts["symbol"] == "o"
+    assert not launcher.cpu_plot._r1_empty_label.isVisible()
+    assert not launcher.memory_plot._r1_empty_label.isVisible()
+    assert launcher.gpu_plot._r1_empty_label.text() == frm_main.NO_GPU_METRIC_TEXT
+    assert launcher.graphView.layout().rowStretch(0) == 3
+    assert launcher.graphView.layout().rowStretch(1) == 0
+
+
+def test_plot_data_uses_docker_stats_when_node_history_has_single_sample(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    launcher.plot_data = REAL_PLOT_DATA.__get__(launcher, frm_main.EdgeNodeLauncher)
+    launcher.plot_graphs = REAL_PLOT_GRAPHS.__get__(launcher, frm_main.EdgeNodeLauncher)
+    launcher.maybe_refresh_uptime = lambda assume_running=None: None
+    log_messages = []
+    launcher.add_log = lambda message, **kwargs: log_messages.append(message)
+    fake_handler.history = _single_sample_history()
+
+    launcher.plot_data(assume_running=True)
+
+    assert fake_handler.stats_container_requests == ["r1node"]
+    assert fake_handler.history_container_requests == ["r1node"]
+    cpu_x, cpu_y = launcher.cpu_plot.listDataItems()[0].getData()
+    memory_x, memory_y = launcher.memory_plot.listDataItems()[0].getData()
+    assert len(cpu_x) == 1
+    assert float(cpu_y[-1]) == 56.48
+    assert len(memory_x) == 1
+    assert float(memory_y[-1]) == 1.746
+    assert any("Telemetry source=Docker stats target=r1node result=updated UI" in message for message in log_messages)
+    assert any("Telemetry source=node_history target=r1node result=fallback" in message for message in log_messages)
+    assert any("node history has only one sample" in message for message in log_messages)
+
+
+def test_plot_data_uses_docker_stats_when_node_history_is_empty(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    launcher.plot_data = REAL_PLOT_DATA.__get__(launcher, frm_main.EdgeNodeLauncher)
+    launcher.plot_graphs = REAL_PLOT_GRAPHS.__get__(launcher, frm_main.EdgeNodeLauncher)
+    launcher.maybe_refresh_uptime = lambda assume_running=None: None
+    log_messages = []
+    launcher.add_log = lambda message, **kwargs: log_messages.append(message)
+    fake_handler.history = _empty_metric_history()
+
+    launcher.plot_data(assume_running=True)
+
+    _cpu_x, cpu_y = launcher.cpu_plot.listDataItems()[0].getData()
+    _memory_x, memory_y = launcher.memory_plot.listDataItems()[0].getData()
+    assert float(cpu_y[-1]) == 56.48
+    assert float(memory_y[-1]) == 1.746
+    assert any("node history has no timestamps" in message for message in log_messages)
+
+
+def test_plot_data_uses_docker_stats_when_node_history_is_stale(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    launcher.plot_data = REAL_PLOT_DATA.__get__(launcher, frm_main.EdgeNodeLauncher)
+    launcher.plot_graphs = REAL_PLOT_GRAPHS.__get__(launcher, frm_main.EdgeNodeLauncher)
+    launcher.maybe_refresh_uptime = lambda assume_running=None: None
+    log_messages = []
+    launcher.add_log = lambda message, **kwargs: log_messages.append(message)
+    fake_handler.history = _history_with_optional_gpu()
+
+    launcher.plot_data(assume_running=True)
+
+    _cpu_x, cpu_y = launcher.cpu_plot.listDataItems()[0].getData()
+    assert float(cpu_y[-1]) == 56.48
+    assert any("node history is stale" in message for message in log_messages)
 
 
 def test_plot_graphs_reuses_existing_axis_items(qtbot, monkeypatch):
@@ -2649,6 +2816,10 @@ def test_main_window_graph_plots_stay_inside_styled_containers(qtbot, monkeypatc
     assert launcher.graphView.objectName() == "metricsGraphGrid"
     assert layout.count() == 4
     assert layout.spacing() == 10
+    assert layout.rowStretch(0) == 1
+    assert layout.rowStretch(1) == 1
+    assert layout.columnStretch(0) == 1
+    assert layout.columnStretch(1) == 1
 
     expected = {
         "cpuPlotContainer": (launcher.cpu_plot, 0, 0),
@@ -2674,6 +2845,8 @@ def test_main_window_graph_plots_stay_inside_styled_containers(qtbot, monkeypatc
         assert empty_label.text() == frm_main.METRIC_EMPTY_STATE_TEXT
         assert empty_label.alignment() == Qt.AlignCenter
         assert layout.itemAtPosition(row, column).widget() is container
+        assert container.sizePolicy().verticalPolicy() == QSizePolicy.Expanding
+        assert plot.sizePolicy().verticalPolicy() == QSizePolicy.Expanding
 
 
 def test_node_selector_exposes_stable_visual_identity(qtbot, monkeypatch):

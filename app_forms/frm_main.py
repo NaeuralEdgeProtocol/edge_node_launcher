@@ -49,6 +49,7 @@ from PyQt5.QtSvg import QSvgRenderer
 
 from models.NodeInfo import NodeInfo
 from models.NodeHistory import NodeHistory
+from models.ContainerStats import ContainerStats
 from widgets.ToastWidget import ToastWidget, NotificationType
 from widgets.dialogs.AddNodeDialog import AddNodeDialog
 from widgets.dialogs.RenameNodeDialog import RenameNodeDialog
@@ -111,6 +112,9 @@ from ver import __VER__ as CURRENT_VERSION
 
 DASHBOARD_SPLITTER_DEFAULT_SIZES = [700, 180]
 MAIN_ACTIVITY_LOG_MAX_BLOCKS = 1000
+DOCKER_STATS_SAMPLE_LIMIT = 100
+TELEMETRY_HISTORY_STALE_SECONDS = 300
+NO_GPU_METRIC_TEXT = "No GPU detected for this node"
 
 def get_platform_and_os_info():
   platform_info = platform.platform()
@@ -171,6 +175,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     self._current_stylesheet = DARK_STYLESHEET  # Default to dark theme
     self.__last_plot_data = None
+    self.__last_plot_source = None
+    self.__docker_stats_history = {}
     self.__last_auto_update_check = 0
 
     # Track update process state to prevent duplicate notifications
@@ -1254,6 +1260,171 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.add_log(f"Error launching container: {str(e)}", color="red")
         self.toast.show_notification(NotificationType.ERROR, f"Error launching container: {str(e)}")
 
+  def _stats_samples_for_container(self, container_name: str):
+    history = getattr(self, "_EdgeNodeLauncher__docker_stats_history", None)
+    if history is None:
+        self.__docker_stats_history = {}
+        history = self.__docker_stats_history
+    return history.setdefault(container_name, [])
+
+  def _remember_container_stats_sample(self, container_name: str, stats: ContainerStats):
+    samples = self._stats_samples_for_container(container_name)
+    samples.append(stats)
+    if len(samples) > DOCKER_STATS_SAMPLE_LIMIT:
+        del samples[:-DOCKER_STATS_SAMPLE_LIMIT]
+    return samples
+
+  def _has_metric_values(self, values) -> bool:
+    return bool(values) and any(value is not None for value in values)
+
+  def _history_age_seconds(self, history) -> Optional[float]:
+    timestamps = getattr(history, "timestamps", None) or []
+    if not timestamps:
+        return None
+    last_timestamp = timestamps[-1]
+    try:
+        if isinstance(last_timestamp, str):
+            timestamp_text = last_timestamp.replace("Z", "+00:00")
+            last_dt = datetime.fromisoformat(timestamp_text)
+        else:
+            last_dt = datetime.fromtimestamp(float(last_timestamp))
+        now = datetime.now(last_dt.tzinfo) if last_dt.tzinfo else datetime.now()
+        age_seconds = (now - last_dt).total_seconds()
+        return age_seconds if age_seconds >= 0 else None
+    except (TypeError, ValueError):
+        return None
+
+  def _history_fallback_reason(self, history) -> Optional[str]:
+    if history is None:
+        return "node history is not available"
+    timestamps = getattr(history, "timestamps", None) or []
+    if not timestamps:
+        return "node history has no timestamps"
+    if not self._has_metric_values(getattr(history, "cpu_load", None)):
+        return "node history has no CPU samples"
+    if not self._has_metric_values(getattr(history, "occupied_memory", None)):
+        return "node history has no memory samples"
+    if len(timestamps) < 2:
+        return "node history has only one sample"
+    age_seconds = self._history_age_seconds(history)
+    if age_seconds is not None and age_seconds > TELEMETRY_HISTORY_STALE_SECONDS:
+        return f"node history is stale ({int(age_seconds)}s old)"
+    return None
+
+  def _history_value(self, history, field_name: str, fallback):
+    value = getattr(history, field_name, None) if history is not None else None
+    return fallback if value in (None, "") else value
+
+  def _history_from_stats_samples(self, container_name: str, samples, base_history=None) -> Optional[NodeHistory]:
+    valid_samples = [sample for sample in samples if sample.has_cpu_memory()]
+    if not valid_samples:
+        return None
+    valid_samples = valid_samples[-DOCKER_STATS_SAMPLE_LIMIT:]
+    timestamps = [sample.sampled_at.isoformat(timespec="seconds") for sample in valid_samples]
+    memory_limits = [
+        sample.memory_limit_gib if sample.memory_limit_gib is not None else sample.memory_used_gib or 0.0
+        for sample in valid_samples
+    ]
+
+    current_epoch = self._history_value(base_history, "current_epoch", self.__current_node_epoch)
+    if current_epoch == -1:
+        current_epoch = 0
+    current_epoch_avail = self._history_value(base_history, "current_epoch_avail", self.__current_node_epoch_avail)
+    if current_epoch_avail == -1:
+        current_epoch_avail = 0.0
+    uptime = self._history_value(base_history, "uptime", self.__current_node_uptime)
+    if uptime == -1:
+        uptime = ""
+    version = self._history_value(base_history, "version", self.__current_node_ver)
+    if version == -1:
+        version = ""
+
+    return NodeHistory(
+        address=self._history_value(base_history, "address", getattr(self, "node_addr", "") or ""),
+        alias=self._history_value(base_history, "alias", getattr(self, "node_name", "") or container_name),
+        cpu_load=[sample.cpu_percent for sample in valid_samples],
+        cpu_temp=getattr(base_history, "cpu_temp", []) if base_history is not None else [],
+        current_epoch=current_epoch,
+        current_epoch_avail=current_epoch_avail,
+        eth_address=self._history_value(base_history, "eth_address", getattr(self, "node_eth_address", "") or ""),
+        gpu_load=getattr(base_history, "gpu_load", None) if base_history is not None else None,
+        gpu_occupied_memory=getattr(base_history, "gpu_occupied_memory", None) if base_history is not None else None,
+        gpu_temp=getattr(base_history, "gpu_temp", None) if base_history is not None else None,
+        gpu_total_memory=getattr(base_history, "gpu_total_memory", None) if base_history is not None else None,
+        last_epochs=getattr(base_history, "last_epochs", []) if base_history is not None else [],
+        last_save_time=timestamps[-1],
+        occupied_memory=[sample.memory_used_gib for sample in valid_samples],
+        timestamps=timestamps,
+        total_memory=memory_limits,
+        uptime=str(uptime),
+        version=str(version),
+    )
+
+  def _apply_metric_history(self, history: NodeHistory, source: str) -> None:
+    self.__last_plot_data = history
+    self.__last_plot_source = source
+    self.plot_graphs()
+
+  def _stats_log_summary(self, stats: ContainerStats) -> str:
+    cpu_text = f"{stats.cpu_percent:.1f}%" if stats.cpu_percent is not None else "unavailable"
+    pids_text = stats.pids if stats.pids is not None else "unavailable"
+    return (
+        f"CPU {cpu_text}, memory {stats.memory_summary()}, "
+        f"PIDs {pids_text}, net {stats.net_io or 'n/a'}, block {stats.block_io or 'n/a'}"
+    )
+
+  def _request_container_stats(self, container_name: str) -> None:
+    if not hasattr(self.docker_handler, "get_container_stats"):
+        self.add_log(f"Telemetry source=Docker stats target={container_name} result=skipped reason=handler unavailable", debug=True)
+        return
+
+    stats_started = time()
+
+    def on_stats_success(stats: ContainerStats) -> None:
+        duration = time() - stats_started
+        current_selected = self._selected_container_name()
+        if container_name != current_selected:
+            self.add_log(
+                f"Telemetry source=Docker stats target={container_name} result=ignored duration={duration:.2f}s selected={current_selected}",
+                debug=True,
+            )
+            return
+
+        samples = self._remember_container_stats_sample(container_name, stats)
+        fallback_reason = self._history_fallback_reason(self.__last_plot_data)
+        stats_history = self._history_from_stats_samples(container_name, samples, self.__last_plot_data)
+        updated_ui = False
+        if stats_history is not None and (self.__last_plot_source == "docker_stats" or fallback_reason is not None):
+            self._apply_metric_history(stats_history, "docker_stats")
+            updated_ui = True
+
+        result = "updated UI" if updated_ui else "sampled"
+        fallback_text = f"; fallback used because {fallback_reason}" if updated_ui and fallback_reason else ""
+        self.add_log(
+            f"Telemetry source=Docker stats target={container_name} result={result} duration={duration:.2f}s "
+            f"{self._stats_log_summary(stats)}{fallback_text}",
+            debug=True,
+        )
+
+    def on_stats_error(error) -> None:
+        duration = time() - stats_started
+        current_selected = self._selected_container_name()
+        if container_name != current_selected:
+            self.add_log(
+                f"Telemetry source=Docker stats target={container_name} result=ignored-error duration={duration:.2f}s selected={current_selected}",
+                debug=True,
+            )
+            return
+        self.add_log(
+            f"Telemetry source=Docker stats target={container_name} result=error duration={duration:.2f}s error={error}",
+            debug=True,
+        )
+
+    try:
+        self.docker_handler.get_container_stats(on_stats_success, on_stats_error)
+    except Exception as e:
+        on_stats_error(str(e))
+
   def plot_data(self, assume_running: Optional[bool] = None):
     """Plot container metrics data."""
     # Skip plotting if Docker pull is in progress to avoid conflicts
@@ -1279,39 +1450,72 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.add_log(f"Container {container_name} is not running, skipping plot data", debug=True)
         return
 
+    node_history_started = time()
+
     def on_success(history: NodeHistory) -> None:
-        # Make sure we're still on the same container
+        duration = time() - node_history_started
         current_selected = self._selected_container_name()
         if container_name != current_selected:
-            self.add_log(f"Container changed during data plotting from {container_name} to {current_selected}, ignoring results", debug=True)
+            self.add_log(
+                f"Telemetry source=node_history target={container_name} result=ignored duration={duration:.2f}s selected={current_selected}",
+                debug=True,
+            )
             return
-            
-        self.__last_plot_data = history
-        self.plot_graphs()
-        
-        # Update uptime and other metrics only for the currently selected container
-        self.__current_node_uptime = history.uptime
-        self.__current_node_epoch = history.current_epoch
-        self.__current_node_epoch_avail = history.current_epoch_avail
-        self.__current_node_ver = history.version
-        
+
+        # Update uptime and other metrics only for the currently selected container.
+        self.__current_node_uptime = getattr(history, "uptime", self.__current_node_uptime)
+        self.__current_node_epoch = getattr(history, "current_epoch", self.__current_node_epoch)
+        self.__current_node_epoch_avail = getattr(history, "current_epoch_avail", self.__current_node_epoch_avail)
+        self.__current_node_ver = getattr(history, "version", self.__current_node_ver)
         self.maybe_refresh_uptime(assume_running=True)
-        self.add_log(f"Updated metrics for container {container_name}", debug=True)
+
+        fallback_reason = self._history_fallback_reason(history)
+        stats_history = self._history_from_stats_samples(container_name, self._stats_samples_for_container(container_name), history)
+        if fallback_reason is not None and stats_history is not None:
+            self._apply_metric_history(stats_history, "docker_stats")
+            self.add_log(
+                f"Telemetry source=node_history target={container_name} result=fallback duration={duration:.2f}s "
+                f"fallback=Docker stats because {fallback_reason}",
+                debug=True,
+            )
+            return
+
+        self._apply_metric_history(history, "node_history")
+        fallback_text = "fallback=unavailable; rendered available sample" if fallback_reason else "fallback=none"
+        self.add_log(
+            f"Telemetry source=node_history target={container_name} result=updated UI duration={duration:.2f}s {fallback_text}",
+            debug=True,
+        )
 
     def on_error(error):
-        # Make sure we're still on the same container
+        duration = time() - node_history_started
         if container_name != self._selected_container_name():
-            self.add_log(f"Container changed during data plotting, ignoring error", debug=True)
+            self.add_log(
+                f"Telemetry source=node_history target={container_name} result=ignored-error duration={duration:.2f}s",
+                debug=True,
+            )
             return
-            
-        self.add_log(f'Error getting metrics for {container_name}: {error}', debug=True)
+
+        stats_history = self._history_from_stats_samples(container_name, self._stats_samples_for_container(container_name), self.__last_plot_data)
+        if stats_history is not None:
+            self._apply_metric_history(stats_history, "docker_stats")
+            self.add_log(
+                f"Telemetry source=node_history target={container_name} result=fallback duration={duration:.2f}s "
+                f"fallback=Docker stats because error={error}",
+                debug=True,
+            )
+        else:
+            self.add_log(
+                f"Telemetry source=node_history target={container_name} result=error duration={duration:.2f}s error={error}",
+                debug=True,
+            )
         
-        # If this is a timeout error, log it more prominently
-        if "timed out" in error.lower():
+        if "timed out" in str(error).lower():
             self.add_log(f"Metrics request for {container_name} timed out. This may indicate Docker is busy or the local node is under high load.", color="red")
 
     try:
-        self.add_log(f"Plotting data for container: {container_name}", debug=True)
+        self.add_log(f"Telemetry request started target={container_name} sources=node_history,Docker stats", debug=True)
+        self._request_container_stats(container_name)
         self.docker_handler.get_node_history(on_success, on_error)
     except Exception as e:
         self.add_log(f"Failed to start metrics request for {container_name}: {str(e)}", debug=True, color="red")
@@ -1334,6 +1538,17 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       date_axis.setTimestamps(timestamps, parent=parent)
     date_axis.setTickSpacing(60, 10)
     date_axis.setStyle(tickTextOffset=10)
+
+  def _set_gpu_metric_availability(self, gpu_available: bool) -> None:
+    if hasattr(self, "graphView") and self.graphView is not None and self.graphView.layout() is not None:
+        layout = self.graphView.layout()
+        layout.setRowStretch(0, 1 if gpu_available else 3)
+        layout.setRowStretch(1, 1 if gpu_available else 0)
+
+    for plot_widget in (getattr(self, "gpu_plot", None), getattr(self, "gpu_memory_plot", None)):
+        if plot_widget is None or getattr(plot_widget, "_ignore_late_paints", False):
+            continue
+        plot_widget.setVisible(gpu_available)
 
   def plot_graphs(self, history: Optional[NodeHistory] = None, limit: int = 100) -> None:
     """Plot the graphs with the given history data.
@@ -1373,9 +1588,30 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     colors = DARK_COLORS if self._current_stylesheet == DARK_STYLESHEET else LIGHT_COLORS
 
     self._clear_metric_plots(empty_message=None)
+
+    def numeric_values(values):
+        result = []
+        for value in values or []:
+            try:
+                if value is not None:
+                    result.append(float(value))
+            except (TypeError, ValueError):
+                continue
+        return result
+
+    def percent_axis_max(values) -> float:
+        numbers = numeric_values(values)
+        return max(100.0, max(numbers) * 1.15) if numbers else 100.0
+
+    def memory_axis_max(used_values, total_values=None) -> float:
+        totals = [value for value in numeric_values(total_values) if value > 0]
+        if totals:
+            return max(totals)
+        used = numeric_values(used_values)
+        return max(1.0, max(used) * 1.2) if used else 1.0
     
     # Helper function to update a plot
-    def update_plot(plot_widget, timestamps, data, name, color):
+    def update_plot(plot_widget, timestamps, data, name, color, y_min=None, y_max=None):
         plot_widget.clear()
         if data and len(data) > 0:
             if hasattr(plot_widget, "clear_empty_state"):
@@ -1401,32 +1637,82 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                     self.add_log(f"Failed to convert timestamp: {ts}", debug=True)
                     numeric_timestamps.append(len(numeric_timestamps))
             
-            # Plot with numeric timestamps
-            plot_widget.plot(numeric_timestamps, data, pen=color, name=name)
+            plot_options = {
+                "pen": color,
+                "name": name,
+            }
+            if len(numeric_timestamps) == 1:
+                plot_options.update(
+                    symbol="o",
+                    symbolSize=7,
+                    symbolBrush=color,
+                    symbolPen=color,
+                )
+            plot_widget.plot(numeric_timestamps, data, **plot_options)
+            if len(numeric_timestamps) == 1:
+                plot_widget.setXRange(numeric_timestamps[0] - 30, numeric_timestamps[0] + 30, padding=0)
+            if y_min is not None and y_max is not None and y_max > y_min:
+                plot_widget.setYRange(y_min, y_max, padding=0.04)
         elif hasattr(plot_widget, "set_empty_state"):
             plot_widget.set_empty_state(METRIC_EMPTY_STATE_TEXT)
     
     # CPU Plot
     self._configure_metric_axis(self.cpu_plot, timestamps, parent="cpu")
-    update_plot(self.cpu_plot, timestamps, history.cpu_load, 'CPU Load', colors["graph_cpu_color"])
+    update_plot(
+        self.cpu_plot,
+        timestamps,
+        history.cpu_load,
+        'CPU Load',
+        colors["graph_cpu_color"],
+        y_min=0,
+        y_max=percent_axis_max(history.cpu_load),
+    )
     
     # Memory Plot
     self._configure_metric_axis(self.memory_plot, timestamps, parent="mem")
-    update_plot(self.memory_plot, timestamps, history.occupied_memory, 'Occupied Memory', colors["graph_memory_color"])
+    update_plot(
+        self.memory_plot,
+        timestamps,
+        history.occupied_memory,
+        'Occupied Memory',
+        colors["graph_memory_color"],
+        y_min=0,
+        y_max=memory_axis_max(history.occupied_memory, history.total_memory),
+    )
     
+    gpu_has_data = bool(history and history.gpu_load)
+    gpu_memory_has_data = bool(history and history.gpu_occupied_memory)
+    self._set_gpu_metric_availability(gpu_has_data or gpu_memory_has_data)
+
     # GPU Plot if available
-    if history and history.gpu_load:
+    if gpu_has_data:
       self._configure_metric_axis(self.gpu_plot, timestamps, parent="gpu")
-      update_plot(self.gpu_plot, timestamps, history.gpu_load, 'GPU Load', colors["graph_gpu_color"])
+      update_plot(
+          self.gpu_plot,
+          timestamps,
+          history.gpu_load,
+          'GPU Load',
+          colors["graph_gpu_color"],
+          y_min=0,
+          y_max=percent_axis_max(history.gpu_load),
+      )
     elif hasattr(self.gpu_plot, "set_empty_state"):
-      self.gpu_plot.set_empty_state(METRIC_EMPTY_STATE_TEXT)
+      self.gpu_plot.set_empty_state(NO_GPU_METRIC_TEXT)
 
     # GPU Memory if available
-    if history and history.gpu_occupied_memory:
+    if gpu_memory_has_data:
       self._configure_metric_axis(self.gpu_memory_plot, timestamps, parent="gpu_mem")
-      update_plot(self.gpu_memory_plot, timestamps, history.gpu_occupied_memory, 'Occupied GPU Memory', colors["graph_gpu_memory_color"])
+      update_plot(
+          self.gpu_memory_plot,
+          timestamps,
+          history.gpu_occupied_memory,
+          'Occupied GPU Memory',
+          colors["graph_gpu_memory_color"],
+          y_min=0,
+          y_max=memory_axis_max(history.gpu_occupied_memory, history.gpu_total_memory),
+      )
     elif hasattr(self.gpu_memory_plot, "set_empty_state"):
-      self.gpu_memory_plot.set_empty_state(METRIC_EMPTY_STATE_TEXT)
+      self.gpu_memory_plot.set_empty_state(NO_GPU_METRIC_TEXT)
       
     self.add_log(f"Updated graphs for container {container_name} with {len(timestamps)} data points", debug=True)
 
@@ -2144,7 +2430,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             debug=True,
         )
         return
-    self.add_log('Refreshing', debug=True)
+    selected_name = self._selected_container_name() or "no selected container"
+    self.add_log(f"Periodic refresh started target={selected_name}: Docker state, host resources, and update check", debug=True)
 
     # Only auto-restart if container is not running, button is enabled, user didn't intentionally stop it, AND no pull is in progress
     if not self.is_container_running() and self.toggleButton.isEnabled() == True and not self.user_stopped_container:
@@ -2211,15 +2498,15 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             self._update_ui_with_fresh_data(node_info, container_name)
             
             # Now refresh metrics and other data
-            self.add_log("Refreshing node metrics and performance data...", debug=True)
+            self.add_log(f"Force refresh telemetry target={container_name}: node history and Docker stats", debug=True)
             self.plot_data()
             
             # Force refresh uptime, epoch, and version info
-            self.add_log("Refreshing node status information...", debug=True)
+            self.add_log(f"Force refresh status target={container_name}: uptime, epoch, and version", debug=True)
             self.maybe_refresh_uptime()
             
             # Update system resources
-            self.add_log("Refreshing system resources...", debug=True)
+            self.add_log("Force refresh host resources: memory, CPU, and storage", debug=True)
             self.update_resources_display()
             
             # Update button states
@@ -2725,11 +3012,11 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     if hasattr(self, '__current_node_ver'):
         self.__current_node_ver = -1
     
-    if hasattr(self, '__last_plot_data'):
-        self.__last_plot_data = None
+    self.__last_plot_data = None
+    self.__last_plot_source = None
+    self.__docker_stats_history = {}
     
-    if hasattr(self, '__last_timesteps'):
-        self.__last_timesteps = []
+    self.__last_timesteps = []
     
     # Clear all graphs
     if hasattr(self, 'cpu_plot'):
@@ -3475,7 +3762,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.vcpusDisplay.setText(f"{VCPUS_LABEL} {cpu_info}")
         self.storageDisplay.setText(f"{STORAGE_LABEL} {storage_info}")
         
-        self.add_log("Updated system resources display", debug=True)
+        self.add_log("Host resources display updated: memory, CPU, and storage", debug=True)
 
     except Exception as e:
         self.add_log(f"Error updating resources display: {str(e)}", debug=True)

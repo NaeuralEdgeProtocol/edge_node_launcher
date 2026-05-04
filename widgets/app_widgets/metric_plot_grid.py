@@ -1,6 +1,6 @@
 from PyQt5 import sip
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QGridLayout, QLabel, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QGridLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 import pyqtgraph as pg
 
 from app_forms.frm_utils import DateAxisItem
@@ -83,6 +83,7 @@ def create_plot_container(
     container.setObjectName(object_name)
     container.setAccessibleName(title)
     container.setProperty("class", "plot-container")
+    container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
     title_label = QLabel(title)
     title_label.setObjectName(title_object_name)
@@ -99,6 +100,7 @@ def create_plot_container(
     empty_label.setWordWrap(True)
     plot_widget.setObjectName(plot_object_name)
     plot_widget.setAccessibleName(f"{title} plot")
+    plot_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
     plot_widget._r1_empty_label = empty_label
 
     layout = QVBoxLayout(container)
@@ -133,6 +135,10 @@ def create_metrics_graph_grid():
     graph_layout = QGridLayout()
     graph_layout.setSpacing(10)
     graph_layout.setContentsMargins(0, 0, 0, 0)
+    graph_layout.setColumnStretch(0, 1)
+    graph_layout.setColumnStretch(1, 1)
+    graph_layout.setRowStretch(0, 1)
+    graph_layout.setRowStretch(1, 1)
 
     plots = {}
     axis_items = {}

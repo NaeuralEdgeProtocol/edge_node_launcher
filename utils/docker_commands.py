@@ -13,6 +13,7 @@ import inspect
 
 from models.NodeInfo import NodeInfo
 from models.NodeHistory import NodeHistory
+from models.ContainerStats import ContainerStats
 from models.StartupConfig import StartupConfig
 from models.ConfigApp import ConfigApp
 from utils.const import DOCKER_VOLUME_PATH
@@ -315,9 +316,10 @@ class DockerDirectCommandThread(QThread):
     command_finished = pyqtSignal(object)
     command_error = pyqtSignal(str)
 
-    def __init__(self, command: DockerDirectCommand):
+    def __init__(self, command: DockerDirectCommand, timeout: Optional[int] = None):
         super().__init__()
         self.command = command
+        self.timeout = timeout or DEFAULT_TIMEOUT
         # Store the result to be processed in the main thread
         self.result_data = None
         self.error_message = None
@@ -338,13 +340,13 @@ class DockerDirectCommandThread(QThread):
                         full_command,
                         capture_output=True,
                         text=True,
-                        timeout=DEFAULT_TIMEOUT,
+                        timeout=self.timeout,
                         creationflags=subprocess.CREATE_NO_WINDOW
                     )
                 else:
                     if is_docker_pull:
                         logging.info(f"Starting Docker pull on {platform.system()} platform")
-                    result = subprocess.run(full_command, capture_output=True, text=True, timeout=DEFAULT_TIMEOUT)
+                    result = subprocess.run(full_command, capture_output=True, text=True, timeout=self.timeout)
 
                 if is_docker_pull:
                     logging.info(f"Docker pull command completed with return code: {result.returncode}")
@@ -650,6 +652,43 @@ class DockerCommandHandler:
             logging.error(f"Error in get_node_history: {str(e)}")
             error_callback(f"Error getting node history: {str(e)}")
 
+    def get_container_stats(self, callback, error_callback) -> None:
+        """Get current Docker stats for the selected container in a background thread."""
+        try:
+            if not self.container_name:
+                error_callback("No container name specified")
+                return
+
+            command = [
+                "docker",
+                "stats",
+                self.container_name,
+                "--no-stream",
+                "--format",
+                "{{json .}}",
+            ]
+
+            def process_stats(result) -> None:
+                stdout, stderr, return_code = result
+                if return_code != 0:
+                    error_callback(f"docker stats failed: {stderr.strip() or stdout.strip()}")
+                    return
+                try:
+                    payload = json.loads(stdout.strip())
+                    callback(ContainerStats.from_docker_stats(payload))
+                except Exception as e:
+                    error_callback(f"Failed to process docker stats: {str(e)}")
+
+            self._execute_direct_threaded(
+                command,
+                process_stats,
+                error_callback,
+                timeout=DOCKER_STATUS_TIMEOUT,
+            )
+        except Exception as e:
+            logging.error(f"Error in get_container_stats: {str(e)}")
+            error_callback(f"Error getting container stats: {str(e)}")
+
     def get_allowed_addresses(self, callback, error_callback) -> None:
         """Get allowed addresses.
         
@@ -863,15 +902,16 @@ class DockerCommandHandler:
         except Exception:
             return False
 
-    def _execute_direct_threaded(self, command: DockerDirectCommand, callback=None, error_callback=None) -> None:
+    def _execute_direct_threaded(self, command: DockerDirectCommand, callback=None, error_callback=None, timeout: Optional[int] = None) -> None:
         """Execute a direct Docker command in a background thread.
         
         Args:
             command: Docker command as list of strings
             callback: Success callback function
             error_callback: Error callback function
+            timeout: Optional command timeout in seconds
         """
-        thread = DockerDirectCommandThread(command)
+        thread = DockerDirectCommandThread(command, timeout=timeout)
         
         # Connect finished signal
         thread.finished.connect(lambda: self._handle_direct_thread_finished(thread, callback, error_callback))

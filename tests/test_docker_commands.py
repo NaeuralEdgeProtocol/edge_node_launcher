@@ -172,6 +172,37 @@ def test_execute_command_returns_timeout_error(monkeypatch):
     assert return_code == 124
 
 
+def test_get_container_stats_uses_bounded_docker_stats_worker(monkeypatch):
+    handler = make_handler(monkeypatch, container_name="r1devnode")
+    calls = []
+    received = []
+    errors = []
+
+    def fake_execute_direct(command, callback=None, error_callback=None, timeout=None):
+        calls.append((command, timeout))
+        callback(
+            (
+                '{"Container":"abc123","Name":"r1devnode","CPUPerc":"56.48%","MemUsage":"1.746GiB / 15.62GiB","MemPerc":"11.18%","NetIO":"151MB / 5.32MB","BlockIO":"0B / 0B","PIDs":"162"}',
+                "",
+                0,
+            )
+        )
+
+    monkeypatch.setattr(handler, "_execute_direct_threaded", fake_execute_direct)
+
+    handler.get_container_stats(received.append, errors.append)
+
+    assert errors == []
+    assert calls == [
+        (
+            ["docker", "stats", "r1devnode", "--no-stream", "--format", "{{json .}}"],
+            docker_commands.DOCKER_STATUS_TIMEOUT,
+        )
+    ]
+    assert received[0].cpu_percent == 56.48
+    assert received[0].memory_used_gib == 1.746
+
+
 def test_active_gpu_probe_uses_bounded_executor(monkeypatch):
     handler = make_handler(monkeypatch)
     calls = []
