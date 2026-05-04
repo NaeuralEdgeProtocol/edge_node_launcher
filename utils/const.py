@@ -619,8 +619,8 @@ COMMON_STYLESHEET_TEMPLATE = """
     font-family: "Segoe UI";
     font-size: 9pt;
     font-weight: 600;
-    padding: 12px 8px 4px 8px;
-    margin: 10px 6px 2px 6px;
+    padding: 8px 8px 3px 8px;
+    margin: 8px 6px 1px 6px;
   }}
   QScrollArea#sidebarScrollArea {{
     background-color: transparent;
@@ -673,9 +673,10 @@ COMMON_STYLESHEET_TEMPLATE = """
     color: {primary_action_text};
     border: 1px solid {primary_action_border};
     border-radius: {action_button_border_radius};
-    padding: 8px 12px;
-    min-height: 38px;
-    font-size: {button_font_size};
+    padding: 5px 10px;
+    margin: 3px 6px;
+    min-height: 24px;
+    font-size: 14px;
     font-weight: bold;
   }}
   QPushButton[actionRole="primary"]:hover {{
@@ -686,9 +687,10 @@ COMMON_STYLESHEET_TEMPLATE = """
     color: {secondary_action_text};
     border: 1px solid {secondary_action_border};
     border-radius: {action_button_border_radius};
-    padding: 7px 12px;
-    min-height: 34px;
-    font-size: {button_font_size};
+    padding: 5px 10px;
+    margin: 3px 6px;
+    min-height: 22px;
+    font-size: 14px;
     font-weight: {button_font_weight};
   }}
   QPushButton[actionRole="secondary"]:hover {{
@@ -699,9 +701,10 @@ COMMON_STYLESHEET_TEMPLATE = """
     color: {utility_action_text};
     border: 1px solid {utility_action_border};
     border-radius: {action_button_border_radius};
-    padding: 7px 12px;
-    min-height: 32px;
-    font-size: {button_font_size};
+    padding: 5px 10px;
+    margin: 3px 6px;
+    min-height: 22px;
+    font-size: 14px;
     font-weight: {button_font_weight};
   }}
   QPushButton[actionRole="utility"]:hover {{

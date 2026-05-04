@@ -35,7 +35,12 @@ from widgets.app_widgets.metric_plot_grid import (
 )
 from widgets.app_widgets.metrics_widget import MetricsWidget
 from widgets.app_widgets.node_info import NodeInfoWidget
-from widgets.app_widgets.sidebar_controls import create_sidebar_action_button, create_sidebar_section_label
+from widgets.app_widgets.sidebar_controls import (
+    SIDEBAR_ACTION_BUTTON_HEIGHTS,
+    SIDEBAR_SECTION_LABEL_HEIGHT,
+    create_sidebar_action_button,
+    create_sidebar_section_label,
+)
 from widgets.app_widgets.sidebar_panel import SidebarPanel
 from widgets.app_widgets.sidebar_status_cards import NodeStatusPanel, ResourceStatusPanel
 
@@ -335,13 +340,15 @@ def test_sidebar_control_factories_expose_stable_metadata(qtbot):
     assert label.accessibleName() == "Network section"
     assert label.property("role") == "sidebarSection"
     assert label.font().family() == "Segoe UI"
-    assert label.minimumHeight() == 30
+    assert label.minimumHeight() == SIDEBAR_SECTION_LABEL_HEIGHT
 
     assert button.objectName() == "openDappButton"
     assert button.property("actionRole") == "secondary"
     assert button.toolTip() == "Open Ratio1 dApp"
     assert button.accessibleName() == "Launch dApp"
     assert button.minimumWidth() == 0
+    assert button.minimumHeight() == SIDEBAR_ACTION_BUTTON_HEIGHTS["secondary"]
+    assert button.maximumHeight() == SIDEBAR_ACTION_BUTTON_HEIGHTS["secondary"]
     assert button.sizePolicy().horizontalPolicy() == QSizePolicy.Ignored
 
     qtbot.mouseClick(button, Qt.LeftButton)

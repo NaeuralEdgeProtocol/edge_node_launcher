@@ -56,6 +56,7 @@ from widgets.app_widgets.activity_log import ActivityLogWidget
 from widgets.app_widgets.dashboard_panel import DashboardPanel
 from widgets.app_widgets.metric_plot_grid import METRIC_EMPTY_STATE_TEXT, create_metrics_graph_grid
 from widgets.app_widgets.sidebar_controls import (
+  SIDEBAR_ACTION_BUTTON_HEIGHTS,
   create_sidebar_action_button as build_sidebar_action_button,
   create_sidebar_section_label as build_sidebar_section_label,
 )
@@ -317,13 +318,19 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         button: The button to style
         style_type: The type of style to apply ('start', 'stop', 'disabled')
     """
+    button_height = SIDEBAR_ACTION_BUTTON_HEIGHTS["primary"]
     if style_type == 'disabled':
         button.setStyleSheet(
             f"background-color: {self.button_colors['disabled']['bg']}; "
             f"color: {self.button_colors['disabled']['text']}; "
             "border-radius: 8px; "
-            "padding: 8px 12px;"
+            "padding: 5px 10px;"
+            "margin: 3px 6px;"
+            "min-height: 24px;"
+            "font-size: 14px;"
         )
+        button.setMinimumHeight(button_height)
+        button.setMaximumHeight(button_height)
         return
     
     # Check if the style type has a hover property
@@ -340,13 +347,17 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             background-color: {self.button_colors[style_type]['bg']};
             color: {self.button_colors[style_type]['text']};
             border: 2px solid {self.button_colors[style_type]['border']};
-            padding: 8px 12px;
+            padding: 5px 10px;
+            margin: 3px 6px;
             border-radius: 8px;
-            min-height: 38px;
+            min-height: 24px;
+            font-size: 14px;
             font-weight: bold;
         }}
         {hover_css}
     """)
+    button.setMinimumHeight(button_height)
+    button.setMaximumHeight(button_height)
 
   def create_sidebar_section_label(self, text, object_name):
     return build_sidebar_section_label(text, object_name)

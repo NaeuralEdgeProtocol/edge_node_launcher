@@ -15,6 +15,10 @@ from widgets.ToastWidget import NotificationType
 import widgets.app_widgets.dashboard_panel as dashboard_panel_module
 from widgets.app_widgets.activity_log import ActivityLogWidget
 from widgets.app_widgets.lifecycle_dialog_presenter import LifecycleDialogPresenter
+from widgets.app_widgets.sidebar_controls import (
+    SIDEBAR_ACTION_BUTTON_HEIGHTS,
+    SIDEBAR_SECTION_LABEL_HEIGHT,
+)
 from widgets.app_widgets.sidebar_status_cards import NodeStatusPanel, ResourceStatusPanel
 
 
@@ -2649,7 +2653,7 @@ def test_main_window_sidebar_sections_group_controls(qtbot, monkeypatch):
         assert label.accessibleName() == f"{text} section"
         assert label.property("role") == "sidebarSection"
         assert label.font().family() != "Courier New"
-        assert label.minimumHeight() == 30
+        assert label.minimumHeight() == SIDEBAR_SECTION_LABEL_HEIGHT
 
 
 def test_rename_action_lives_with_node_controls(qtbot, monkeypatch):
@@ -2692,6 +2696,8 @@ def test_main_window_sidebar_actions_have_hierarchy_roles(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
 
     assert launcher.toggleButton.property("actionRole") == "primary"
+    assert launcher.toggleButton.minimumHeight() <= SIDEBAR_ACTION_BUTTON_HEIGHTS["primary"]
+    assert launcher.toggleButton.maximumHeight() == SIDEBAR_ACTION_BUTTON_HEIGHTS["primary"]
 
     for button in (
         launcher.add_node_button,
@@ -2702,8 +2708,12 @@ def test_main_window_sidebar_actions_have_hierarchy_roles(qtbot, monkeypatch):
         launcher.refreshButton,
     ):
         assert button.property("actionRole") == "secondary"
+        assert button.minimumHeight() <= SIDEBAR_ACTION_BUTTON_HEIGHTS["secondary"]
+        assert button.maximumHeight() == SIDEBAR_ACTION_BUTTON_HEIGHTS["secondary"]
 
     assert launcher.themeToggleButton.property("actionRole") == "utility"
+    assert launcher.themeToggleButton.minimumHeight() <= SIDEBAR_ACTION_BUTTON_HEIGHTS["utility"]
+    assert launcher.themeToggleButton.maximumHeight() == SIDEBAR_ACTION_BUTTON_HEIGHTS["utility"]
     assert "border-radius: 8px;" in launcher.toggleButton.styleSheet()
 
 
