@@ -89,6 +89,11 @@ from utils.window_geometry import calculate_initial_window_geometry, calculate_r
 from utils.subprocess_utils import terminate_process_by_pid
 from services.docker_runtime_service import DockerRuntimeService
 from services.node_telemetry_service import NodeTelemetryMetadata, NodeTelemetryService
+from services.node_status_service import (
+  NODE_INFO_FAILURE_ACTION_DEFER_STARTUP,
+  NODE_INFO_FAILURE_ACTION_THRESHOLD_REACHED,
+  NodeStatusService,
+)
 from widgets.app_widgets.lifecycle_dialog_presenter import LifecycleDialogPresenter
 from widgets.app_widgets.lifecycle_controls import (
   LIFECYCLE_BUSY_TOOLTIP,
@@ -252,6 +257,10 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.docker_container_name = self.default_container_name
     self.docker_initialize()
     self.docker_handler = DockerRuntimeService(DockerCommandHandler(self.default_container_name))
+    self.node_status_service = NodeStatusService(
+      failure_threshold=NODE_INFO_FAILURE_THRESHOLD,
+      startup_grace_seconds=NODE_STARTUP_GRACE_PERIOD_SECONDS,
+    )
 
     # Initialize container list
     self.refresh_container_list()
@@ -264,7 +273,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     
     # Track failed get_node_info requests for auto-restart
     self.node_info_failure_count = 0
-    self.__container_startup_grace_started_at = {}
+    self.__container_startup_grace_started_at = self.node_status_service.startup_grace_started_at
     
     # Check if container is running and update UI accordingly
     if self.is_container_running():
@@ -1661,20 +1670,22 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.add_log(f"Getting node information for {container_name}", debug=True)
     
     def on_success(node_info: NodeInfo) -> None:
-      self._clear_container_startup_grace(container_name)
+      status_result = self.node_status_service.record_node_info_success(container_name)
+      if status_result.startup_grace_cleared:
+        self.add_log(f"Startup grace period cleared for {container_name}; node info is available.", debug=True)
 
       # Reset failure counter on successful request
-      if self.node_info_failure_count > 0:
-        self.add_log(f"Node info request succeeded after {self.node_info_failure_count} failures, resetting counter", debug=True)
-        self.node_info_failure_count = 0
+      if status_result.previous_failure_count > 0:
+        self.add_log(f"Node info request succeeded after {status_result.previous_failure_count} failures, resetting counter", debug=True)
       
       # Update UI with fresh node info data
       self._update_ui_with_fresh_data(node_info, container_name)
 
     def on_error(error):
-      if self._should_defer_node_info_failure(container_name, str(error)):
-        self.node_info_failure_count = 0
-        remaining = self._container_startup_grace_remaining_seconds(container_name)
+      decision = self.node_status_service.record_node_info_failure(container_name, str(error))
+
+      if decision.action == NODE_INFO_FAILURE_ACTION_DEFER_STARTUP:
+        remaining = decision.startup_grace_remaining_seconds
         self.add_log(
           f"Node {container_name} is still starting; auto-restart is paused for {remaining} more seconds. Last health check: {error}",
           color="yellow",
@@ -1682,18 +1693,16 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self._show_node_starting_state()
         return
 
-      # Increment failure counter
-      self.node_info_failure_count += 1
-      self.add_log(f"Node info request failed ({self.node_info_failure_count}/{NODE_INFO_FAILURE_THRESHOLD}): {error}", color="yellow")
+      self.add_log(f"Node info request failed ({decision.failure_count}/{decision.threshold}): {error}", color="yellow")
       
       # Check if we need to restart the container after consecutive failures
-      if self.node_info_failure_count >= NODE_INFO_FAILURE_THRESHOLD:
+      if decision.action == NODE_INFO_FAILURE_ACTION_THRESHOLD_REACHED:
         if self._should_restart_after_node_info_failure(container_name):
           self.add_log(f"Node info failed {NODE_INFO_FAILURE_THRESHOLD} times for {container_name}, restarting container", color="red")
           self._restart_container_after_failures(container_name)
         else:
           self.add_log(f"Node info failed {NODE_INFO_FAILURE_THRESHOLD} times for {container_name}, but auto-restart was skipped", color="yellow")
-          self.node_info_failure_count = 0
+          self.node_status_service.reset_node_info_failure_count()
         return
       
       # Handle error by falling back to cached data or showing error messages
@@ -1731,6 +1740,21 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       "pending_launch_context": snapshot.pending_launch_context,
     }
 
+  @property
+  def node_info_failure_count(self) -> int:
+    status_service = getattr(self, "node_status_service", None)
+    if status_service is None:
+      return getattr(self, "_legacy_node_info_failure_count", 0)
+    return status_service.node_info_failure_count
+
+  @node_info_failure_count.setter
+  def node_info_failure_count(self, value: int) -> None:
+    status_service = getattr(self, "node_status_service", None)
+    if status_service is None:
+      self._legacy_node_info_failure_count = value
+      return
+    status_service.node_info_failure_count = value
+
   def _active_lifecycle_operation(self) -> Optional[dict]:
     return self.__lifecycle_state.active_operation_dict()
 
@@ -1746,7 +1770,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   def _mark_container_startup_grace(self, container_name: str, *, reason: str = "launch") -> None:
     if not container_name:
       return
-    self.__container_startup_grace_started_at[container_name] = time()
+    self.node_status_service.mark_startup_grace(container_name)
     self.add_log(
       f"Startup grace period started for {container_name} after {reason}; auto-restart is paused while the node initializes.",
       debug=True,
@@ -1754,34 +1778,17 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     )
 
   def _clear_container_startup_grace(self, container_name: str) -> None:
-    if self.__container_startup_grace_started_at.pop(container_name, None) is not None:
+    if self.node_status_service.clear_startup_grace(container_name):
       self.add_log(f"Startup grace period cleared for {container_name}; node info is available.", debug=True)
 
   def _container_startup_grace_remaining_seconds(self, container_name: str) -> int:
-    started_at = self.__container_startup_grace_started_at.get(container_name)
-    if started_at is None:
-      return 0
-    elapsed = max(0, int(time() - started_at))
-    return max(0, NODE_STARTUP_GRACE_PERIOD_SECONDS - elapsed)
+    return self.node_status_service.startup_grace_remaining_seconds(container_name)
 
   def _is_startup_pending_node_info_error(self, error: str) -> bool:
-    normalized = (error or "").lower()
-    return any(
-      marker in normalized
-      for marker in (
-        "local_info.json does not exist",
-        "no such file or directory",
-        "timed out",
-        "timeout",
-        "connection refused",
-      )
-    )
+    return self.node_status_service.is_startup_pending_node_info_error(error)
 
   def _should_defer_node_info_failure(self, container_name: str, error: str) -> bool:
-    return (
-      self._container_startup_grace_remaining_seconds(container_name) > 0
-      and self._is_startup_pending_node_info_error(error)
-    )
+    return self.node_status_service.should_defer_node_info_failure(container_name, error)
 
   def _show_node_starting_state(self) -> None:
     self.addressDisplay.setText('Address: Starting up...')
