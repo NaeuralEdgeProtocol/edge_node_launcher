@@ -1,11 +1,41 @@
 from typing import Callable, Optional
 
-from PyQt5.QtWidgets import QDialog, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout
+from PyQt5.QtWidgets import (
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 
 AliasValidator = Callable[[str], Optional[str]]
 AliasSubmitter = Callable[[str, Callable[[], None]], bool]
 ErrorReporter = Callable[[str], None]
+
+
+_RENAME_ACTION_BUTTON_HEIGHT = 52
+_RENAME_ACTION_BUTTON_VERTICAL_PADDING = 8
+_RENAME_ACTION_BUTTON_BORDER = 1
+_RENAME_ACTION_BUTTON_CONTENT_HEIGHT = (
+    _RENAME_ACTION_BUTTON_HEIGHT
+    - (_RENAME_ACTION_BUTTON_VERTICAL_PADDING * 2)
+    - (_RENAME_ACTION_BUTTON_BORDER * 2)
+)
+
+_RENAME_ACTION_BUTTON_STYLE = f"""
+QPushButton#renameNodeSaveButton,
+QPushButton#renameNodeCancelButton {{
+    margin: 0px;
+    padding: {_RENAME_ACTION_BUTTON_VERTICAL_PADDING}px 12px;
+    border-width: {_RENAME_ACTION_BUTTON_BORDER}px;
+    min-height: {_RENAME_ACTION_BUTTON_CONTENT_HEIGHT}px;
+    max-height: {_RENAME_ACTION_BUTTON_CONTENT_HEIGHT}px;
+}}
+"""
 
 
 class RenameNodeDialog(QDialog):
@@ -34,7 +64,7 @@ class RenameNodeDialog(QDialog):
 
         layout = QVBoxLayout()
         layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(8)
+        layout.setSpacing(10)
 
         explanation = QLabel("Name this node for display in the launcher.")
         explanation.setObjectName("renameNodeExplanationLabel")
@@ -71,26 +101,41 @@ class RenameNodeDialog(QDialog):
         restrictions_text.setWordWrap(True)
         layout.addWidget(restrictions_text)
 
-        button_layout = QHBoxLayout()
+        self.button_row = QWidget()
+        self.button_row.setObjectName("renameNodeButtonRow")
+        self.button_row.setAccessibleName("Rename node actions")
+        button_layout = QHBoxLayout(self.button_row)
+        button_layout.setContentsMargins(0, 0, 0, 0)
         button_layout.setSpacing(12)
         self.save_button = QPushButton("Save")
         self.save_button.setObjectName("renameNodeSaveButton")
         self.save_button.setAccessibleName("Save node name")
+        self.save_button.setToolTip("Save node display name")
         self.save_button.setProperty("type", "confirm")
+        self.save_button.setProperty("actionRole", "primary")
+        self._prepare_button(self.save_button)
         self.cancel_button = QPushButton("Cancel")
         self.cancel_button.setObjectName("renameNodeCancelButton")
         self.cancel_button.setAccessibleName("Cancel node rename")
+        self.cancel_button.setToolTip("Cancel node rename")
         self.cancel_button.setProperty("type", "cancel")
+        self.cancel_button.setProperty("actionRole", "secondary")
+        self._prepare_button(self.cancel_button)
 
         button_layout.addWidget(self.save_button)
         button_layout.addWidget(self.cancel_button)
-        layout.addLayout(button_layout)
+        layout.addWidget(self.button_row)
 
         self.setLayout(layout)
-        self.setStyleSheet(stylesheet)
+        self.setStyleSheet(stylesheet + _RENAME_ACTION_BUTTON_STYLE)
 
         self.save_button.clicked.connect(self._handle_save_clicked)
         self.cancel_button.clicked.connect(self.reject)
+
+    @staticmethod
+    def _prepare_button(button: QPushButton):
+        button.setFixedHeight(_RENAME_ACTION_BUTTON_HEIGHT)
+        button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
     def reset_submit_controls(self):
         self.save_button.setEnabled(True)

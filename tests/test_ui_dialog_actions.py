@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QLineEdit, QPushButto
 
 import widgets.dialogs.DockerCheckDialog as docker_check_module
 from ui.ProgressDialog import ImagePullProgressDialog
-from utils.const import DARK_STYLESHEET, INSUFFICIENT_RAM_MESSAGE
+from utils.const import DARK_STYLESHEET, INSUFFICIENT_RAM_MESSAGE, LIGHT_STYLESHEET
 from widgets.dialogs.AddNodeDialog import AddNodeDialog
 from widgets.dialogs.AuthorizedAddressedDialog import AddressRow, AuthorizedAddressesDialog
 from widgets.dialogs.RenameNodeDialog import RenameNodeDialog
@@ -124,8 +124,20 @@ def test_rename_node_dialog_preserves_submit_guard(qtbot):
     assert explanation.accessibleName() == "Rename node explanation"
     assert restrictions_label.accessibleName() == "Name restrictions heading"
     assert restrictions_text.accessibleName() == "Name restrictions"
+    assert dialog.button_row.objectName() == "renameNodeButtonRow"
+    assert dialog.button_row.accessibleName() == "Rename node actions"
     assert save_button.accessibleName() == "Save node name"
+    assert save_button.toolTip() == "Save node display name"
+    assert save_button.property("actionRole") == "primary"
+    assert save_button.minimumHeight() == 52
+    assert save_button.maximumHeight() == 52
+    assert save_button.sizePolicy().horizontalPolicy() == QSizePolicy.Expanding
+    assert "QPushButton#renameNodeSaveButton" in dialog.styleSheet()
     assert cancel_button.accessibleName() == "Cancel node rename"
+    assert cancel_button.toolTip() == "Cancel node rename"
+    assert cancel_button.property("actionRole") == "secondary"
+    assert cancel_button.minimumHeight() == 52
+    assert cancel_button.maximumHeight() == 52
 
     name_input.setText("beta")
     qtbot.mouseClick(save_button, Qt.LeftButton)
@@ -135,6 +147,22 @@ def test_rename_node_dialog_preserves_submit_guard(qtbot):
     assert not save_button.isEnabled()
     assert not cancel_button.isEnabled()
     assert save_button.text() == "Saving..."
+
+
+def test_rename_node_dialog_action_buttons_render_evenly_with_themes(qtbot):
+    for stylesheet in (DARK_STYLESHEET, LIGHT_STYLESHEET):
+        dialog = RenameNodeDialog(current_alias="alpha", stylesheet=stylesheet)
+        qtbot.addWidget(dialog)
+
+        dialog.show()
+        qtbot.waitUntil(dialog.isVisible)
+
+        save_button = dialog.findChild(QPushButton, "renameNodeSaveButton")
+        cancel_button = dialog.findChild(QPushButton, "renameNodeCancelButton")
+
+        assert save_button.height() == cancel_button.height() == 52
+        assert save_button.y() == cancel_button.y()
+        dialog.close()
 
 
 def test_rename_node_dialog_validation_keeps_controls_enabled(qtbot):
