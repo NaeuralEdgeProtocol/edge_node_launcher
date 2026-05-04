@@ -1656,7 +1656,7 @@ def test_refresh_node_info_targets_selected_container_id_not_display_alias(qtbot
 
     assert launcher.container_combo.currentText() == "alpha"
 
-    launcher.refresh_node_info()
+    REAL_REFRESH_NODE_INFO(launcher)
 
     assert "alpha" not in fake_handler.container_names
     assert fake_handler.container_names[-1] == "r1node"
@@ -1780,6 +1780,50 @@ def test_stale_node_info_failures_do_not_restart_other_nodes(qtbot, monkeypatch)
 
     launcher.user_stopped_container = False
     assert launcher._should_restart_after_node_info_failure("r1node")
+
+
+def test_startup_pending_node_info_does_not_auto_restart(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    restarts = []
+    fake_handler.running = True
+    launcher.is_container_running = lambda: True
+    fake_handler.get_node_info = lambda on_success, on_error: on_error(
+        "Error: /edge_node/_local_cache/_data/local_info.json does not exist"
+    )
+    launcher._restart_container_after_failures = lambda container_name: restarts.append(container_name)
+    launcher._mark_container_startup_grace("r1node", reason="test")
+    launcher.node_info_failure_count = frm_main.NODE_INFO_FAILURE_THRESHOLD - 1
+
+    REAL_REFRESH_NODE_INFO(launcher)
+
+    assert restarts == []
+    assert launcher.node_info_failure_count == 0
+    assert launcher.addressDisplay.text() == "Address: Starting up..."
+    assert launcher.ethAddressDisplay.text() == "ETH Address: Starting up..."
+    assert launcher.nameDisplay.text() == "Name: Loading..."
+    log_text = "\n".join(launcher.log_buffer)
+    if launcher.logView is not None:
+        log_text += launcher.logView.toPlainText()
+    assert "auto-restart is paused" in log_text
+
+
+def test_auto_restart_can_resume_after_startup_grace_expires(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launcher._mark_container_startup_grace("r1node", reason="test")
+    getattr(launcher, "_EdgeNodeLauncher__container_startup_grace_started_at")["r1node"] = (
+        frm_main.time() - frm_main.NODE_STARTUP_GRACE_PERIOD_SECONDS - 1
+    )
+
+    assert launcher._should_restart_after_node_info_failure("r1node")
+
+
+def test_node_info_success_clears_startup_grace(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launcher._mark_container_startup_grace("r1node", reason="test")
+
+    launcher._clear_container_startup_grace("r1node")
+
+    assert launcher._container_startup_grace_remaining_seconds("r1node") == 0
 
 
 def test_restart_pull_and_launch_reports_active_pull_skip(qtbot, monkeypatch):

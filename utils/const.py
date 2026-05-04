@@ -33,6 +33,7 @@ AUTO_UPDATE_CHECK_INTERVAL = 3600 # 1 hour
 DOCKER_IMAGE_AUTO_UPDATE_CHECK_INTERVAL = 300  # 5 minutes
 MAX_ALIAS_LENGTH = 15  # Maximum length for aliases (node name and authorized addresses)
 NODE_INFO_FAILURE_THRESHOLD = 5  # Number of consecutive get_node_info failures before container restart
+NODE_STARTUP_GRACE_PERIOD_SECONDS = 20 * 60  # Cold starts can build packages such as llama-cpp-python.
 
 # ============================================================================
 # NODE REQUIREMENTS

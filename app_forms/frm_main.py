@@ -258,12 +258,17 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     
     # Track failed get_node_info requests for auto-restart
     self.node_info_failure_count = 0
+    self.__container_startup_grace_started_at = {}
     
     # Check if container is running and update UI accordingly
     if self.is_container_running():
         self.add_log("Container is running on startup, updating UI", debug=True)
         # Clear the stop flag since container is already running
         self.user_stopped_container = False
+        selected_container = self._selected_container_name()
+        container_config = self.config_manager.get_container(selected_container) if selected_container else None
+        if selected_container and not (container_config and container_config.node_address):
+          self._mark_container_startup_grace(selected_container, reason="startup")
         self.post_launch_setup()
         self.refresh_node_info()
         self.plot_data()  # Initial plot
@@ -1454,6 +1459,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.add_log(f"Getting node information for {container_name}", debug=True)
     
     def on_success(node_info: NodeInfo) -> None:
+      self._clear_container_startup_grace(container_name)
+
       # Reset failure counter on successful request
       if self.node_info_failure_count > 0:
         self.add_log(f"Node info request succeeded after {self.node_info_failure_count} failures, resetting counter", debug=True)
@@ -1463,6 +1470,16 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       self._update_ui_with_fresh_data(node_info, container_name)
 
     def on_error(error):
+      if self._should_defer_node_info_failure(container_name, str(error)):
+        self.node_info_failure_count = 0
+        remaining = self._container_startup_grace_remaining_seconds(container_name)
+        self.add_log(
+          f"Node {container_name} is still starting; auto-restart is paused for {remaining} more seconds. Last health check: {error}",
+          color="yellow",
+        )
+        self._show_node_starting_state()
+        return
+
       # Increment failure counter
       self.node_info_failure_count += 1
       self.add_log(f"Node info request failed ({self.node_info_failure_count}/{NODE_INFO_FAILURE_THRESHOLD}): {error}", color="yellow")
@@ -1523,6 +1540,54 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
   def _docker_pull_in_progress(self) -> bool:
     return self.__lifecycle_state.docker_pull_in_progress
+
+  def _mark_container_startup_grace(self, container_name: str, *, reason: str = "launch") -> None:
+    if not container_name:
+      return
+    self.__container_startup_grace_started_at[container_name] = time()
+    self.add_log(
+      f"Startup grace period started for {container_name} after {reason}; auto-restart is paused while the node initializes.",
+      debug=True,
+      color="yellow",
+    )
+
+  def _clear_container_startup_grace(self, container_name: str) -> None:
+    if self.__container_startup_grace_started_at.pop(container_name, None) is not None:
+      self.add_log(f"Startup grace period cleared for {container_name}; node info is available.", debug=True)
+
+  def _container_startup_grace_remaining_seconds(self, container_name: str) -> int:
+    started_at = self.__container_startup_grace_started_at.get(container_name)
+    if started_at is None:
+      return 0
+    elapsed = max(0, int(time() - started_at))
+    return max(0, NODE_STARTUP_GRACE_PERIOD_SECONDS - elapsed)
+
+  def _is_startup_pending_node_info_error(self, error: str) -> bool:
+    normalized = (error or "").lower()
+    return any(
+      marker in normalized
+      for marker in (
+        "local_info.json does not exist",
+        "no such file or directory",
+        "timed out",
+        "timeout",
+        "connection refused",
+      )
+    )
+
+  def _should_defer_node_info_failure(self, container_name: str, error: str) -> bool:
+    return (
+      self._container_startup_grace_remaining_seconds(container_name) > 0
+      and self._is_startup_pending_node_info_error(error)
+    )
+
+  def _show_node_starting_state(self) -> None:
+    self.addressDisplay.setText('Address: Starting up...')
+    self.ethAddressDisplay.setText('ETH Address: Starting up...')
+    self.nameDisplay.setText('Name: Loading...')
+    self.copyAddrButton.hide()
+    self.copyEthButton.hide()
+    self.update_toggle_button_text(assume_running=True)
 
   def _begin_lifecycle_operation(self, operation: str, container_name: str) -> None:
     """Mark that a user-visible lifecycle operation is in progress."""
@@ -1623,6 +1688,15 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     if blocker == "user_stopped":
       self.add_log(
         f"Skipping auto-restart for {container_name}; user intentionally stopped the container",
+        debug=True,
+        color="yellow",
+      )
+      return False
+
+    remaining_startup_grace = self._container_startup_grace_remaining_seconds(container_name)
+    if remaining_startup_grace > 0:
+      self.add_log(
+        f"Skipping auto-restart for {container_name}; startup grace period has {remaining_startup_grace} seconds remaining",
         debug=True,
         color="yellow",
       )
@@ -3106,6 +3180,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   def _finalize_launch_success(self, container_name: str, volume_name: str) -> None:
     """Persist launch state, refresh visible UI, and close launch dialogs."""
     self._lifecycle_dialogs.update_launch_progress("Container launched, updating configuration...")
+    self._mark_container_startup_grace(container_name)
 
     self.config_manager.update_last_used(container_name, datetime.now().isoformat())
 
