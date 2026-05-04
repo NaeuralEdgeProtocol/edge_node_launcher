@@ -852,6 +852,93 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     if dialog is None or current_dialog is dialog:
       setattr(self, dialog_attr, None)
 
+  def _dialog_reference(self, dialog_attr: str):
+    """Return a live dialog reference or clear stale/deleted wrappers."""
+    if not hasattr(self, dialog_attr):
+      return None
+
+    try:
+      dialog = getattr(self, dialog_attr)
+    except RuntimeError:
+      setattr(self, dialog_attr, None)
+      return None
+
+    if dialog is None:
+      return None
+
+    if self._qt_object_deleted(dialog):
+      setattr(self, dialog_attr, None)
+      self.add_log(f"Cleared deleted {dialog_attr}", debug=True)
+      return None
+
+    return dialog
+
+  def _dialog_is_visible(self, dialog_attr: str) -> bool:
+    dialog = self._dialog_reference(dialog_attr)
+    if dialog is None:
+      return False
+
+    try:
+      return dialog.isVisible()
+    except RuntimeError:
+      self._clear_dialog_reference(dialog_attr, dialog)
+      return False
+
+  def _update_dialog_progress(self, dialog_attr: str, message: str, *, require_visible: bool = False) -> bool:
+    dialog = self._dialog_reference(dialog_attr)
+    if dialog is None:
+      return False
+    if require_visible and not self._dialog_is_visible(dialog_attr):
+      return False
+
+    try:
+      dialog.update_progress(message)
+      return True
+    except RuntimeError:
+      self._clear_dialog_reference(dialog_attr, dialog)
+      return False
+
+  def _safe_close_dialog_reference(self, dialog_attr: str, dialog=None) -> bool:
+    if dialog is None:
+      dialog = self._dialog_reference(dialog_attr)
+    if dialog is None:
+      return False
+
+    if self._dialog_reference(dialog_attr) is not dialog:
+      return False
+
+    try:
+      if hasattr(dialog, "safe_close"):
+        dialog.safe_close()
+      else:
+        dialog.close()
+      return True
+    except RuntimeError:
+      self._clear_dialog_reference(dialog_attr, dialog)
+      return False
+
+  def _schedule_safe_close_dialog_reference(
+    self,
+    dialog_attr: str,
+    *,
+    close_delay_ms: int,
+    clear_delay_ms: int,
+  ) -> bool:
+    """Close and clear a dialog later without clearing a newer replacement."""
+    dialog = self._dialog_reference(dialog_attr)
+    if dialog is None:
+      return False
+
+    QTimer.singleShot(
+      close_delay_ms,
+      lambda dialog=dialog: self._safe_close_dialog_reference(dialog_attr, dialog),
+    )
+    QTimer.singleShot(
+      clear_delay_ms,
+      lambda dialog=dialog: self._clear_dialog_reference(dialog_attr, dialog),
+    )
+    return True
+
   def _close_dialog_reference(self, dialog_attr: str) -> bool:
     """Close a stored dialog reference, tolerating already-deleted Qt wrappers."""
     if not hasattr(self, dialog_attr):
@@ -1131,8 +1218,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.loading_indicator.start()
         
         # Update loading dialog with progress
-        if hasattr(self, 'toggle_dialog') and self.toggle_dialog is not None and self.toggle_dialog.isVisible():
-            self.toggle_dialog.update_progress("Stopping Docker container...")
+        self._update_dialog_progress("toggle_dialog", "Stopping Docker container...", require_visible=True)
         
         # Define success callback for threaded operation
         def on_stop_success(result):
@@ -1140,6 +1226,13 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             if return_code != 0:
                 # Handle error case
                 error_msg = f"Failed to stop container: {stderr}"
+                self.loading_indicator.stop()
+                self._update_dialog_progress("toggle_dialog", f"Error: {error_msg}", require_visible=True)
+                self._schedule_safe_close_dialog_reference(
+                    "toggle_dialog",
+                    close_delay_ms=1500,
+                    clear_delay_ms=2000,
+                )
                 self._end_lifecycle_operation(container_name)
                 self.add_log(error_msg, color="red")
                 self.toast.show_notification(NotificationType.ERROR, error_msg)
@@ -1149,8 +1242,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             self.user_stopped_container = True
             
             # Update loading dialog with progress    
-            if hasattr(self, 'toggle_dialog') and self.toggle_dialog is not None and self.toggle_dialog.isVisible():
-                self.toggle_dialog.update_progress("Container stopped, updating UI...")
+            self._update_dialog_progress("toggle_dialog", "Container stopped, updating UI...", require_visible=True)
                 
             # Clear and update all UI elements
             self.update_toggle_button_text()
@@ -1162,15 +1254,14 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             self.loading_indicator.stop()
             
             # Update loading dialog with completion message
-            if hasattr(self, 'toggle_dialog') and self.toggle_dialog is not None and self.toggle_dialog.isVisible():
-                self.toggle_dialog.update_progress("Container stopped successfully!")
+            self._update_dialog_progress("toggle_dialog", "Container stopped successfully!", require_visible=True)
                 
             # Close the loading dialog after a short delay to show success message
-            toggle_dialog_visible = hasattr(self, 'toggle_dialog') and self.toggle_dialog is not None and self.toggle_dialog.isVisible()
-            if toggle_dialog_visible:
-                QTimer.singleShot(500, lambda: self.toggle_dialog.safe_close() if hasattr(self, 'toggle_dialog') and self.toggle_dialog is not None else None)
-                # Schedule removal of the reference after a delay
-                QTimer.singleShot(1000, lambda: setattr(self, 'toggle_dialog', None) if hasattr(self, 'toggle_dialog') else None)
+            self._schedule_safe_close_dialog_reference(
+                "toggle_dialog",
+                close_delay_ms=500,
+                clear_delay_ms=1000,
+            )
             
             self._queue_ui_refresh()
             
@@ -1185,15 +1276,14 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             self.loading_indicator.stop()
             
             # Update loading dialog with error message
-            if hasattr(self, 'toggle_dialog') and self.toggle_dialog is not None and self.toggle_dialog.isVisible():
-                self.toggle_dialog.update_progress(f"Error: {error_msg}")
+            self._update_dialog_progress("toggle_dialog", f"Error: {error_msg}", require_visible=True)
                 
             # Close the loading dialog after a short delay to show error message
-            toggle_dialog_visible = hasattr(self, 'toggle_dialog') and self.toggle_dialog is not None and self.toggle_dialog.isVisible()
-            if toggle_dialog_visible:
-                QTimer.singleShot(1500, lambda: self.toggle_dialog.safe_close() if hasattr(self, 'toggle_dialog') and self.toggle_dialog is not None else None)
-                # Schedule removal of the reference after a delay
-                QTimer.singleShot(2000, lambda: setattr(self, 'toggle_dialog', None) if hasattr(self, 'toggle_dialog') else None)
+            self._schedule_safe_close_dialog_reference(
+                "toggle_dialog",
+                close_delay_ms=1500,
+                clear_delay_ms=2000,
+            )
                 
             self.add_log(f"Error stopping container: {error_msg}", color="red")
             self.toast.show_notification(NotificationType.ERROR, f"Error stopping container: {error_msg}")
@@ -1207,15 +1297,14 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.loading_indicator.stop()
         
         # Update loading dialog with error message
-        if hasattr(self, 'toggle_dialog') and self.toggle_dialog is not None and self.toggle_dialog.isVisible():
-            self.toggle_dialog.update_progress(f"Error: {str(e)}")
+        self._update_dialog_progress("toggle_dialog", f"Error: {str(e)}", require_visible=True)
             
         # Close the loading dialog after a short delay to show error message
-        toggle_dialog_visible = hasattr(self, 'toggle_dialog') and self.toggle_dialog is not None and self.toggle_dialog.isVisible()
-        if toggle_dialog_visible:
-            QTimer.singleShot(1500, lambda: self.toggle_dialog.safe_close() if hasattr(self, 'toggle_dialog') and self.toggle_dialog is not None else None)
-            # Schedule removal of the reference after a delay
-            QTimer.singleShot(2000, lambda: setattr(self, 'toggle_dialog', None) if hasattr(self, 'toggle_dialog') else None)
+        self._schedule_safe_close_dialog_reference(
+            "toggle_dialog",
+            close_delay_ms=1500,
+            clear_delay_ms=2000,
+        )
             
         self.add_log(f"Error stopping container: {str(e)}", color="red")
         self.toast.show_notification(NotificationType.ERROR, f"Error stopping container: {str(e)}")

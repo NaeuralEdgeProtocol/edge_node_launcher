@@ -530,6 +530,49 @@ def test_stop_button_double_click_does_not_start_second_lifecycle(qtbot, monkeyp
     }
 
 
+def test_scheduled_dialog_close_does_not_clear_replaced_dialog(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    first_dialog = frm_main.LoadingDialog(launcher, title="Launching Node", message="First")
+    replacement_dialog = frm_main.LoadingDialog(launcher, title="Launching Node", message="Replacement")
+    launcher.launcher_dialog = first_dialog
+    callbacks = []
+
+    monkeypatch.setattr(frm_main.QTimer, "singleShot", lambda delay, callback: callbacks.append((delay, callback)))
+
+    assert launcher._schedule_safe_close_dialog_reference(
+        "launcher_dialog",
+        close_delay_ms=500,
+        clear_delay_ms=1000,
+    )
+
+    launcher.launcher_dialog = replacement_dialog
+    for _delay, callback in callbacks:
+        callback()
+
+    assert launcher.launcher_dialog is replacement_dialog
+
+
+def test_stop_return_code_failure_closes_dialog_and_clears_lifecycle(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+
+    def fail_stop(container_name, callback, error_callback):
+        fake_handler.stopped_containers.append(container_name)
+        callback(("", "permission denied", 1))
+
+    fake_handler.stop_container_threaded = fail_stop
+    monkeypatch.setattr(frm_main.QTimer, "singleShot", lambda _delay, callback: callback())
+
+    qtbot.mouseClick(launcher.toggleButton, Qt.LeftButton)
+
+    assert fake_handler.stopped_containers == ["r1node"]
+    assert launcher.toggle_dialog is None
+    assert not launcher.loading_indicator.timer.isActive()
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+    assert launcher.toast.notifications == [
+        (NotificationType.ERROR, "Failed to stop container: permission denied")
+    ]
+
+
 def test_start_after_container_exited_can_supersede_stop_lifecycle(qtbot, monkeypatch):
     launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
     launch_requests = []
