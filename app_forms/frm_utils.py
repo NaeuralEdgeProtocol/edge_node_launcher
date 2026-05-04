@@ -2,61 +2,12 @@ import sys
 import base64
 import traceback
 from datetime import datetime
-import random
-import subprocess
 
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QAbstractButton, QCheckBox, QRadioButton
 from PyQt5.QtCore import Qt, QRect, QRectF, QPropertyAnimation
 from PyQt5.QtGui import QFont, QPixmap, QIcon, QPainter, QColor, QBrush
 from pyqtgraph import AxisItem
 from widgets.loading_indicator import LoadingIndicator
-
-# List of adjectives and nouns for generating container names
-ADJECTIVES = [
-    "swift", "bright", "calm", "wise", "bold", 
-    "quick", "keen", "brave", "agile", "noble"
-]
-
-NOUNS = [
-    "falcon", "tiger", "eagle", "wolf", "bear",
-    "hawk", "lion", "puma", "lynx", "fox"
-]
-
-def generate_container_name(prefix="r1node"):
-    """Generate a sequential container name.
-    
-    First container is named just "r1node" (no number),
-    subsequent containers are "r1node1", "r1node2", etc.
-    """
-    # Get list of existing containers with the prefix
-    try:
-        result = subprocess.run(
-            ['docker', 'ps', '-a', '--format', '{{.Names}}', '--filter', f'name={prefix}'],
-            capture_output=True, text=True
-        )
-        
-        # Parse existing container names and find the highest index
-        existing_containers = result.stdout.strip().split('\n')
-        existing_containers = [c for c in existing_containers if c]  # Remove empty strings
-        
-        highest_index = -1  # Start from -1 so first container will be r1node0
-        for container in existing_containers:
-            if container.startswith(prefix):
-                try:
-                    # Extract the number after the prefix
-                    index_str = container[len(prefix):]
-                    if index_str.isdigit():
-                        index = int(index_str)
-                        highest_index = max(highest_index, index)
-                except (ValueError, IndexError):
-                    continue
-        
-        # Return next available index
-        return f"{prefix}{highest_index + 1}"
-        
-    except Exception as e:
-        # In case of any error, start from 0
-        return f"{prefix}0"
 
 def get_volume_name(container_name):
     """Get volume name from container name"""
