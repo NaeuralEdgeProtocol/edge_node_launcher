@@ -93,6 +93,7 @@ def test_list_containers_parses_docker_ps_output(monkeypatch):
 
     def fake_execute(command, timeout=None):
         assert command[:3] == ["docker", "ps", "--format"]
+        assert command[command.index("-f") + 1] == "name=r1node"
         assert timeout == docker_commands.DOCKER_STATUS_TIMEOUT
         return "r1node\tUp 2 minutes\tabc123\nr1node2\tExited (0)\tdef456\n", "", 0
 
@@ -103,6 +104,23 @@ def test_list_containers_parses_docker_ps_output(monkeypatch):
     assert containers == [
         {"name": "r1node", "status": "Up 2 minutes", "id": "abc123", "running": True},
         {"name": "r1node2", "status": "Exited (0)", "id": "def456", "running": False},
+    ]
+
+
+def test_list_containers_uses_active_devnet_filter(monkeypatch):
+    configure_edge_node_image(cli_image="devnet", environ={}, production_mode=False)
+    handler = make_handler(monkeypatch)
+
+    def fake_execute(command, timeout=None):
+        assert command[command.index("-f") + 1] == "name=r1devnode"
+        return "r1devnode\tUp 2 minutes\tabc123\n", "", 0
+
+    monkeypatch.setattr(handler, "execute_command", fake_execute)
+
+    containers = handler.list_containers()
+
+    assert containers == [
+        {"name": "r1devnode", "status": "Up 2 minutes", "id": "abc123", "running": True},
     ]
 
 

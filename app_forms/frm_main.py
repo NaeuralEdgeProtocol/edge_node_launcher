@@ -66,9 +66,15 @@ from utils.docker import _DockerUtilsMixin
 from utils.docker_commands import DockerCommandHandler
 from utils.updater import _UpdaterMixin, UpdateCheckThread
 from utils.system_resources import _SystemResourcesMixin
-from utils.docker_utils import get_volume_name, generate_container_name
+from utils.docker_utils import (
+  generate_container_name,
+  get_default_container_name,
+  get_default_volume_name,
+  get_volume_name,
+  is_container_name_for_config,
+)
 from utils.docker_errors import extract_conflicting_container_id
-from utils.edge_image_config import get_edge_node_image_config
+from utils.edge_image_config import MAINNET_CONTAINER_PREFIX, get_edge_node_image_config
 from utils.config_manager import ConfigManager, ContainerConfig
 from utils.container_selection import SelectedContainer, selected_container_from_combo, select_container_by_name
 from utils.lifecycle_copy import (
@@ -152,6 +158,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     self.edge_image_config = get_edge_node_image_config()
     self.current_environment = self.edge_image_config.environment_key
+    self.default_container_name = self._resolve_default_container_name()
+    self.default_volume_name = self._resolve_default_volume_name()
+    self.container_name_prefix = self.edge_image_config.container_prefix
 
     self.__current_node_uptime = -1
     self.__current_node_epoch = -1
@@ -215,10 +224,15 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.add_log(f'Edge Node Launcher v{self.__version__} started. Running in production: {self.runs_in_production}, running with debugger: {self.runs_with_debugger()}, running in ipython: {self.runs_from_ipython()},  running from exe: {not self.not_running_from_exe()}')
     self.add_log(f'Running from: {self.__cwd}')
     self.add_log(f'Edge Node Docker image: {self.edge_image_config.image} (source: {self.edge_image_config.source})')
+    self.add_log(f'Edge Node Docker names: container={self.default_container_name}, volume={self.default_volume_name}')
     if self.edge_image_config.ignored_reason:
       self.add_log(self.edge_image_config.ignored_reason, color="yellow")
     elif not self.edge_image_config.is_mainnet:
       self.add_log('Local testing image override is active. Packaged production runs use mainnet only.', color="yellow")
+      self.add_log(
+        f'Local testing Docker resources use the {self.container_name_prefix} / {self.edge_image_config.volume_prefix} prefixes to avoid mainnet data.',
+        color="yellow",
+      )
 
     platform_info, os_name, os_version = get_platform_and_os_info()
     self.add_log(f'Platform: {platform_info}')
@@ -229,8 +243,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.close()
         sys.exit(1)
 
+    self.docker_container_name = self.default_container_name
     self.docker_initialize()
-    self.docker_handler = DockerCommandHandler(DOCKER_CONTAINER_NAME)
+    self.docker_handler = DockerCommandHandler(self.default_container_name)
 
     # Initialize container list
     self.refresh_container_list()
@@ -277,6 +292,22 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     # Perform initial update check on startup
     self.check_for_updates(verbose=True)
+
+  def _resolve_default_container_name(self) -> str:
+    """Resolve the first managed container for the active network.
+
+    Test and E2E tools may patch DOCKER_CONTAINER_NAME before constructing
+    the launcher. Preserve that explicit override while keeping production
+    mainnet on the historical r1node name.
+    """
+    if DOCKER_CONTAINER_NAME != MAINNET_CONTAINER_PREFIX:
+      return DOCKER_CONTAINER_NAME
+    return get_default_container_name(self.edge_image_config)
+
+  def _resolve_default_volume_name(self) -> str:
+    if self.default_container_name != self.edge_image_config.default_container_name:
+      return get_volume_name(self.default_container_name)
+    return get_default_volume_name(self.edge_image_config)
 
   def init_button_colors(self):
     """Initialize or update button colors based on current theme"""
@@ -2733,7 +2764,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   def show_add_node_dialog(self):
     """Show confirmation dialog for adding a new node."""
     # Check RAM before showing the dialog
-    existing_node_count = len(self.config_manager.get_all_containers())
+    existing_node_count = len(self._containers_for_current_environment(self.config_manager.get_all_containers()))
     ram_check = self.check_ram_for_new_node(existing_node_count)
     
     # If there's an error checking RAM, ask user if they want to proceed
@@ -2762,7 +2793,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         return
 
     # Generate the container name that would be used
-    container_name = generate_container_name()
+    container_name = generate_container_name(self.container_name_prefix)
     volume_name = get_volume_name(container_name)
 
     dialog = AddNodeDialog(
@@ -3219,6 +3250,18 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         
     except Exception as e:
         self._finalize_launch_exception(container_name, e)
+
+  def _containers_for_current_environment(self, containers):
+    """Return saved containers that belong to the active edge-node image network."""
+    return [
+      container
+      for container in containers
+      if is_container_name_for_config(
+        container.name,
+        self.edge_image_config,
+        default_container_name=self.default_container_name,
+      )
+    ]
   
   def refresh_container_list(self):
     """Refresh the container list in the combo box."""
@@ -3229,15 +3272,16 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     # Clear the combo box
     self.container_combo.clear()
     
-    # Get containers from config
-    containers = self.config_manager.get_all_containers()
+    # Get containers from config and keep the active network isolated.
+    all_containers = self.config_manager.get_all_containers()
+    containers = self._containers_for_current_environment(all_containers)
     
-    # If no containers found, create a default one
+    # If no containers found for this network, create a default one.
     if not containers:
         default_container = ContainerConfig(
-            name="r1node",
-            volume="r1vol",
-            node_alias="r1node"
+            name=self.default_container_name,
+            volume=self.default_volume_name,
+            node_alias=self.default_container_name
         )
         self.config_manager.add_container(default_container)
         containers = [default_container]

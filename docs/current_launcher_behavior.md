@@ -13,6 +13,7 @@ The launcher is not the edge node runtime itself. The production runtime is the 
 - `main.py` is the source entrypoint for local development. It creates `QApplication`, applies the app icon and Windows AppUserModelID, instantiates `EdgeNodeLauncher`, shows it, and starts the Qt event loop.
 - `launcher.py` is the packaged wrapper. It configures file logging, hides the console window on Windows, patches subprocess behavior, and then starts the same PyQt application.
 - Local source runs can override the edge-node image with `--edge-image` or `R1_EDGE_NODE_IMAGE`, for example `ratio1/edge_node:devnet`. Packaged production runs ignore non-mainnet overrides and use mainnet only.
+- Mainnet Docker resources keep the existing names (`r1node`, `r1vol`, with numeric suffixes for additional nodes). Devnet and testnet source runs use separate prefixes (`r1devnode`/`r1devvol`, `r1testnode`/`r1testvol`) and the launcher filters saved nodes to the active image network before creating or selecting containers.
 - `app_forms/frm_main.py` contains the main `EdgeNodeLauncher` widget. It currently owns a large amount of UI construction, app state, Docker flow coordination, refresh timers, dialogs, logs, and node-status behavior.
 - `requirements.txt` currently lists direct runtime dependencies without pinned versions: `PyQt5`, `matplotlib`, `pyqtgraph`, `requests`, `pyyaml`, and `psutil`.
 
@@ -24,6 +25,7 @@ The launcher is not the edge node runtime itself. The production runtime is the 
 - Node information is fetched through container exec commands such as `get_node_info`, `get_node_history`, `get_allowed`, `get_startup_config`, `get_config_app`, `reset_address`, and `change_alias`.
 - Docker work is executed through Qt threads to avoid blocking the UI.
 - Destructive E2E supports `--devnet-real-data`, which selects `ratio1/edge_node:devnet` and disables offline startup-config injection. Use `--no-cleanup` only for manual real-data/license sessions where the dedicated E2E volume should remain available afterward.
+- Environment-scoped naming is implemented in `utils/edge_image_config.py` and `utils/docker_utils.py`; UI flows in `app_forms/frm_main.py` use those helpers instead of hard-coded dev/test names.
 
 ## Local State
 

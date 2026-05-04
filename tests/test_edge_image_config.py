@@ -20,6 +20,10 @@ def test_default_image_is_mainnet_for_local_runs():
     assert config.source == "default"
     assert config.environment_key == "mainnet"
     assert config.is_mainnet is True
+    assert config.container_prefix == "r1node"
+    assert config.volume_prefix == "r1vol"
+    assert config.default_container_name == "r1node"
+    assert config.default_volume_name == "r1vol"
 
 
 def test_env_image_override_selects_devnet_for_local_runs():
@@ -32,6 +36,10 @@ def test_env_image_override_selects_devnet_for_local_runs():
     assert config.source == EDGE_IMAGE_ENV_VAR
     assert config.environment_key == "devnet"
     assert config.is_mainnet is False
+    assert config.container_prefix == "r1devnode"
+    assert config.volume_prefix == "r1devvol"
+    assert config.default_container_name == "r1devnode"
+    assert config.default_volume_name == "r1devvol"
 
 
 def test_env_tag_override_accepts_network_alias():
@@ -42,6 +50,18 @@ def test_env_tag_override_accepts_network_alias():
 
     assert config.image == DEVNET_EDGE_NODE_IMAGE
     assert config.source == EDGE_IMAGE_TAG_ENV_VAR
+
+
+def test_testnet_uses_separate_resource_prefixes():
+    config = resolve_edge_node_image_config(
+        cli_image="testnet",
+        environ={},
+        production_mode=False,
+    )
+
+    assert config.environment_key == "testnet"
+    assert config.container_prefix == "r1testnode"
+    assert config.volume_prefix == "r1testvol"
 
 
 def test_cli_override_takes_precedence_over_environment():

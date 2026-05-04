@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (QDialog, QInputDialog, QLabel,
 
 from .const import *
 from .docker_commands import DockerCommandHandler
-from .edge_image_config import get_edge_node_image
+from .edge_image_config import get_edge_node_image, get_edge_node_image_config
 from .screen_geometry import screen_geometry
 from widgets.dialogs.DockerCheckDialog import DockerCheckDialog
 
@@ -182,13 +182,14 @@ class _DockerUtilsMixin:
     super().__init__()
     
     self.init_directories()
-    
-    self.docker_commands = DockerCommandHandler(DOCKER_CONTAINER_NAME)
+
+    default_container_name = get_edge_node_image_config().default_container_name
+    self.docker_commands = DockerCommandHandler(default_container_name)
 
     self.node_addr = None
     self.node_eth_address = None
     self.container_last_run_status = None
-    self.docker_container_name = DOCKER_CONTAINER_NAME
+    self.docker_container_name = default_container_name
     self.docker_tag = DOCKER_TAG
     self.node_id = self.get_node_id()
     self._dev_mode = False

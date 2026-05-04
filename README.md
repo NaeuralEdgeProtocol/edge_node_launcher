@@ -121,6 +121,11 @@ To install and run Edge Node Launcher, follow these steps:
    Packaged production builds always use `ratio1/edge_node:mainnet`; non-mainnet
    image overrides are for source/E2E testing only.
 
+   Mainnet keeps the historical Docker resource names (`r1node`, `r1vol`,
+   then numeric suffixes). Devnet and testnet source runs use separate Docker
+   resource prefixes (`r1devnode`/`r1devvol` and `r1testnode`/`r1testvol`) so
+   local test data does not mix with mainnet node volumes.
+
 ## Building the Application
 
 The repository uses GitHub Actions to build and release binaries for different platforms (Windows, Ubuntu 22.04, and Ubuntu 20.04). The build process includes:

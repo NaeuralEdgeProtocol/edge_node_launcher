@@ -302,6 +302,42 @@ def test_devnet_image_override_routes_dapp_and_shows_badge(qtbot, monkeypatch):
     assert opened_urls == [frm_main.DAPP_URLS["devnet"]]
 
 
+def test_devnet_image_override_uses_dev_container_and_volume_names(qtbot, monkeypatch):
+    configure_edge_node_image(cli_image=DEVNET_EDGE_NODE_IMAGE, environ={}, production_mode=False)
+    launcher, fake_config, fake_handler = _build_launcher(monkeypatch, qtbot)
+
+    assert launcher.default_container_name == "r1devnode"
+    assert launcher.default_volume_name == "r1devvol"
+    assert launcher.container_combo.count() == 1
+    assert launcher.container_combo.itemData(0) == "r1devnode"
+    assert fake_config.get_container("r1node") is not None
+    assert fake_config.get_container("r1devnode").volume == "r1devvol"
+    assert fake_handler.container_name == "r1devnode"
+
+
+def test_mainnet_selector_hides_devnet_containers_without_renaming_mainnet(qtbot, monkeypatch):
+    def add_devnet_container(fake_config):
+        fake_config.add_container(
+            ContainerConfig(
+                name="r1devnode",
+                volume="r1devvol",
+                node_alias="dev-alpha",
+            )
+        )
+
+    launcher, _fake_config, _fake_handler = _build_launcher(
+        monkeypatch,
+        qtbot,
+        config_setup=add_devnet_container,
+    )
+
+    assert launcher.default_container_name == "r1node"
+    assert launcher.default_volume_name == "r1vol"
+    assert [launcher.container_combo.itemData(i) for i in range(launcher.container_combo.count())] == [
+        "r1node"
+    ]
+
+
 def test_add_log_does_not_process_events_synchronously(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
 
@@ -2426,6 +2462,40 @@ def test_main_window_add_node_dialog_create_action_is_clickable(qtbot, monkeypat
     container_name, volume_name, display_name = created_nodes[0]
     assert container_name.startswith("r1node")
     assert volume_name.startswith("r1vol")
+    assert display_name is None
+
+
+def test_devnet_add_node_dialog_uses_dev_resource_prefixes(qtbot, monkeypatch):
+    configure_edge_node_image(cli_image=DEVNET_EDGE_NODE_IMAGE, environ={}, production_mode=False)
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    created_nodes = []
+
+    monkeypatch.setattr(
+        launcher,
+        "check_ram_for_new_node",
+        lambda existing_node_count: {
+            "can_add_node": True,
+            "total_ram_gb": 32.0,
+            "max_nodes_supported": 4,
+            "current_node_count": existing_node_count,
+            "min_required_gb": frm_main.MIN_NODE_RAM_GB,
+        },
+    )
+
+    def record_create(container_name, volume_name, display_name, dialog):
+        created_nodes.append((container_name, volume_name, display_name))
+        dialog.accept()
+
+    monkeypatch.setattr(launcher, "_create_node_with_name", record_create)
+    monkeypatch.setattr(frm_main, "generate_container_name", lambda prefix=None: f"{prefix}2")
+    monkeypatch.setattr(QDialog, "exec_", lambda dialog: dialog.findChild(QPushButton, "createNodeConfirmButton").click() or QDialog.Accepted)
+
+    qtbot.mouseClick(launcher.add_node_button, Qt.LeftButton)
+
+    assert len(created_nodes) == 1
+    container_name, volume_name, display_name = created_nodes[0]
+    assert container_name.startswith("r1devnode")
+    assert volume_name.startswith("r1devvol")
     assert display_name is None
 
 

@@ -17,6 +17,7 @@ from models.StartupConfig import StartupConfig
 from models.ConfigApp import ConfigApp
 from utils.const import DOCKER_VOLUME_PATH
 from utils.edge_image_config import PRODUCTION_EDGE_NODE_IMAGE, get_edge_node_image
+from utils.docker_utils import get_container_name_prefix
 
 # Docker configuration
 DOCKER_IMAGE = PRODUCTION_EDGE_NODE_IMAGE
@@ -774,7 +775,7 @@ class DockerCommandHandler:
         command = [
             'docker', 'ps',
             '--format', '{{.Names}}\t{{.Status}}\t{{.ID}}',
-            '-f', 'name=r1node'
+            '-f', f'name={get_container_name_prefix()}'
         ]
         if all_containers:
             command.append('-a')

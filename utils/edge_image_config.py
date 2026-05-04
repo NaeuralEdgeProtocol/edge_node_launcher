@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 from dataclasses import dataclass
 from typing import Mapping, Sequence
@@ -14,6 +15,13 @@ EDGE_IMAGE_ENV_VAR = "R1_EDGE_NODE_IMAGE"
 EDGE_IMAGE_TAG_ENV_VAR = "R1_EDGE_NODE_TAG"
 EDGE_IMAGE_CLI_ARG = "--edge-image"
 KNOWN_NETWORK_TAGS = {MAINNET_TAG, DEVNET_TAG, TESTNET_TAG}
+MAINNET_CONTAINER_PREFIX = "r1node"
+MAINNET_VOLUME_PREFIX = "r1vol"
+RESOURCE_NAME_PREFIXES = {
+    MAINNET_TAG: (MAINNET_CONTAINER_PREFIX, MAINNET_VOLUME_PREFIX),
+    DEVNET_TAG: ("r1devnode", "r1devvol"),
+    TESTNET_TAG: ("r1testnode", "r1testvol"),
+}
 
 
 @dataclass(frozen=True)
@@ -38,11 +46,43 @@ class EdgeNodeImageConfig:
 
     @property
     def display_name(self) -> str:
-        return self.environment_key.capitalize()
+        if self.tag in KNOWN_NETWORK_TAGS:
+            return self.tag.capitalize()
+        return self.resource_key.capitalize()
 
     @property
     def is_mainnet(self) -> bool:
-        return self.environment_key == MAINNET_TAG
+        return self.tag == MAINNET_TAG
+
+    @property
+    def resource_key(self) -> str:
+        if self.tag in RESOURCE_NAME_PREFIXES:
+            return self.tag
+
+        sanitized = re.sub(r"[^a-z0-9]+", "", self.tag.lower())
+        return sanitized or "custom"
+
+    @property
+    def container_prefix(self) -> str:
+        prefixes = RESOURCE_NAME_PREFIXES.get(self.resource_key)
+        if prefixes:
+            return prefixes[0]
+        return f"r1{self.resource_key}node"
+
+    @property
+    def volume_prefix(self) -> str:
+        prefixes = RESOURCE_NAME_PREFIXES.get(self.resource_key)
+        if prefixes:
+            return prefixes[1]
+        return f"r1{self.resource_key}vol"
+
+    @property
+    def default_container_name(self) -> str:
+        return self.container_prefix
+
+    @property
+    def default_volume_name(self) -> str:
+        return self.volume_prefix
 
 
 _active_config: EdgeNodeImageConfig | None = None

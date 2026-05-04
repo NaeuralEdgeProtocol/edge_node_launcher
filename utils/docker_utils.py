@@ -5,6 +5,13 @@ import os
 import subprocess
 from pathlib import Path
 
+from utils.edge_image_config import (
+    MAINNET_TAG,
+    RESOURCE_NAME_PREFIXES,
+    EdgeNodeImageConfig,
+    get_edge_node_image_config,
+)
+
 DOCKER_NAME_CHECK_TIMEOUT = 10
 WINDOWS_CREATE_NO_WINDOW = 0x08000000
 
@@ -38,6 +45,70 @@ def _docker_container_names(name_filter: str):
 
     return [name.strip() for name in result.stdout.split('\n') if name.strip()]
 
+
+def get_container_name_prefix(config: EdgeNodeImageConfig | None = None) -> str:
+    """Return the active Docker container prefix for edge-node resources."""
+    image_config = config or get_edge_node_image_config()
+    return image_config.container_prefix
+
+
+def get_volume_name_prefix(config: EdgeNodeImageConfig | None = None) -> str:
+    """Return the active Docker volume prefix for edge-node resources."""
+    image_config = config or get_edge_node_image_config()
+    return image_config.volume_prefix
+
+
+def get_default_container_name(config: EdgeNodeImageConfig | None = None) -> str:
+    """Return the first container name for the active edge-node image network."""
+    return get_container_name_prefix(config)
+
+
+def get_default_volume_name(config: EdgeNodeImageConfig | None = None) -> str:
+    """Return the first volume name for the active edge-node image network."""
+    return get_volume_name_prefix(config)
+
+
+def _sequential_suffix(name: str, prefix: str) -> str | None:
+    if name == prefix:
+        return ""
+    if not name.startswith(prefix):
+        return None
+
+    suffix = name[len(prefix):]
+    return suffix if suffix.isdigit() else None
+
+
+def _resource_prefix_pairs() -> list[tuple[str, str]]:
+    return list(RESOURCE_NAME_PREFIXES.values())
+
+
+def is_non_mainnet_container_name(container_name: str) -> bool:
+    """Return True when a name belongs to a known non-mainnet namespace."""
+    for environment, (container_prefix, _volume_prefix) in RESOURCE_NAME_PREFIXES.items():
+        if environment == MAINNET_TAG:
+            continue
+        if _sequential_suffix(container_name, container_prefix) is not None:
+            return True
+    return False
+
+
+def is_container_name_for_config(
+    container_name: str,
+    config: EdgeNodeImageConfig | None = None,
+    *,
+    default_container_name: str | None = None,
+) -> bool:
+    """Return whether a saved container should be shown for the active image config."""
+    image_config = config or get_edge_node_image_config()
+    if default_container_name and container_name == default_container_name:
+        return True
+
+    if image_config.is_mainnet:
+        return not is_non_mainnet_container_name(container_name)
+
+    return _sequential_suffix(container_name, image_config.container_prefix) is not None
+
+
 def get_volume_name(container_name):
     """Get volume name from container name.
     
@@ -51,29 +122,21 @@ def get_volume_name(container_name):
     if "edge_node_container" in container_name:
         return container_name.replace("container", "volume")
     
-    # For new r1node naming convention
-    if container_name == "r1node":
-        return "r1vol"  # First container gets simple volume name
-    
-    # For r1node with sequential numbers
-    if container_name.startswith("r1node"):
-        # Extract the number part
-        try:
-            # Get the numeric part after "r1node"
-            number_part = container_name[6:]
-            if number_part.isdigit():
-                return f"r1vol{number_part}"
-        except (ValueError, IndexError):
-            pass
+    for container_prefix, volume_prefix in _resource_prefix_pairs():
+        suffix = _sequential_suffix(container_name, container_prefix)
+        if suffix is not None:
+            return f"{volume_prefix}{suffix}"
     
     # Fallback
     return f"volume_{container_name}"
 
-def generate_container_name(prefix="r1node"):
+
+def generate_container_name(prefix=None):
     """Generate a sequential container name.
     
-    First container is named just "r1node" (if available),
-    subsequent containers are "r1node1", "r1node2", etc.
+    First container is named just like the active network prefix
+    (for example "r1node" or "r1devnode"), subsequent containers
+    append a numeric suffix.
     
     This function checks both Docker containers and the config file
     for the highest index, then increments from there. It also validates
@@ -85,6 +148,9 @@ def generate_container_name(prefix="r1node"):
     Returns:
         str: Sequential container name
     """
+    if prefix is None:
+        prefix = get_container_name_prefix()
+
     # Config file path
     config_dir = os.path.join(str(Path.home()), ".ratio1", "edge_node_launcher")
     containers_file = os.path.join(config_dir, "containers.json")
