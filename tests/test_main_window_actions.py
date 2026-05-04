@@ -559,6 +559,50 @@ def test_start_button_double_click_does_not_start_second_lifecycle(qtbot, monkey
     }
 
 
+def test_start_container_uses_shared_launch_volume_resolver(qtbot, monkeypatch):
+    def clear_saved_volume(config):
+        config.containers[0].volume = ""
+
+    launcher, fake_config, _fake_handler = _build_launcher(
+        monkeypatch,
+        qtbot,
+        running=False,
+        config_setup=clear_saved_volume,
+    )
+    launch_requests = []
+    checked_volumes = []
+    fake_config.volume_exists_in_docker = lambda volume_name: checked_volumes.append(volume_name) or False
+    launcher._perform_container_launch = (
+        lambda container_name, volume_name: launch_requests.append((container_name, volume_name))
+    )
+
+    launcher._start_container()
+
+    expected_volume = frm_main.get_volume_name("r1node")
+    assert launch_requests == [("r1node", expected_volume)]
+    assert checked_volumes == [expected_volume]
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") == {
+        "operation": "start",
+        "container_name": "r1node",
+    }
+
+
+def test_start_container_exception_uses_launch_failure_finalizer(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launcher._perform_container_launch = lambda container_name, volume_name: (_ for _ in ()).throw(
+        RuntimeError("start failed")
+    )
+
+    launcher._start_container()
+
+    assert launcher.launcher_dialog is None
+    assert not launcher.loading_indicator.timer.isActive()
+    assert launcher.toast.notifications == [
+        (NotificationType.ERROR, "Failed to launch container: start failed")
+    ]
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+
+
 def test_stop_button_double_click_does_not_start_second_lifecycle(qtbot, monkeypatch):
     launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
     stop_requests = []

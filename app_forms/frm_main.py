@@ -1163,21 +1163,14 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
   def _start_container(self):
     """Start the Docker container."""
+    container_name = None
     try:
         # Get the current container name
         container_name = self.docker_handler.container_name
         if not self._try_begin_lifecycle_operation("start", container_name):
             return
         
-        # Get volume name from config or generate one
-        volume_name = None
-        container_config = self.config_manager.get_container(container_name)
-        if container_config:
-            volume_name = container_config.volume
-            self.add_log(f"Using existing volume name from config: {volume_name}", debug=True)
-        else:
-            volume_name = get_volume_name(container_name)
-            self.add_log(f"Generated volume name: {volume_name}", debug=True)
+        volume_name = self._resolve_launch_volume_name(container_name)
         
         # Mark that user intentionally started the container (clear stop flag)
         self.user_stopped_container = False
@@ -1190,19 +1183,13 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self._perform_container_launch(container_name, volume_name)
         
     except Exception as e:
-        # Stop loading indicator on error
+        if container_name:
+            self._finalize_launch_exception(container_name, e)
+            return
+
         self.loading_indicator.stop()
-        
-        self._lifecycle_dialogs.schedule_safe_close_reference(
-            "launcher_dialog",
-            close_delay_ms=0,
-            clear_delay_ms=500,
-        )
-            
         self.add_log(f"Error launching container: {str(e)}", color="red")
         self.toast.show_notification(NotificationType.ERROR, f"Error launching container: {str(e)}")
-        if 'container_name' in locals():
-            self._end_lifecycle_operation(container_name)
 
   def plot_data(self, assume_running: Optional[bool] = None):
     """Plot container metrics data."""
