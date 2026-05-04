@@ -1,7 +1,7 @@
 from utils import docker_commands
 from utils import docker as docker_utils
 from utils.const import DOCKER_VOLUME_PATH
-from utils.edge_image_config import DEVNET_EDGE_NODE_IMAGE, configure_edge_node_image
+from utils.edge_image_config import DEVNET_EDGE_NODE_IMAGE, GPU_PRODUCTION_EDGE_NODE_IMAGE, configure_edge_node_image
 
 
 class FakeRegistry:
@@ -50,6 +50,19 @@ def test_launch_command_adds_gpu_flag_when_available(monkeypatch):
     command = handler.get_launch_command("ratio1_vol")
 
     assert "--gpus=all" in command
+    assert command[-1] == GPU_PRODUCTION_EDGE_NODE_IMAGE
+
+
+def test_launch_command_does_not_attach_gpu_to_secondary_node(monkeypatch):
+    handler = make_handler(monkeypatch, container_name="r1node2")
+    monkeypatch.setattr(handler, "check_nvidia_gpu_available", lambda: True)
+    monkeypatch.setattr(docker_commands.platform, "machine", lambda: "AMD64")
+    monkeypatch.setattr(docker_commands.platform, "system", lambda: "Windows")
+
+    command = handler.get_launch_command("ratio1_vol")
+
+    assert "--gpus=all" not in command
+    assert command[-1] == docker_commands.DOCKER_IMAGE
 
 
 def test_launch_command_can_target_captured_container_name(monkeypatch):

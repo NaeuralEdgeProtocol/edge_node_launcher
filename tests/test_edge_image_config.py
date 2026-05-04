@@ -5,6 +5,7 @@ from utils.edge_image_config import (
     EDGE_IMAGE_CLI_ARG,
     EDGE_IMAGE_ENV_VAR,
     EDGE_IMAGE_TAG_ENV_VAR,
+    GPU_PRODUCTION_EDGE_NODE_IMAGE,
     PRODUCTION_EDGE_NODE_IMAGE,
     configure_edge_node_image,
     consume_edge_image_cli_args,
@@ -24,6 +25,7 @@ def test_default_image_is_mainnet_for_local_runs():
     assert config.volume_prefix == "r1vol"
     assert config.default_container_name == "r1node"
     assert config.default_volume_name == "r1vol"
+    assert config.gpu_image == GPU_PRODUCTION_EDGE_NODE_IMAGE
 
 
 def test_env_image_override_selects_devnet_for_local_runs():
@@ -40,6 +42,7 @@ def test_env_image_override_selects_devnet_for_local_runs():
     assert config.volume_prefix == "r1devvol"
     assert config.default_container_name == "r1devnode"
     assert config.default_volume_name == "r1devvol"
+    assert config.gpu_image == "ratio1/edge_node_gpu:devnet"
 
 
 def test_env_tag_override_accepts_network_alias():

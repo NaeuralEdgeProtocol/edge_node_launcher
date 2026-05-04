@@ -6,10 +6,12 @@ from typing import Mapping, Sequence
 
 
 EDGE_NODE_REPOSITORY = "ratio1/edge_node"
+GPU_EDGE_NODE_REPOSITORY = "ratio1/edge_node_gpu"
 MAINNET_TAG = "mainnet"
 DEVNET_TAG = "devnet"
 TESTNET_TAG = "testnet"
 PRODUCTION_EDGE_NODE_IMAGE = f"{EDGE_NODE_REPOSITORY}:{MAINNET_TAG}"
+GPU_PRODUCTION_EDGE_NODE_IMAGE = f"{GPU_EDGE_NODE_REPOSITORY}:{MAINNET_TAG}"
 DEVNET_EDGE_NODE_IMAGE = f"{EDGE_NODE_REPOSITORY}:{DEVNET_TAG}"
 EDGE_IMAGE_ENV_VAR = "R1_EDGE_NODE_IMAGE"
 EDGE_IMAGE_TAG_ENV_VAR = "R1_EDGE_NODE_TAG"
@@ -53,6 +55,10 @@ class EdgeNodeImageConfig:
     @property
     def is_mainnet(self) -> bool:
         return self.tag == MAINNET_TAG
+
+    @property
+    def gpu_image(self) -> str:
+        return f"{GPU_EDGE_NODE_REPOSITORY}:{self.tag}"
 
     @property
     def resource_key(self) -> str:

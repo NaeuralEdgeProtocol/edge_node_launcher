@@ -294,7 +294,7 @@ class _SystemResourcesMixin:
         Returns:
             dict: Dictionary with node capacity information
         """
-        from utils.const import MIN_NODE_RAM_GB
+        from services.node_runtime_policy import evaluate_node_capacity
         
         total_ram_bytes = self.get_total_ram_bytes()
         
@@ -305,23 +305,7 @@ class _SystemResourcesMixin:
             }
         
         total_ram_gb = self.bytes_to_gb(total_ram_bytes)
-        used_by_nodes_gb = existing_node_count * MIN_NODE_RAM_GB
-        
-        # Calculate maximum nodes system can support based on total RAM
-        # Simple formula: total RAM / RAM per node
-        max_nodes_supported = int(total_ram_gb // MIN_NODE_RAM_GB)
-        
-        # Check if we can add another node
-        can_add_node = existing_node_count < max_nodes_supported
-        
-        return {
-            'total_ram_gb': total_ram_gb,
-            'used_by_nodes_gb': used_by_nodes_gb,
-            'max_nodes_supported': max_nodes_supported,
-            'current_node_count': existing_node_count,
-            'can_add_node': can_add_node,
-            'min_required_gb': MIN_NODE_RAM_GB
-        }
+        return evaluate_node_capacity(total_ram_gb, existing_node_count).to_legacy_dict()
 
     def check_ram_for_new_node(self, existing_node_count=0):
         """Check if there's enough RAM to add a new node.

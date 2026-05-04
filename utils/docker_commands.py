@@ -16,8 +16,9 @@ from models.NodeHistory import NodeHistory
 from models.ContainerStats import ContainerStats
 from models.StartupConfig import StartupConfig
 from models.ConfigApp import ConfigApp
+from services.node_runtime_policy import plan_node_launch
 from utils.const import DOCKER_VOLUME_PATH
-from utils.edge_image_config import PRODUCTION_EDGE_NODE_IMAGE, get_edge_node_image
+from utils.edge_image_config import PRODUCTION_EDGE_NODE_IMAGE, get_edge_node_image, get_edge_node_image_config
 from utils.docker_utils import get_container_name_prefix
 
 # Docker configuration
@@ -544,10 +545,12 @@ class DockerCommandHandler:
         Returns:
             list: The Docker command as a list of strings
         """
-        # Check for GPU support
-        use_gpu = self.check_nvidia_gpu_available()
-        
         target_container_name = container_name or self.container_name
+        runtime_plan = plan_node_launch(
+            target_container_name,
+            get_edge_node_image_config(),
+            gpu_available=self.check_nvidia_gpu_available(),
+        )
 
         # Base command with container name
         command = [
@@ -555,11 +558,11 @@ class DockerCommandHandler:
         ]
         
         # Add GPU support if available
-        if use_gpu:
+        if runtime_plan.use_gpu:
             command.append('--gpus=all')
-            logging.info('Using GPU for Docker container')
+            logging.info(f'Using GPU for Docker container {target_container_name}')
         else:
-            logging.info('Not using GPU for Docker container - nvidia-smi not available')
+            logging.info(f'Not using GPU for Docker container {target_container_name}: {runtime_plan.gpu_reason}')
             
         if platform.machine() in ['aarch64', 'arm64']:
             command += ['--platform', 'linux/amd64']
@@ -582,7 +585,7 @@ class DockerCommandHandler:
         else:
             logging.warning(f"No volume specified for container {self.container_name}")
         
-        command.append(get_edge_node_image())
+        command.append(runtime_plan.image)
         
         return command
 
