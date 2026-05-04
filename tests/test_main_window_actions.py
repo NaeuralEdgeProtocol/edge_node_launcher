@@ -1330,6 +1330,57 @@ def test_launch_preparation_does_not_run_blocking_docker_checks_on_ui_thread(qtb
     assert getattr(launcher, "_EdgeNodeLauncher__docker_pull_in_progress") is True
 
 
+def test_launch_skipped_during_existing_pull_closes_launch_dialogs(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launcher.launcher_dialog = frm_main.LoadingDialog(
+        launcher,
+        title="Launching Node",
+        message="Please wait",
+    )
+    launcher.startup_dialog = frm_main.LoadingDialog(
+        launcher,
+        title="Starting Node",
+        message="Please wait",
+    )
+    launcher._begin_lifecycle_operation("launch", "r1node")
+    launcher._start_docker_pull("r1node2", "r1vol2")
+    monkeypatch.setattr(frm_main.QTimer, "singleShot", lambda _delay, callback: callback())
+
+    launcher._perform_container_launch("r1node", "r1vol")
+
+    assert launcher.launcher_dialog is None
+    assert launcher.startup_dialog is None
+    assert not launcher.loading_indicator.timer.isActive()
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+
+
+def test_launch_container_exception_closes_existing_launch_dialogs(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launcher.launcher_dialog = frm_main.LoadingDialog(
+        launcher,
+        title="Launching Node",
+        message="Please wait",
+    )
+    launcher.startup_dialog = frm_main.LoadingDialog(
+        launcher,
+        title="Starting Node",
+        message="Please wait",
+    )
+    launcher._perform_container_launch = lambda container_name, volume_name: (_ for _ in ()).throw(
+        RuntimeError("boom")
+    )
+    monkeypatch.setattr(frm_main.QTimer, "singleShot", lambda _delay, callback: callback())
+
+    launcher.launch_container("r1vol")
+
+    assert launcher.launcher_dialog is None
+    assert launcher.startup_dialog is None
+    assert not launcher.loading_indicator.timer.isActive()
+    assert launcher.toast.notifications == [
+        (NotificationType.ERROR, "Failed to launch container: boom")
+    ]
+
+
 def test_refresh_all_auto_start_does_not_sleep_on_ui_thread(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
     calls = []
