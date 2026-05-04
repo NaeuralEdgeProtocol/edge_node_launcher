@@ -22,6 +22,7 @@ REAL_PLOT_DATA = frm_main.EdgeNodeLauncher.plot_data
 REAL_PLOT_GRAPHS = frm_main.EdgeNodeLauncher.plot_graphs
 REAL_REFRESH_NODE_INFO = frm_main.EdgeNodeLauncher.refresh_node_info
 REAL_MAYBE_REFRESH_UPTIME = frm_main.EdgeNodeLauncher.maybe_refresh_uptime
+REAL_UPDATE_RESOURCES_DISPLAY = frm_main.EdgeNodeLauncher.update_resources_display
 
 
 class FakeToast:
@@ -360,6 +361,41 @@ def test_resource_panel_uses_semantic_label_roles(qtbot, monkeypatch):
     assert 'QLabel[resourceField="memory"]' in frm_main.DARK_STYLESHEET
     assert 'QLabel[resourceField="cpu"]' in frm_main.DARK_STYLESHEET
     assert 'QLabel[resourceField="storage"]' in frm_main.DARK_STYLESHEET
+
+
+def test_update_resources_display_uses_compact_sidebar_copy(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+    launcher.update_resources_display = REAL_UPDATE_RESOURCES_DISPLAY.__get__(
+        launcher,
+        frm_main.EdgeNodeLauncher,
+    )
+    compact_flags = {}
+
+    def memory_info(compact=False):
+        compact_flags["memory"] = compact
+        return "40.0 GB/64.0 GB (37.5%)"
+
+    def cpu_info(compact=False):
+        compact_flags["cpu"] = compact
+        return "14 cores (20.5%)"
+
+    def storage_info(compact=False):
+        compact_flags["storage"] = compact
+        return "162.0 GB/299.0 GB (45.6%)"
+
+    launcher.get_formatted_memory_info = memory_info
+    launcher.get_formatted_cpu_info = cpu_info
+    launcher.get_formatted_storage_info = storage_info
+
+    launcher.update_resources_display()
+
+    assert compact_flags == {"memory": True, "cpu": True, "storage": True}
+    assert launcher.memoryDisplay.text() == "Memory: 40.0 GB/64.0 GB (37.5%)"
+    assert launcher.vcpusDisplay.text() == "vCPUs: 14 cores (20.5%)"
+    assert launcher.storageDisplay.text() == "Storage: 162.0 GB/299.0 GB (45.6%)"
+    assert "used" not in launcher.memoryDisplay.text()
+    assert "used" not in launcher.vcpusDisplay.text()
+    assert "used" not in launcher.storageDisplay.text()
 
 
 def test_sidebar_status_resource_labels_elide_without_losing_full_text(qtbot, monkeypatch):

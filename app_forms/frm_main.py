@@ -3320,9 +3320,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     """Update the system resources display with current information."""
     try:
         # Use the new mixin helper methods for cleaner, more maintainable code
-        memory_info = self.get_formatted_memory_info()
-        cpu_info = self.get_formatted_cpu_info()
-        storage_info = self.get_formatted_storage_info()
+        memory_info = self.get_formatted_memory_info(compact=True)
+        cpu_info = self.get_formatted_cpu_info(compact=True)
+        storage_info = self.get_formatted_storage_info(compact=True)
         
         # Update displays
         self.memoryDisplay.setText(f"{MEMORY_LABEL} {memory_info}")

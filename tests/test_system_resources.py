@@ -45,6 +45,30 @@ def test_ram_capacity_message_uses_ascii_copy_at_node_capacity():
     assert "\u00e2" not in message
 
 
+def test_compact_resource_formatting_removes_sidebar_only_filler():
+    resources = SystemResourcesHarness()
+    resources.get_system_resources = lambda use_cache=True: {
+        "memory": {
+            "available": 40 * 1024**3,
+            "total": 64 * 1024**3,
+            "percent": 37.5,
+        },
+        "cpu": {"count": 14, "usage": 20.5},
+        "storage": {
+            "free": 162 * 1024**3,
+            "total": 299 * 1024**3,
+            "percent": 45.6,
+        },
+    }
+
+    assert resources.get_formatted_memory_info() == "40.0 GB / 64.0 GB (37.5% used)"
+    assert resources.get_formatted_cpu_info() == "14 cores (20.5% used)"
+    assert resources.get_formatted_storage_info() == "162.0 GB / 299.0 GB (45.6% used)"
+    assert resources.get_formatted_memory_info(compact=True) == "40.0 GB/64.0 GB (37.5%)"
+    assert resources.get_formatted_cpu_info(compact=True) == "14 cores (20.5%)"
+    assert resources.get_formatted_storage_info(compact=True) == "162.0 GB/299.0 GB (45.6%)"
+
+
 def test_user_visible_source_copy_does_not_contain_common_mojibake_or_typographic_symbols():
     repo_root = Path(__file__).resolve().parents[1]
     source_roots = ("app_forms", "utils", "widgets", "tools", "main.py")
