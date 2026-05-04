@@ -2,6 +2,7 @@ from PyQt5.QtWidgets import QApplication, QComboBox, QSizePolicy, QStyledItemDel
 from PyQt5.QtCore import Qt, QObject, QEvent, QTimer, QRect, QSize
 from PyQt5.QtGui import QColor, QFontMetrics, QIcon, QPainter, QPen
 from utils.const import DARK_STYLESHEET, DARK_COLORS, LIGHT_COLORS
+from utils.screen_geometry import screen_geometry
 
 
 _COMBO_THEME_COLORS = {
@@ -353,9 +354,4 @@ class CenteredComboBox(QComboBox):
         popup.move(new_x, popup.y())
 
     def _popup_screen_geometry(self):
-        screen = self.screen() or QApplication.primaryScreen()
-        if screen is not None:
-            return screen.geometry()
-
-        desktop = QApplication.desktop()
-        return desktop.screenGeometry(self)
+        return screen_geometry(self)

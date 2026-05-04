@@ -42,6 +42,28 @@ def test_record_step_prints_unicode_as_ascii_json(tmp_path, capsys):
     assert log["steps"] == [{"step": "toast", "icon": "\u26a0"}]
 
 
+def test_prepare_evidence_paths_resolves_before_launcher_changes_cwd(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    args = SimpleNamespace(output="evidence/result.json", screenshot_dir="evidence/screens")
+
+    smoke.prepare_evidence_paths(args)
+
+    output_path = tmp_path / "evidence" / "result.json"
+    screenshot_dir = tmp_path / "evidence" / "screens"
+    assert args.output == str(output_path.resolve())
+    assert args.screenshot_dir == str(screenshot_dir.resolve())
+    assert output_path.parent.exists()
+    assert screenshot_dir.exists()
+
+    changed_cwd = tmp_path / "changed"
+    changed_cwd.mkdir()
+    monkeypatch.chdir(changed_cwd)
+    smoke.record_step({"steps": []}, args.output, {"step": "after cwd change"})
+
+    assert output_path.exists()
+    assert not (changed_cwd / "evidence" / "result.json").exists()
+
+
 def test_smoke_window_snapshot_serializes_geometry():
     class FakeRect:
         def __init__(self, x, y, w, h):

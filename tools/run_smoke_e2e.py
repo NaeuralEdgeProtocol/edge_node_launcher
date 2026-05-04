@@ -17,6 +17,11 @@ from types import SimpleNamespace
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from tools.e2e_paths import prepare_evidence_paths, write_json_log
+
 SMOKE_CONTAINER = "r1nodesmoke"
 SMOKE_VOLUME = "r1volsmoke"
 SMOKE_SECONDARY_CONTAINER = "r1nodesmoke2"
@@ -66,8 +71,7 @@ class FakeDockerHandler:
 
 
 def write_log(log, output_path):
-    if output_path:
-        Path(output_path).write_text(json.dumps(log, indent=2), encoding="utf-8")
+    write_json_log(log, output_path)
 
 
 def record_step(log, output_path, step):
@@ -1015,6 +1019,7 @@ def main():
     parser.add_argument("--output", default="")
     parser.add_argument("--screenshot-dir", default="")
     args = parser.parse_args()
+    prepare_evidence_paths(args)
     log = run_scenarios(args)
     if log.get("result") != "passed":
         raise SystemExit(2)

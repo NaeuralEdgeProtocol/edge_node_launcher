@@ -1,9 +1,10 @@
 import webbrowser
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
-                           QLabel, QApplication, QWidget, QSizePolicy)
+                           QLabel, QWidget, QSizePolicy)
 from PyQt5.QtCore import Qt
 
 from utils.const import DARK_STYLESHEET
+from utils.screen_geometry import available_screen_geometry
 
 class DockerCheckDialog(QDialog):
     def __init__(self, parent=None, icon=None):
@@ -149,16 +150,7 @@ class DockerCheckDialog(QDialog):
         if parent is not None and parent.isVisible():
             center_point = parent.frameGeometry().center()
         else:
-            screen = self.screen()
-            if parent is not None and parent.screen() is not None:
-                screen = parent.screen()
-            if screen is None:
-                screen = QApplication.primaryScreen()
-
-            if screen is not None:
-                center_point = screen.availableGeometry().center()
-            else:
-                center_point = QApplication.desktop().availableGeometry(self).center()
+            center_point = available_screen_geometry(parent or self).center()
 
         frame = self.frameGeometry()
         frame.moveCenter(center_point)

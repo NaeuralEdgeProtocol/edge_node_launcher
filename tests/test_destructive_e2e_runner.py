@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -76,6 +77,28 @@ def test_wait_for_container_running_fails_fast_on_stale_main_window(monkeypatch,
     assert log["result"] == "failed_stale_main_window"
     assert log["diagnostics"] == {"diagnostic": "captured"}
     assert json.loads(output_path.read_text(encoding="utf-8"))["result"] == "failed_stale_main_window"
+
+
+def test_prepare_evidence_paths_resolves_before_launcher_changes_cwd(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    args = SimpleNamespace(output="evidence/result.json", screenshot_dir="evidence/screens")
+
+    e2e.prepare_evidence_paths(args)
+
+    output_path = tmp_path / "evidence" / "result.json"
+    screenshot_dir = tmp_path / "evidence" / "screens"
+    assert args.output == str(output_path.resolve())
+    assert args.screenshot_dir == str(screenshot_dir.resolve())
+    assert output_path.parent.exists()
+    assert screenshot_dir.exists()
+
+    changed_cwd = tmp_path / "changed"
+    changed_cwd.mkdir()
+    monkeypatch.chdir(changed_cwd)
+    e2e.record_step({"steps": []}, args.output, {"step": "after cwd change"})
+
+    assert output_path.exists()
+    assert not (changed_cwd / "evidence" / "result.json").exists()
 
 
 def test_run_command_returns_timeout_diagnostics(monkeypatch):

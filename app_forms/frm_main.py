@@ -77,6 +77,7 @@ from utils.lifecycle_copy import (
   stop_success_notification,
 )
 from utils.lifecycle_state import LaunchContext, LifecycleState
+from utils.screen_geometry import available_screen_geometry, screen_geometry
 from utils.window_geometry import calculate_initial_window_geometry, calculate_restored_window_geometry, calculate_visible_frame_client_geometry, format_rect
 from widgets.app_widgets.lifecycle_dialog_presenter import LifecycleDialogPresenter
 
@@ -449,16 +450,10 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     return
 
   def _available_screen_geometry(self):
-    screen = self.screen() or QApplication.primaryScreen()
-    if screen:
-      return screen.availableGeometry()
-    return QApplication.desktop().availableGeometry(self)
+    return available_screen_geometry(self)
 
   def _screen_geometry(self):
-    screen = self.screen() or QApplication.primaryScreen()
-    if screen:
-      return screen.geometry()
-    return QApplication.desktop().screenGeometry(self)
+    return screen_geometry(self)
 
   def apply_initial_window_geometry(self):
     available_geometry = self._available_screen_geometry()

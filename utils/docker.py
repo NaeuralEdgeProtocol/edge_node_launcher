@@ -11,13 +11,14 @@ from time import sleep
 from uuid import uuid4
 
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtWidgets import (QApplication, QDialog, QInputDialog, QLabel,
+from PyQt5.QtWidgets import (QDialog, QInputDialog, QLabel,
                              QMessageBox, QProgressBar, QTextEdit, QVBoxLayout)
 
 from .const import *
 from .docker_commands import DockerCommandHandler
 from .ssh_service import SSHService, SSHConfig
 from .service_manager import ServiceManager
+from .screen_geometry import screen_geometry
 from widgets.dialogs.DockerCheckDialog import DockerCheckDialog
 
 def get_user_folder():
@@ -114,10 +115,9 @@ class ProgressBarWindow(QDialog):
     self.setLayout(layout)
     self.apply_stylesheet()
     
-    screen_geometry = QApplication.desktop().screenGeometry()
-    x = (screen_geometry.width() - self.width()) // 2
-    y = (screen_geometry.height() - self.height()) // 2
-    self.move(x, y)
+    frame = self.frameGeometry()
+    frame.moveCenter(screen_geometry(self).center())
+    self.move(frame.topLeft())
     return
   
   
@@ -555,4 +555,3 @@ class _DockerUtilsMixin:
     self.ssh_service.clear_configuration()
     self.docker_commands.clear_remote_connection()
     self.__setup_docker_run()
-  

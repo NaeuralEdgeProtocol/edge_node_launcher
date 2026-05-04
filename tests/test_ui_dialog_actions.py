@@ -1,8 +1,10 @@
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QRect, Qt
+from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QLineEdit, QPushButton, QScrollArea, QSizePolicy
 
 import widgets.dialogs.DockerCheckDialog as docker_check_module
 from ui.ProgressDialog import ImagePullProgressDialog
+from utils import docker as docker_module
 from utils.const import DARK_STYLESHEET, INSUFFICIENT_RAM_MESSAGE, LIGHT_STYLESHEET
 from widgets.dialogs.AddNodeDialog import AddNodeDialog
 from widgets.dialogs.AuthorizedAddressedDialog import AddressRow, AuthorizedAddressesDialog
@@ -81,6 +83,57 @@ def test_docker_check_dialog_centers_on_visible_parent(qtbot):
 
     assert abs(dialog_center.x() - parent_center.x()) <= 6
     assert abs(dialog_center.y() - parent_center.y()) <= 6
+
+
+def test_docker_check_dialog_centers_on_hidden_parent_screen_geometry(qtbot, monkeypatch):
+    parent = QDialog()
+    qtbot.addWidget(parent)
+    screen_geometry = QRect(40, 60, 900, 700)
+    used_widgets = []
+
+    def fake_available_screen_geometry(widget):
+        used_widgets.append(widget)
+        return QRect(screen_geometry)
+
+    monkeypatch.setattr(
+        docker_check_module,
+        "available_screen_geometry",
+        fake_available_screen_geometry,
+    )
+
+    dialog = docker_check_module.DockerCheckDialog(parent)
+    qtbot.addWidget(dialog)
+    dialog._center_on_parent_or_screen()
+
+    dialog_center = dialog.frameGeometry().center()
+
+    assert used_widgets
+    assert used_widgets[-1] is parent
+    assert abs(dialog_center.x() - screen_geometry.center().x()) <= 6
+    assert abs(dialog_center.y() - screen_geometry.center().y()) <= 6
+
+
+def test_progress_bar_window_centers_on_screen_geometry(qtbot, monkeypatch):
+    screen_geometry = QRect(120, 160, 1000, 760)
+    used_widgets = []
+
+    class Sender:
+        _current_stylesheet = ""
+
+    def fake_screen_geometry(widget):
+        used_widgets.append(widget)
+        return QRect(screen_geometry)
+
+    monkeypatch.setattr(docker_module, "screen_geometry", fake_screen_geometry)
+
+    window = docker_module.ProgressBarWindow("Pulling image", QIcon(), Sender())
+    qtbot.addWidget(window)
+
+    window_center = window.frameGeometry().center()
+
+    assert used_widgets == [window]
+    assert abs(window_center.x() - screen_geometry.center().x()) <= 6
+    assert abs(window_center.y() - screen_geometry.center().y()) <= 6
 
 
 def test_image_pull_cancel_button_rejects_dialog(qtbot):
