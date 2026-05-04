@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy
 from PyQt5.QtCore import Qt, QTimer, pyqtSlot
 import platform
 from widgets.loading_indicator import LoadingIndicator
@@ -40,7 +40,8 @@ class LoadingDialog(QDialog):
             # macOS needs special handling for proper appearance
             self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
         
-        self.setFixedSize(300, 180)
+        self.setMinimumSize(340, 190)
+        self.resize(360, 210)
         self.setModal(True)
         
         # Use system colors instead of blue background
@@ -90,6 +91,7 @@ class LoadingDialog(QDialog):
         self.title_label.setAccessibleName("Loading dialog title")
         self.title_label.setAlignment(Qt.AlignCenter)
         self.title_label.setWordWrap(True)
+        self.title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         
         # Create message label
         self.message_label = QLabel(message)
@@ -97,6 +99,8 @@ class LoadingDialog(QDialog):
         self.message_label.setAccessibleName("Loading dialog message")
         self.message_label.setAlignment(Qt.AlignCenter)
         self.message_label.setWordWrap(True)
+        self.message_label.setMinimumWidth(280)
+        self.message_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.MinimumExpanding)
         
         # Add widgets to layout
         indicator_layout = QHBoxLayout()

@@ -477,6 +477,29 @@ def test_loading_dialog_exposes_visual_snapshot_targets(qtbot):
     assert dialog.message_label.accessibleName() == "Loading dialog message"
     assert dialog.loading_indicator.objectName() == "loadingDialogIndicator"
     assert dialog.loading_indicator.accessibleName() == "Loading indicator"
+    assert dialog.minimumWidth() == 340
+    assert dialog.minimumHeight() == 190
+    assert dialog.maximumWidth() > dialog.minimumWidth()
+    assert dialog.message_label.minimumWidth() == 280
+    assert dialog.message_label.sizePolicy().horizontalPolicy() == QSizePolicy.Expanding
+
+
+def test_loading_dialog_accepts_long_progress_copy_without_fixed_size(qtbot):
+    dialog = LoadingDialog(
+        title="Launching Node",
+        message="Preparing Docker command with a detailed status message",
+    )
+    qtbot.addWidget(dialog)
+
+    dialog.update_progress(
+        "Error: Docker reported a long startup failure message that should wrap instead of being clipped"
+    )
+    dialog.adjustSize()
+
+    assert dialog.message_label.wordWrap()
+    assert dialog.message_label.text().startswith("Error: Docker reported")
+    assert dialog.size().width() >= dialog.minimumWidth()
+    assert dialog.size().height() >= dialog.minimumHeight()
 
 
 def test_loading_indicator_lives_in_widgets_with_legacy_alias(qtbot):
