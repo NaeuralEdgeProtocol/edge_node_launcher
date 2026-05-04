@@ -7,6 +7,24 @@ import re
 import logging
 import hashlib
 
+
+SIZE_PROGRESS_PATTERN = re.compile(
+    r"(\d+(?:\.\d+)?)\s*([KMG]?B)\s*/\s*(\d+(?:\.\d+)?)\s*([KMG]?B)",
+    re.IGNORECASE,
+)
+SIZE_PROGRESS_NORMALIZER = re.compile(
+    r"\d+(?:\.\d+)?\s*[KMG]?B\s*/\s*\d+(?:\.\d+)?\s*[KMG]?B",
+    re.IGNORECASE,
+)
+PERCENT_PROGRESS_NORMALIZER = re.compile(r"\d+%")
+SIZE_UNIT_BYTES = {
+    "B": 1,
+    "KB": 1024,
+    "MB": 1024 * 1024,
+    "GB": 1024 * 1024 * 1024,
+}
+
+
 class DockerPullDialog(QDialog):
     """Dialog for Docker image pull progress."""
     
@@ -165,8 +183,29 @@ class DockerPullDialog(QDialog):
 
     @staticmethod
     def _synthetic_layer_id(line):
-        normalized = line.strip().encode("utf-8")
+        normalized = SIZE_PROGRESS_NORMALIZER.sub("<size-progress>", line.strip())
+        normalized = PERCENT_PROGRESS_NORMALIZER.sub("<percent>", normalized)
+        normalized = normalized.encode("utf-8")
         return hashlib.sha1(normalized).hexdigest()[:12]
+
+    @staticmethod
+    def _size_to_bytes(value, unit):
+        return float(value) * SIZE_UNIT_BYTES.get(unit.upper(), 1)
+
+    @classmethod
+    def _progress_from_size_status(cls, status):
+        progress_match = SIZE_PROGRESS_PATTERN.search(status)
+        if not progress_match:
+            return None
+
+        current_value, current_unit, total_value, total_unit = progress_match.groups()
+        current_bytes = cls._size_to_bytes(current_value, current_unit)
+        total_bytes = cls._size_to_bytes(total_value, total_unit)
+        if total_bytes <= 0:
+            return None
+
+        progress = int((current_bytes / total_bytes) * 100)
+        return max(0, min(100, progress))
 
     def _create_layer_row(self, layer_id, label_text, status, accessible_name):
         layer_layout = QHBoxLayout()
@@ -343,17 +382,13 @@ class DockerPullDialog(QDialog):
                 self.layer_widgets[line_hash]['status'].setToolTip(status)
             
             # Check for progress information in newer format
-            progress_match = re.search(r'(\d+\.\d+)MB/(\d+\.\d+)MB', status)
-            if progress_match:
-                current = float(progress_match.group(1))
-                total = float(progress_match.group(2))
-                if total > 0:
-                    progress = int((current / total) * 100)
-                    self.layers[line_hash]['progress'] = progress
-                    
-                    # Update progress bar
-                    if line_hash in self.layer_widgets:
-                        self.layer_widgets[line_hash]['progress'].setValue(progress)
+            progress = self._progress_from_size_status(status)
+            if progress is not None:
+                self.layers[line_hash]['progress'] = progress
+
+                # Update progress bar
+                if line_hash in self.layer_widgets:
+                    self.layer_widgets[line_hash]['progress'].setValue(progress)
             elif "Download complete" in status or "Pull complete" in status or "Already exists" in status:
                 # Set to 100% when complete
                 self.layers[line_hash]['progress'] = 100

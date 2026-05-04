@@ -623,15 +623,30 @@ def test_docker_pull_dialog_uses_stable_synthetic_layer_ids(qtbot):
     dialog = DockerPullDialog()
     qtbot.addWidget(dialog)
     line = "Downloading 2.0MB/4.0MB"
+    updated_line = "Downloading 3.0MB/4.0MB"
+    object_suffix = dialog._synthetic_layer_id(line)
+
+    dialog.update_pull_progress(line)
+    dialog.update_pull_progress(updated_line)
+
+    assert len(object_suffix) == 12
+    assert object_suffix == DockerPullDialog._synthetic_layer_id(line)
+    assert object_suffix == DockerPullDialog._synthetic_layer_id(updated_line)
+    assert len(dialog.layers) == 1
+    assert dialog.findChild(QLabel, f"dockerPullLayerLabel_{object_suffix}").text() == "Layer"
+    assert dialog.findChild(QLabel, f"dockerPullLayerStatus_{object_suffix}").text() == updated_line
+    assert dialog.findChild(QLabel, f"dockerPullLayerStatus_{object_suffix}").toolTip() == updated_line
+    assert dialog.findChild(QProgressBar, f"dockerPullLayerProgress_{object_suffix}").value() == 75
+
+
+def test_docker_pull_dialog_parses_size_progress_units(qtbot):
+    dialog = DockerPullDialog()
+    qtbot.addWidget(dialog)
+    line = "Extracting 512KB/1MB"
     object_suffix = dialog._synthetic_layer_id(line)
 
     dialog.update_pull_progress(line)
 
-    assert len(object_suffix) == 12
-    assert object_suffix == DockerPullDialog._synthetic_layer_id(line)
-    assert dialog.findChild(QLabel, f"dockerPullLayerLabel_{object_suffix}").text() == "Layer"
-    assert dialog.findChild(QLabel, f"dockerPullLayerStatus_{object_suffix}").text() == line
-    assert dialog.findChild(QLabel, f"dockerPullLayerStatus_{object_suffix}").toolTip() == line
     assert dialog.findChild(QProgressBar, f"dockerPullLayerProgress_{object_suffix}").value() == 50
 
 
