@@ -2742,12 +2742,12 @@ def test_rename_action_lives_with_node_controls(qtbot, monkeypatch):
 
 def test_refresh_action_lives_with_status_section(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
-    top_button_area = launcher.findChild(QVBoxLayout, "topButtonArea")
+    status_button_area = launcher.findChild(QVBoxLayout, "statusButtonArea")
     status_label = launcher.findChild(QLabel, "statusSectionLabel")
 
-    assert top_button_area is not None
+    assert status_button_area is not None
     assert status_label is not None
-    assert top_button_area.indexOf(status_label) < top_button_area.indexOf(launcher.refreshButton)
+    assert status_button_area.indexOf(status_label) < status_button_area.indexOf(launcher.refreshButton)
 
 
 def test_docker_download_action_lives_with_network_actions(qtbot, monkeypatch):
@@ -2842,20 +2842,29 @@ def test_status_panels_have_semantic_roles(qtbot, monkeypatch):
     assert resources_box.layout().spacing() == 3
 
 
-def test_main_window_sidebar_settings_follow_resource_panel_without_large_gap(qtbot, monkeypatch):
+def test_main_window_sidebar_settings_are_visible_before_status_cards(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
     launcher.resize(1600, 900)
     qtbot.wait(50)
 
-    resources_box = launcher.findChild(QGroupBox, "resourcesBox")
     settings_label = launcher.findChild(QLabel, "settingsSectionLabel")
+    status_label = launcher.findChild(QLabel, "statusSectionLabel")
+    sidebar_scroll = launcher.findChild(QScrollArea, "sidebarScrollArea")
 
-    assert resources_box is not None
     assert settings_label is not None
+    assert status_label is not None
+    assert sidebar_scroll is not None
 
-    gap = settings_label.y() - (resources_box.y() + resources_box.height())
+    assert settings_label.y() < status_label.y()
 
-    assert 0 <= gap <= 80
+    viewport = sidebar_scroll.viewport()
+    viewport_top = viewport.mapToGlobal(viewport.rect().topLeft()).y()
+    viewport_bottom = viewport.mapToGlobal(viewport.rect().bottomLeft()).y()
+    for control in (settings_label, launcher.themeToggleButton, launcher.force_debug_checkbox):
+        control_top = control.mapToGlobal(control.rect().topLeft()).y()
+        control_bottom = control.mapToGlobal(control.rect().bottomLeft()).y()
+        assert viewport_top <= control_top <= viewport_bottom
+        assert viewport_top <= control_bottom <= viewport_bottom
 
 
 def test_main_window_sidebar_controls_are_scrollable(qtbot, monkeypatch):

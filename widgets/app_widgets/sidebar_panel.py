@@ -76,8 +76,10 @@ class SidebarPanel(QWidget):
 
         top_button_area = self._create_top_section()
         menu_layout.addLayout(top_button_area)
-        menu_layout.addSpacing(10)
+        menu_layout.addSpacing(6)
         menu_layout.addLayout(self._create_settings_section())
+        menu_layout.addSpacing(6)
+        menu_layout.addLayout(self._create_status_section())
 
     def _create_top_section(self) -> QVBoxLayout:
         layout = QVBoxLayout()
@@ -156,29 +158,6 @@ class SidebarPanel(QWidget):
         )
         layout.addWidget(self.explorer_button)
 
-        layout.addSpacing(7)
-        layout.addWidget(create_sidebar_section_label("Status", "statusSectionLabel"))
-
-        self.refreshButton = create_sidebar_action_button(
-            "Refresh Node Info",
-            "refreshNodeInfoButton",
-            "secondary",
-            REFRESH_NODE_INFO_TOOLTIP,
-            self._refresh_handler,
-        )
-        layout.addWidget(self.refreshButton)
-
-        layout.addSpacing(7)
-        self.node_status_panel = NodeStatusPanel(
-            self._copy_address_handler,
-            self._copy_eth_handler,
-            parent=self,
-        )
-        layout.addWidget(self.node_status_panel)
-        layout.addSpacing(7)
-        self.resource_status_panel = ResourceStatusPanel(parent=self)
-        layout.addWidget(self.resource_status_panel)
-
         return layout
 
     def _create_settings_section(self) -> QVBoxLayout:
@@ -206,5 +185,33 @@ class SidebarPanel(QWidget):
         self.force_debug_checkbox.setMinimumHeight(32)
         self.force_debug_checkbox.stateChanged.connect(self._force_debug_handler)
         layout.addWidget(self.force_debug_checkbox)
+
+        return layout
+
+    def _create_status_section(self) -> QVBoxLayout:
+        layout = QVBoxLayout()
+        layout.setObjectName("statusButtonArea")
+        layout.setContentsMargins(5, 4, 8, 0)
+        layout.addWidget(create_sidebar_section_label("Status", "statusSectionLabel"))
+
+        self.refreshButton = create_sidebar_action_button(
+            "Refresh Node Info",
+            "refreshNodeInfoButton",
+            "secondary",
+            REFRESH_NODE_INFO_TOOLTIP,
+            self._refresh_handler,
+        )
+        layout.addWidget(self.refreshButton)
+
+        layout.addSpacing(7)
+        self.node_status_panel = NodeStatusPanel(
+            self._copy_address_handler,
+            self._copy_eth_handler,
+            parent=self,
+        )
+        layout.addWidget(self.node_status_panel)
+        layout.addSpacing(7)
+        self.resource_status_panel = ResourceStatusPanel(parent=self)
+        layout.addWidget(self.resource_status_panel)
 
         return layout
