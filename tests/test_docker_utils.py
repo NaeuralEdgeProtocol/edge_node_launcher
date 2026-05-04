@@ -7,6 +7,12 @@ def test_main_form_uses_bounded_container_name_generator():
     assert frm_main.generate_container_name is docker_utils.generate_container_name
 
 
+def test_main_form_uses_canonical_volume_name_helper():
+    from app_forms import frm_main
+
+    assert frm_main.get_volume_name is docker_utils.get_volume_name
+
+
 def test_generate_container_name_uses_bounded_hidden_docker_queries(monkeypatch, tmp_path):
     calls = []
     create_no_window = 0x08000000

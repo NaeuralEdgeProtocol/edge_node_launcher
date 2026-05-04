@@ -9,30 +9,6 @@ from PyQt5.QtGui import QFont, QPixmap, QIcon, QPainter, QColor, QBrush
 from pyqtgraph import AxisItem
 from widgets.loading_indicator import LoadingIndicator
 
-def get_volume_name(container_name):
-    """Get volume name from container name"""
-    # For legacy container names
-    if "edge_node_container" in container_name:
-        return container_name.replace("container", "volume")
-    
-    # For new r1node naming convention
-    if container_name == "r1node":
-        return "r1vol"  # First container gets simple volume name
-    
-    # For r1node with sequential numbers
-    if container_name.startswith("r1node"):
-        # Extract the number part
-        try:
-            # Get the numeric part after "r1node"
-            number_part = container_name[6:]
-            if number_part.isdigit():
-                return f"r1vol{number_part}"
-        except (ValueError, IndexError):
-            pass
-    
-    # Fallback
-    return f"volume_{container_name}"
-
 def get_icon_from_base64(base64_str):
   icon_data = base64.b64decode(base64_str)
   pixmap = QPixmap()
