@@ -31,7 +31,6 @@ from PyQt5.QtWidgets import (
   QMenuBar,
   QMenu,
   QAction,
-  QSplitter,
   QProgressBar,
   QDesktopWidget,
   QMainWindow,
@@ -57,6 +56,7 @@ from widgets.ToastWidget import ToastWidget, NotificationType
 from widgets.dialogs.AddNodeDialog import AddNodeDialog
 from widgets.dialogs.RenameNodeDialog import RenameNodeDialog
 from widgets.app_widgets.activity_log import ActivityLogWidget
+from widgets.app_widgets.dashboard_panel import DashboardPanel
 from widgets.app_widgets.metric_plot_grid import METRIC_EMPTY_STATE_TEXT, create_metrics_graph_grid
 from widgets.app_widgets.sidebar_controls import (
   create_sidebar_action_button as build_sidebar_action_button,
@@ -650,28 +650,16 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
   def _create_dashboard_panel(self) -> QWidget:
     """Create the right-side metrics and activity panel."""
-    dashboard_panel = QWidget()
-    dashboard_panel.setObjectName("dashboardPanel")
-
-    dashboard_layout = QVBoxLayout(dashboard_panel)
-    dashboard_layout.setContentsMargins(10, 0, 10, 10)
-    dashboard_layout.setSpacing(10)
-
-    self.dashboard_splitter = QSplitter(Qt.Vertical)
-    self.dashboard_splitter.setObjectName("dashboardSplitter")
-    self.dashboard_splitter.setChildrenCollapsible(False)
-    self.dashboard_splitter.setHandleWidth(8)
-
     self.graphView = self._create_metrics_graph_grid()
     self.activityLogPanel = self._create_activity_log_panel()
-    self.dashboard_splitter.addWidget(self.graphView)
-    self.dashboard_splitter.addWidget(self.activityLogPanel)
-    self.dashboard_splitter.setStretchFactor(0, 4)
-    self.dashboard_splitter.setStretchFactor(1, 1)
-    self.dashboard_splitter.setSizes(self._dashboard_splitter_initial_sizes())
-    self.dashboard_splitter.splitterMoved.connect(lambda _pos, _index: self._save_dashboard_splitter_sizes())
-
-    dashboard_layout.addWidget(self.dashboard_splitter)
+    dashboard_panel = DashboardPanel(
+        self.graphView,
+        self.activityLogPanel,
+        self._dashboard_splitter_initial_sizes(),
+        lambda _pos, _index: self._save_dashboard_splitter_sizes(),
+        parent=self,
+    )
+    self.dashboard_splitter = dashboard_panel.splitter
     self._flush_log_buffer_to_view()
 
     return dashboard_panel

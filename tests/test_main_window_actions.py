@@ -11,6 +11,7 @@ from models.NodeHistory import NodeHistory
 from models.NodeInfo import NodeInfo
 from utils.config_manager import ContainerConfig
 from widgets.ToastWidget import NotificationType
+import widgets.app_widgets.dashboard_panel as dashboard_panel_module
 from widgets.app_widgets.activity_log import ActivityLogWidget
 from widgets.app_widgets.sidebar_status_cards import NodeStatusPanel, ResourceStatusPanel
 
@@ -1553,14 +1554,14 @@ def test_main_window_log_view_has_stable_identity_and_dimensions(qtbot, monkeypa
 
 def test_dashboard_splitter_restores_saved_sizes(qtbot, monkeypatch):
     set_sizes_calls = []
-    original_set_sizes = frm_main.QSplitter.setSizes
+    original_set_sizes = dashboard_panel_module.QSplitter.setSizes
 
     def record_set_sizes(splitter, sizes):
         if splitter.objectName() == "dashboardSplitter":
             set_sizes_calls.append(list(sizes))
         return original_set_sizes(splitter, sizes)
 
-    monkeypatch.setattr(frm_main.QSplitter, "setSizes", record_set_sizes)
+    monkeypatch.setattr(dashboard_panel_module.QSplitter, "setSizes", record_set_sizes)
 
     _launcher, _fake_config, _fake_handler = _build_launcher(
         monkeypatch,

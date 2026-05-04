@@ -23,6 +23,7 @@ from app_forms.frm_utils import LoadingIndicator as LegacyLoadingIndicator
 from widgets.app_widgets.activity_log import ActivityLogWidget
 from widgets.app_widgets.config_editor import ConfigEditorWidget
 from widgets.app_widgets.container_list import CONTAINER_LIST_EMPTY_TEXT, ContainerListWidget
+from widgets.app_widgets.dashboard_panel import DashboardPanel
 from widgets.app_widgets.log_console import MAX_LOG_LINES, LogConsoleWidget
 from widgets.app_widgets.metric_plot_grid import (
     METRIC_AXIS_COLOR,
@@ -225,6 +226,35 @@ def test_activity_log_widget_appends_copies_and_clears(qtbot):
     assert widget.text() == ""
     assert not widget.copy_button.isEnabled()
     assert not widget.clear_button.isEnabled()
+
+
+def test_dashboard_panel_owns_splitter_layout(qtbot):
+    graph = QWidget()
+    graph.setObjectName("graphView")
+    activity = ActivityLogWidget()
+    moves = []
+    panel = DashboardPanel(
+        graph,
+        activity,
+        [600, 180],
+        lambda pos, index: moves.append((pos, index)),
+    )
+    qtbot.addWidget(panel)
+
+    assert panel.objectName() == "dashboardPanel"
+    assert panel.graph_view is graph
+    assert panel.activity_log_panel is activity
+    assert panel.splitter.objectName() == "dashboardSplitter"
+    assert panel.splitter.orientation() == Qt.Vertical
+    assert not panel.splitter.childrenCollapsible()
+    assert panel.splitter.handleWidth() == 8
+    assert panel.splitter.widget(0) is graph
+    assert panel.splitter.widget(1) is activity
+    assert panel.layout().indexOf(panel.splitter) >= 0
+
+    panel.splitter.splitterMoved.emit(100, 1)
+
+    assert moves == [(100, 1)]
 
 
 def test_sidebar_status_card_panels_expose_stable_controls(qtbot):
