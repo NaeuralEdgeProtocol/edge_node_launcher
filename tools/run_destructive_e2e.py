@@ -22,6 +22,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from tools.e2e_paths import prepare_evidence_paths, write_json_log
+from tools.e2e_visual import assert_title_bar_visible, rect_snapshot, window_snapshot
 
 PRIMARY_CONTAINER = "r1nodee2e"
 SECOND_CONTAINER = "r1nodee2e2"
@@ -90,41 +91,6 @@ def save_widget_screenshot(widget, screenshot_dir, filename):
     if not pixmap.save(str(target_path)):
         raise RuntimeError(f"Could not save screenshot to {target_path}")
     return str(target_path)
-
-
-def rect_snapshot(rect):
-    return {
-        "x": rect.x(),
-        "y": rect.y(),
-        "w": rect.width(),
-        "h": rect.height(),
-        "left": rect.x(),
-        "top": rect.y(),
-        "right": rect.x() + rect.width() - 1,
-        "bottom": rect.y() + rect.height() - 1,
-    }
-
-
-def window_snapshot(launcher):
-    frame = launcher.frameGeometry()
-    client = launcher.geometry()
-    snapshot = {
-        "title": launcher.windowTitle(),
-        "client": {"x": client.x(), "y": client.y(), "w": client.width(), "h": client.height()},
-        "frame": {"x": frame.x(), "y": frame.y(), "w": frame.width(), "h": frame.height()},
-        "visible": launcher.isVisible(),
-    }
-    if hasattr(launcher, "_available_screen_geometry"):
-        available = launcher._available_screen_geometry()
-        snapshot["available"] = rect_snapshot(available)
-        snapshot["title_bar_visible"] = frame.y() >= available.y()
-        snapshot["frame_inside_available"] = (
-            frame.x() >= available.x()
-            and frame.y() >= available.y()
-            and frame.x() + frame.width() <= available.x() + available.width()
-            and frame.y() + frame.height() <= available.y() + available.height()
-        )
-    return snapshot
 
 
 def capture_visible_dialog_screenshots(app, screenshot_dir, label):
@@ -624,10 +590,7 @@ def run_scenarios(args):
     try:
         shown_window = window_snapshot(launcher)
         record_step(log, args.output, {"step": "window shown", "window": shown_window})
-        if not shown_window.get("title_bar_visible", True):
-            raise AssertionError(
-                f"window title bar is outside the available screen area: {shown_window}"
-            )
+        assert_title_bar_visible(shown_window)
 
         record_step(log, args.output, {"step": click_button(app, launcher.themeToggleButton, "toggle light theme")})
         wait_until(app, lambda: launcher.themeToggleButton.text() == frm_main.DARK_DASHBOARD_BUTTON_TEXT, 10, "light theme")

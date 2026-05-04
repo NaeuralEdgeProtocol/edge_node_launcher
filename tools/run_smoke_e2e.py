@@ -21,6 +21,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from tools.e2e_paths import prepare_evidence_paths, write_json_log
+from tools.e2e_visual import assert_title_bar_visible, rect_snapshot, window_snapshot
 
 SMOKE_CONTAINER = "r1nodesmoke"
 SMOKE_VOLUME = "r1volsmoke"
@@ -88,41 +89,6 @@ def wait_until(app, predicate, timeout, label, interval=0.1):
             return
         time.sleep(interval)
     raise TimeoutError(f"Timed out waiting for {label}")
-
-
-def window_snapshot(launcher):
-    frame = launcher.frameGeometry()
-    client = launcher.geometry()
-    snapshot = {
-        "title": launcher.windowTitle(),
-        "client": {"x": client.x(), "y": client.y(), "w": client.width(), "h": client.height()},
-        "frame": {"x": frame.x(), "y": frame.y(), "w": frame.width(), "h": frame.height()},
-        "visible": launcher.isVisible(),
-    }
-    if hasattr(launcher, "_available_screen_geometry"):
-        available = launcher._available_screen_geometry()
-        snapshot["available"] = rect_snapshot(available)
-        snapshot["title_bar_visible"] = frame.y() >= available.y()
-        snapshot["frame_inside_available"] = (
-            frame.x() >= available.x()
-            and frame.y() >= available.y()
-            and frame.x() + frame.width() <= available.x() + available.width()
-            and frame.y() + frame.height() <= available.y() + available.height()
-        )
-    return snapshot
-
-
-def rect_snapshot(rect):
-    return {
-        "x": rect.x(),
-        "y": rect.y(),
-        "w": rect.width(),
-        "h": rect.height(),
-        "left": rect.x(),
-        "top": rect.y(),
-        "right": rect.x() + rect.width() - 1,
-        "bottom": rect.y() + rect.height() - 1,
-    }
 
 
 def widget_global_rect(widget):
@@ -618,10 +584,7 @@ def run_scenarios(args):
     try:
         shown_window = window_snapshot(launcher)
         record_step(log, args.output, {"step": "window shown", "window": shown_window})
-        if not shown_window.get("title_bar_visible", True):
-            raise AssertionError(
-                f"window title bar is outside the available screen area: {shown_window}"
-            )
+        assert_title_bar_visible(shown_window)
         startup_visual = capture_visual_evidence(launcher, args.screenshot_dir, "startup")
         record_step(log, args.output, {"step": "captured startup visual evidence", "visual": startup_visual})
         if not startup_visual["sidebar"]["passed"]:
