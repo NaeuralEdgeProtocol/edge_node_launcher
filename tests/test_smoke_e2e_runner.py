@@ -297,12 +297,43 @@ def test_toast_visual_snapshot_records_visible_notification(qtbot):
 
     assert snapshot["found"] is True
     assert snapshot["visible"] is True
+    assert snapshot["object_name"] == "toastNotification"
+    assert snapshot["accessible_name"] == "Notification"
     assert snapshot["title"] == "Information"
     assert snapshot["message"] == "Visual review message"
+    assert snapshot["message_word_wrap"] is True
     assert snapshot["icon"] == "i"
     assert snapshot["icon"].isascii()
-    assert snapshot["rect"]["w"] >= 280
+    assert snapshot["rect"]["w"] >= ToastWidget.MIN_WIDTH
     assert "#FFFFFF" in toast.styleSheet()
+
+
+def test_toast_long_messages_keep_readable_width_and_visible_position(qtbot):
+    parent = QDialog()
+    parent.resize(520, 180)
+    toast = ToastWidget(parent, bottom_margin=160)
+    qtbot.addWidget(parent)
+    parent.show()
+    qtbot.waitUntil(parent.isVisible)
+
+    toast.show_notification(
+        NotificationType.ERROR,
+        "Failed to start the selected container because Docker returned a long diagnostic message "
+        "that should wrap cleanly without pushing the notification outside the visible window.",
+        duration=5000,
+    )
+    qtbot.waitUntil(toast.isVisible)
+
+    assert toast.objectName() == "toastNotification"
+    assert toast.container.objectName() == "toastContainer"
+    assert toast.message.objectName() == "toastMessage"
+    assert toast.message.wordWrap()
+    assert toast.width() <= ToastWidget.MAX_WIDTH
+    assert toast.width() >= ToastWidget.MIN_WIDTH
+    assert toast.x() >= ToastWidget.EDGE_MARGIN
+    assert toast.y() >= ToastWidget.EDGE_MARGIN
+    assert toast.x() + toast.width() <= parent.width() - ToastWidget.EDGE_MARGIN
+    assert toast.y() + toast.height() <= parent.height() - ToastWidget.EDGE_MARGIN
 
 
 def test_toast_notification_icons_are_ascii_safe():

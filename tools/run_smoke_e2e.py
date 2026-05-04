@@ -412,10 +412,13 @@ def toast_visual_snapshot(launcher):
     return {
         "found": True,
         "visible": toast.isVisible(),
+        "object_name": toast.objectName(),
+        "accessible_name": toast.accessibleName(),
         "rect": widget_global_rect(toast),
         "title": toast.title.text() if hasattr(toast, "title") else "",
         "icon": toast.icon.text() if hasattr(toast, "icon") else "",
         "message": toast.message.text() if hasattr(toast, "message") else "",
+        "message_word_wrap": toast.message.wordWrap() if hasattr(toast, "message") else False,
     }
 
 
