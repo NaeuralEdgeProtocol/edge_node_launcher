@@ -1383,6 +1383,67 @@ def test_launch_conflict_remove_failure_clears_lifecycle_and_reports_error(qtbot
     assert "Failed to remove conflicting container: permission denied" in log_text
 
 
+def test_launch_conflict_remove_success_retries_and_finalizes(qtbot, monkeypatch):
+    launcher, fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launch_attempts = []
+    removed_containers = []
+    progress_messages = []
+    ui_updates = []
+
+    def conflict_then_success(volume_name=None, callback=None, error_callback=None):
+        launch_attempts.append((fake_handler.container_name, volume_name))
+        if len(launch_attempts) == 1:
+            error_callback(
+                'Conflict. The container name "/r1node" is already in use by container "abc123".'
+            )
+            return
+        callback(("", "", 0))
+
+    def remove_success(container_name, callback, error_callback, force=True):
+        removed_containers.append((container_name, force))
+        callback(("", "", 0))
+
+    fake_handler.launch_container_threaded = conflict_then_success
+    fake_handler.remove_container_threaded = remove_success
+    monkeypatch.setattr(frm_main.QTimer, "singleShot", lambda _delay, callback: callback())
+    launcher._update_launch_dialog_progress = (
+        lambda message, **_kwargs: progress_messages.append(message) or True
+    )
+    launcher.post_launch_setup = lambda: ui_updates.append("post_launch_setup")
+    launcher.refresh_node_info = lambda: ui_updates.append("refresh_node_info")
+    launcher.plot_data = lambda assume_running=False: ui_updates.append(
+        ("plot_data", assume_running)
+    )
+    launcher.update_toggle_button_text = lambda assume_running=False: ui_updates.append(
+        ("update_toggle_button_text", assume_running)
+    )
+    launcher._begin_lifecycle_operation("launch", "r1node")
+
+    launcher._perform_container_launch_after_pull("r1node", "r1vol")
+
+    assert launch_attempts == [("r1node", "r1vol"), ("r1node", "r1vol")]
+    assert removed_containers == [("abc123", True)]
+    assert progress_messages == [
+        "Launching Docker container...",
+        "Container name conflict detected. Trying again with container removal...",
+        "Container launched, updating configuration...",
+        "Updating user interface...",
+        "Container launched successfully!",
+    ]
+    assert fake_config.last_used_updates
+    assert fake_config.volume_updates == []
+    assert ui_updates == [
+        "post_launch_setup",
+        "refresh_node_info",
+        ("plot_data", True),
+        ("update_toggle_button_text", True),
+    ]
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+    assert launcher.toast.notifications == [
+        (NotificationType.SUCCESS, "Node 'alpha' launched successfully")
+    ]
+
+
 def test_launch_progress_updates_visible_startup_dialog_without_launcher(qtbot, monkeypatch):
     launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
     launch_requests = []

@@ -3304,6 +3304,65 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     for dialog_attr in ("launcher_dialog", "startup_dialog"):
       self._close_dialog_reference(dialog_attr)
 
+  def _retry_launch_after_container_conflict(
+    self,
+    container_name: str,
+    volume_name: str,
+    error_msg: str,
+    on_launch_success,
+    on_launch_error,
+  ) -> bool:
+    """Remove a conflicting container and retry launch for Docker name conflicts."""
+    if "Conflict" not in error_msg or "is already in use" not in error_msg:
+      return False
+
+    self._update_launch_dialog_progress(
+      "Container name conflict detected. Trying again with container removal..."
+    )
+
+    try:
+      container_id = extract_conflicting_container_id(error_msg)
+      if not container_id:
+        return False
+
+      self.add_log(
+        f"Attempting to forcefully remove container with ID: {container_id}",
+        color="yellow",
+      )
+
+      def on_conflict_remove_success(result):
+        if self._skip_lifecycle_callback_if_shutting_down("conflict container removal", container_name):
+          return
+
+        _stdout, stderr, return_code = result
+        if return_code != 0:
+          self._finalize_launch_failure(
+            container_name,
+            f"Failed to remove conflicting container: {stderr}",
+          )
+          return
+
+        self.add_log("Successfully removed conflicting container, retrying launch", color="blue")
+        QTimer.singleShot(
+          1000,
+          lambda: self.docker_handler.launch_container_threaded(
+            volume_name,
+            on_launch_success,
+            on_launch_error,
+          ),
+        )
+
+      self.docker_handler.remove_container_threaded(
+        container_id,
+        on_conflict_remove_success,
+        on_launch_error,
+        force=True,
+      )
+      return True
+    except Exception as retry_err:
+      self.add_log(f"Failed to resolve container conflict: {retry_err}", color="red")
+      return False
+
   def _perform_container_launch_after_pull(self, container_name, volume_name):
     """Perform the container launch operation after Docker pull is complete."""
     try:
@@ -3337,34 +3396,15 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
             # Stop loading indicator on error
             self.loading_indicator.stop()
-            
-            # Check if this is a "container already exists" error
-            if "Conflict" in error_msg and "is already in use" in error_msg:
-                # Update loading dialogs with specific error message
-                self._update_launch_dialog_progress("Container name conflict detected. Trying again with container removal...")
-                
-                # Try to forcefully remove the container and retry launch
-                try:
-                    container_id = extract_conflicting_container_id(error_msg)
-                    
-                    if container_id:
-                        self.add_log(f"Attempting to forcefully remove container with ID: {container_id}", color="yellow")
-                        def on_conflict_remove_success(result):
-                            _stdout, stderr, return_code = result
-                            if return_code != 0:
-                                self._finalize_launch_failure(
-                                    container_name,
-                                    f"Failed to remove conflicting container: {stderr}",
-                                )
-                                return
 
-                            self.add_log("Successfully removed conflicting container, retrying launch", color="blue")
-                            QTimer.singleShot(1000, lambda: self.docker_handler.launch_container_threaded(volume_name, on_launch_success, on_launch_error))
-
-                        self.docker_handler.remove_container_threaded(container_id, on_conflict_remove_success, on_launch_error, force=True)
-                        return
-                except Exception as retry_err:
-                    self.add_log(f"Failed to resolve container conflict: {retry_err}", color="red")
+            if self._retry_launch_after_container_conflict(
+                container_name,
+                volume_name,
+                error_msg,
+                on_launch_success,
+                on_launch_error,
+            ):
+                return
             
             self._finalize_launch_failure(container_name, f"Failed to launch container: {error_msg}")
         
