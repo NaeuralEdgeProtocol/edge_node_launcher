@@ -582,7 +582,7 @@ def test_immediate_dialog_close_does_not_clear_replaced_dialog(qtbot, monkeypatc
 def test_launch_loading_dialog_helper_sets_progress_message(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
 
-    dialog = launcher._show_launch_loading_dialog("alpha")
+    dialog = launcher._lifecycle_dialogs.show_launch_loading("alpha")
 
     assert launcher.launcher_dialog is dialog
     assert dialog.windowTitle() == "Launching Node"
@@ -592,19 +592,19 @@ def test_launch_loading_dialog_helper_sets_progress_message(qtbot, monkeypatch):
 def test_new_node_loading_dialog_helper_preserves_initial_copy(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
 
-    dialog = launcher._show_new_node_loading_dialog("beta")
+    dialog = launcher._lifecycle_dialogs.show_new_node_loading("beta")
 
     assert launcher.startup_dialog is dialog
     assert dialog.windowTitle() == "Starting Node"
     assert dialog.message_label.text() == "Please wait while node 'beta' is being launched..."
 
 
-def test_lifecycle_dialog_presenter_backs_launcher_dialog_helpers(qtbot, monkeypatch):
+def test_lifecycle_dialog_presenter_backs_launch_progress_helpers(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
 
     assert isinstance(launcher._lifecycle_dialogs, LifecycleDialogPresenter)
 
-    dialog = launcher._show_launch_loading_dialog("alpha")
+    dialog = launcher._lifecycle_dialogs.show_launch_loading("alpha")
 
     assert launcher._dialog_reference("launcher_dialog") is dialog
     assert launcher._lifecycle_dialogs.reference("launcher_dialog") is dialog
@@ -615,7 +615,7 @@ def test_lifecycle_dialog_presenter_backs_launcher_dialog_helpers(qtbot, monkeyp
 def test_stop_loading_dialog_helper_sets_progress_message(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
 
-    dialog = launcher._show_stop_loading_dialog("alpha")
+    dialog = launcher._lifecycle_dialogs.show_stop_loading("alpha")
 
     assert launcher.toggle_dialog is dialog
     assert launcher._lifecycle_dialogs.reference("toggle_dialog") is dialog
@@ -629,7 +629,7 @@ def test_stop_success_callback_updates_ui_and_clears_lifecycle(qtbot, monkeypatc
     progress_messages = []
     real_update_progress = launcher._lifecycle_dialogs.update_progress
 
-    launcher._show_stop_loading_dialog("alpha")
+    launcher._lifecycle_dialogs.show_stop_loading("alpha")
     launcher._begin_lifecycle_operation("stop", "r1node")
     launcher.loading_indicator.start()
     launcher.update_toggle_button_text = lambda: ui_calls.append("toggle")
@@ -684,7 +684,7 @@ def test_stop_return_code_failure_closes_dialog_and_clears_lifecycle(qtbot, monk
 
 def test_stop_error_callback_reports_and_clears_lifecycle(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
-    launcher._show_stop_loading_dialog("alpha")
+    launcher._lifecycle_dialogs.show_stop_loading("alpha")
     launcher._begin_lifecycle_operation("stop", "r1node")
     launcher.loading_indicator.start()
     monkeypatch.setattr(frm_main.QTimer, "singleShot", lambda _delay, callback: callback())

@@ -863,30 +863,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       process_events=process_events,
     )
 
-  def _show_loading_dialog_reference(
-    self,
-    dialog_attr: str,
-    *,
-    title: str,
-    message: str,
-    progress_message: str = None,
-  ):
-    return self._lifecycle_dialogs.show_loading_reference(
-      dialog_attr,
-      title=title,
-      message=message,
-      progress_message=progress_message,
-    )
-
-  def _show_launch_loading_dialog(self, node_alias: str = None):
-    return self._lifecycle_dialogs.show_launch_loading(node_alias)
-
-  def _show_new_node_loading_dialog(self, display_name: str = None):
-    return self._lifecycle_dialogs.show_new_node_loading(display_name)
-
-  def _show_stop_loading_dialog(self, node_alias: str = None):
-    return self._lifecycle_dialogs.show_stop_loading(node_alias)
-
   def _safe_close_dialog_reference(self, dialog_attr: str, dialog=None) -> bool:
     return self._lifecycle_dialogs.safe_close_reference(dialog_attr, dialog)
 
@@ -1233,7 +1209,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         
         container_config = self.config_manager.get_container(container_name)
         node_alias = container_config.node_alias if container_config and container_config.node_alias else None
-        self._show_stop_loading_dialog(node_alias)
+        self._lifecycle_dialogs.show_stop_loading(node_alias)
         
         # Clear info displays
         self._clear_info_display()
@@ -1281,7 +1257,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         
         container_config = self.config_manager.get_container(container_name)
         node_alias = container_config.node_alias if container_config and container_config.node_alias else None
-        self._show_launch_loading_dialog(node_alias)
+        self._lifecycle_dialogs.show_launch_loading(node_alias)
         
         # Start the container launch process
         self._perform_container_launch(container_name, volume_name)
@@ -2828,7 +2804,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         return
 
       # Show the loading dialog - now with blue background
-      self._show_new_node_loading_dialog(display_name)
+      self._lifecycle_dialogs.show_new_node_loading(display_name)
       
       # Add a small delay to ensure dialog is fully rendered
       QTimer.singleShot(100, lambda: self._perform_add_new_node(container_name, volume_name, display_name))
@@ -2946,7 +2922,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         if not startup_dialog_visible and not launcher_dialog_visible:
             container_config = self.config_manager.get_container(container_name)
             node_alias = container_config.node_alias if container_config and container_config.node_alias else None
-            self._show_launch_loading_dialog(node_alias)
+            self._lifecycle_dialogs.show_launch_loading(node_alias)
             
             # Add a small delay to ensure dialog is fully rendered
             QTimer.singleShot(100, lambda: self._perform_container_launch(container_name, volume_name))
@@ -3107,7 +3083,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             self._select_container_by_name(container_name)
             container_config = self.config_manager.get_container(container_name)
             node_alias = container_config.node_alias if container_config and container_config.node_alias else None
-            self._show_launch_loading_dialog(node_alias)
+            self._lifecycle_dialogs.show_launch_loading(node_alias)
 
             # Continue with container launch after pull - use a short timer to ensure UI is updated first
             QTimer.singleShot(100, lambda: self._perform_container_launch_after_pull(container_name, volume_name))
