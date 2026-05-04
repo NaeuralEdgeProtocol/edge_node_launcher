@@ -1052,6 +1052,11 @@ def test_main_window_theme_and_force_debug_buttons(qtbot, monkeypatch):
     assert launcher.force_debug_checkbox.minimumHeight() >= 32
     assert launcher.force_debug_checkbox.styleSheet() == ""
 
+    launcher.sidebar_panel.show_page("settings")
+    qtbot.wait(20)
+    assert launcher.themeToggleButton.isVisible()
+    assert launcher.force_debug_checkbox.isVisible()
+
     initial_theme = launcher._current_stylesheet
     qtbot.mouseClick(launcher.themeToggleButton, Qt.LeftButton)
 
@@ -3017,6 +3022,9 @@ def test_main_window_sidebar_sections_group_controls(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
     expected_sections = {
         "nodeControlsSectionLabel": "Node",
+        "appsPageSectionLabel": "Apps",
+        "logsPageSectionLabel": "Logs",
+        "dockerSectionLabel": "Docker",
         "networkActionsSectionLabel": "Network",
         "statusSectionLabel": "Status",
         "settingsSectionLabel": "Settings",
@@ -3031,6 +3039,36 @@ def test_main_window_sidebar_sections_group_controls(qtbot, monkeypatch):
         assert label.property("role") == "sidebarSection"
         assert label.font().family() != "Courier New"
         assert label.minimumHeight() == SIDEBAR_SECTION_LABEL_HEIGHT
+
+
+def test_navigation_rail_switches_contextual_control_pages(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+
+    pages = {
+        "nodes": ("navNodesButton", "nodesPage", launcher.toggleButton),
+        "apps": ("navAppsButton", "appsPage", launcher.findChild(QLabel, "appsPagePlaceholderLabel")),
+        "logs": ("navLogsButton", "logsPage", launcher.findChild(QLabel, "logsPagePlaceholderLabel")),
+        "docker": ("navDockerButton", "dockerPage", launcher.docker_download_button),
+        "settings": ("navSettingsButton", "settingsPage", launcher.themeToggleButton),
+        "network": ("navNetworkButton", "networkPage", launcher.dapp_button),
+    }
+
+    assert launcher.navigation_page_stack.objectName() == "launcherPageStack"
+
+    for page_name, (button_name, page_object_name, expected_visible_widget) in pages.items():
+        nav_button = launcher.findChild(QToolButton, button_name)
+        page = launcher.findChild(QWidget, page_object_name)
+
+        assert nav_button is not None
+        assert page is not None
+        assert expected_visible_widget is not None
+
+        qtbot.mouseClick(nav_button, Qt.LeftButton)
+
+        assert launcher.sidebar_panel.current_page_name() == page_name
+        assert launcher.navigation_page_stack.currentWidget() is page
+        assert nav_button.isChecked()
+        assert expected_visible_widget.isVisible()
 
 
 def test_rename_action_lives_with_node_controls(qtbot, monkeypatch):
@@ -3056,17 +3094,20 @@ def test_refresh_action_lives_with_status_section(qtbot, monkeypatch):
 
 def test_docker_download_action_lives_with_network_actions(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
-    top_button_area = launcher.findChild(QVBoxLayout, "topButtonArea")
+    docker_button_area = launcher.findChild(QVBoxLayout, "dockerButtonArea")
+    docker_label = launcher.findChild(QLabel, "dockerSectionLabel")
+    network_button_area = launcher.findChild(QVBoxLayout, "networkButtonArea")
     network_label = launcher.findChild(QLabel, "networkActionsSectionLabel")
 
-    assert top_button_area is not None
+    assert docker_button_area is not None
+    assert docker_label is not None
+    assert network_button_area is not None
     assert network_label is not None
-    assert top_button_area.indexOf(network_label) < top_button_area.indexOf(
+    assert docker_button_area.indexOf(docker_label) < docker_button_area.indexOf(
         launcher.docker_download_button
     )
-    assert top_button_area.indexOf(launcher.docker_download_button) < top_button_area.indexOf(
-        launcher.dapp_button
-    )
+    assert network_button_area.indexOf(network_label) < network_button_area.indexOf(launcher.dapp_button)
+    assert network_button_area.indexOf(launcher.dapp_button) < network_button_area.indexOf(launcher.explorer_button)
 
 
 def test_main_window_sidebar_actions_have_hierarchy_roles(qtbot, monkeypatch):
@@ -3150,7 +3191,7 @@ def test_status_panels_have_semantic_roles(qtbot, monkeypatch):
     assert resources_box.layout().spacing() == 3
 
 
-def test_main_window_sidebar_settings_are_visible_before_status_cards(qtbot, monkeypatch):
+def test_main_window_navigation_pages_keep_settings_separate_from_node_status(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
     launcher.resize(1600, 900)
     qtbot.wait(50)
@@ -3162,8 +3203,16 @@ def test_main_window_sidebar_settings_are_visible_before_status_cards(qtbot, mon
     assert settings_label is not None
     assert status_label is not None
     assert sidebar_scroll is not None
+    assert launcher.navigation_page_stack.objectName() == "launcherPageStack"
+    assert launcher.sidebar_panel.current_page_name() == "nodes"
+    assert status_label.isVisible()
+    assert not settings_label.isVisible()
 
-    assert settings_label.y() < status_label.y()
+    launcher.sidebar_panel.show_page("settings")
+    qtbot.wait(50)
+    assert launcher.sidebar_panel.current_page_name() == "settings"
+    assert settings_label.isVisible()
+    assert not status_label.isVisible()
 
     viewport = sidebar_scroll.viewport()
     viewport_top = viewport.mapToGlobal(viewport.rect().topLeft()).y()
@@ -3206,19 +3255,22 @@ def test_main_window_sidebar_controls_do_not_overlap_scrollbar(qtbot, monkeypatc
 
     assert sidebar_scroll.widget().width() <= viewport.width()
 
-    controls = (
-        launcher.add_node_button,
-        launcher.renameNodeButton,
-        launcher.toggleButton,
-        launcher.docker_download_button,
-        launcher.dapp_button,
-        launcher.explorer_button,
-        launcher.refreshButton,
-        launcher.themeToggleButton,
-        launcher.force_debug_checkbox,
-    )
-    for control in controls:
-        if not control.isVisible():
-            continue
-        control_right = control.mapToGlobal(control.rect().topRight()).x()
-        assert control_right <= safe_right, control.objectName()
+    page_controls = {
+        "nodes": (
+            launcher.add_node_button,
+            launcher.renameNodeButton,
+            launcher.toggleButton,
+            launcher.refreshButton,
+        ),
+        "docker": (launcher.docker_download_button,),
+        "network": (launcher.dapp_button, launcher.explorer_button),
+        "settings": (launcher.themeToggleButton, launcher.force_debug_checkbox),
+    }
+
+    for page_name, controls in page_controls.items():
+        launcher.sidebar_panel.show_page(page_name)
+        qtbot.wait(20)
+        for control in controls:
+            assert control.isVisible(), control.objectName()
+            control_right = control.mapToGlobal(control.rect().topRight()).x()
+            assert control_right <= safe_right, control.objectName()

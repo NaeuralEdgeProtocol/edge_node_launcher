@@ -766,7 +766,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     sidebar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
     sidebar_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
     sidebar_scroll.setFrameShape(QFrame.NoFrame)
-    sidebar_scroll.setFixedWidth(300)
+    sidebar_scroll.setFixedWidth(390)
     sidebar_scroll.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
     sidebar_scroll.setWidget(sidebar_widget)
     return sidebar_scroll
@@ -799,6 +799,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     return menu_widget
 
   def _bind_sidebar_panel_aliases(self, panel: SidebarPanel) -> None:
+    self.sidebar_panel = panel
+    self.navigation_page_stack = panel.page_stack
     self.add_node_button = panel.add_node_button
     self.container_combo = panel.container_combo
     self.renameNodeButton = panel.renameNodeButton

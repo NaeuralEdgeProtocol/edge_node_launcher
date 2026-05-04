@@ -631,6 +631,45 @@ COMMON_STYLESHEET_TEMPLATE = """
   QScrollArea#sidebarScrollArea QWidget#sidebarPanel {{
     background-color: transparent;
   }}
+  QFrame#navigationRail {{
+    background-color: {secondary_action_bg};
+    border: 1px solid {section_label_border};
+    border-radius: 8px;
+  }}
+  QToolButton[role="navRailButton"] {{
+    background-color: transparent;
+    color: {secondary_action_text};
+    border: 1px solid transparent;
+    border-radius: 7px;
+    padding: 5px 2px;
+    font-family: "Segoe UI";
+    font-size: 8pt;
+    font-weight: 600;
+  }}
+  QToolButton[role="navRailButton"]:hover {{
+    background-color: {secondary_action_hover};
+    border-color: {secondary_action_border};
+  }}
+  QToolButton[role="navRailButton"]:checked {{
+    background-color: {primary_action_bg};
+    color: {primary_action_text};
+    border-color: {primary_action_border};
+  }}
+  QStackedWidget#launcherPageStack,
+  QWidget[role="navigationPage"] {{
+    background-color: transparent;
+  }}
+  QLabel[role="pagePlaceholder"] {{
+    color: {section_label_text};
+    background-color: {secondary_action_bg};
+    border: 1px solid {secondary_action_border};
+    border-radius: 8px;
+    font-family: "Segoe UI";
+    font-size: 10pt;
+    font-weight: 600;
+    padding: 8px;
+    margin: 3px 6px;
+  }}
   QScrollArea#sidebarScrollArea QScrollBar:vertical {{
     background-color: transparent;
     border: none;

@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import (
     QSizePolicy,
     QTabWidget,
     QTextEdit,
+    QToolButton,
     QWidget,
 )
 
@@ -409,6 +410,14 @@ def test_sidebar_panel_exposes_stable_launcher_controls(qtbot):
     assert panel.objectName() == "sidebarPanel"
     assert panel.property("role") == "navigationSidebar"
     assert panel.findChild(QWidget, "sidebarPanel") is None
+    assert panel.page_stack.objectName() == "launcherPageStack"
+    assert panel.current_page_name() == "nodes"
+    assert panel.findChild(QToolButton, "navNodesButton").isChecked()
+    assert panel.findChild(QToolButton, "navAppsButton") is not None
+    assert panel.findChild(QToolButton, "navLogsButton") is not None
+    assert panel.findChild(QToolButton, "navDockerButton") is not None
+    assert panel.findChild(QToolButton, "navSettingsButton") is not None
+    assert panel.findChild(QToolButton, "navNetworkButton") is not None
     assert panel.add_node_button.objectName() == "addNodeButton"
     assert panel.container_combo.objectName() == "nodeSelectorCombo"
     assert panel.container_combo.accessibleName() == "Node selector"
@@ -427,10 +436,14 @@ def test_sidebar_panel_exposes_stable_launcher_controls(qtbot):
     qtbot.mouseClick(panel.add_node_button, Qt.LeftButton)
     qtbot.mouseClick(panel.renameNodeButton, Qt.LeftButton)
     qtbot.mouseClick(panel.toggleButton, Qt.LeftButton)
+    panel.show_page("docker")
     qtbot.mouseClick(panel.docker_download_button, Qt.LeftButton)
+    panel.show_page("network")
     qtbot.mouseClick(panel.dapp_button, Qt.LeftButton)
     qtbot.mouseClick(panel.explorer_button, Qt.LeftButton)
+    panel.show_page("nodes")
     qtbot.mouseClick(panel.refreshButton, Qt.LeftButton)
+    panel.show_page("settings")
     qtbot.mouseClick(panel.themeToggleButton, Qt.LeftButton)
     panel.force_debug_checkbox.setChecked(False)
 

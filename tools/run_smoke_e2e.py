@@ -468,6 +468,14 @@ def click_visible_button(app, button, label):
     return click_button(app, button, label)
 
 
+def show_launcher_page(app, launcher, page_name):
+    panel = getattr(launcher, "sidebar_panel", None)
+    if panel is None or not hasattr(panel, "show_page"):
+        return
+    panel.show_page(page_name)
+    app.processEvents()
+
+
 def patch_message_boxes(log, output_path):
     from PyQt5.QtWidgets import QMessageBox
 
@@ -634,6 +642,24 @@ def run_scenarios(args):
         launcher.setMinimumSize(original_minimum_size)
         launcher.resize(1600, 900)
         app.processEvents()
+
+        for page_name in ("apps", "logs", "docker", "settings", "network", "nodes"):
+            show_launcher_page(app, launcher, page_name)
+            page_visual = capture_visual_evidence(
+                launcher,
+                args.screenshot_dir,
+                f"nav_{page_name}_page",
+            )
+            record_step(
+                log,
+                args.output,
+                {
+                    "step": f"captured {page_name} navigation page visual evidence",
+                    "visual": page_visual,
+                },
+            )
+            if not page_visual["sidebar"]["passed"]:
+                raise AssertionError("; ".join(page_visual["sidebar"]["issues"]))
 
         docker_check_dialog = DockerCheckDialog(launcher)
         show_and_capture_dialog(
@@ -823,6 +849,8 @@ def run_scenarios(args):
             finally:
                 launcher.is_container_running = original_running_check
 
+        show_launcher_page(app, launcher, "settings")
+        record_step(log, args.output, {"step": "show settings page"})
         record_step(log, args.output, {"step": click_button(app, launcher.themeToggleButton, "toggle light theme")})
         wait_until(app, lambda: launcher.themeToggleButton.text() == frm_main.DARK_DASHBOARD_BUTTON_TEXT, args.timeout, "light theme")
         light_visual = capture_visual_evidence(launcher, args.screenshot_dir, "light_theme")
@@ -861,10 +889,16 @@ def run_scenarios(args):
             },
         )
 
+        show_launcher_page(app, launcher, "nodes")
+        record_step(log, args.output, {"step": "show nodes page"})
         open_and_cancel_rename_dialog("light_rename_node", "open and cancel light rename dialog")
+        show_launcher_page(app, launcher, "settings")
+        record_step(log, args.output, {"step": "show settings page"})
         record_step(log, args.output, {"step": click_button(app, launcher.themeToggleButton, "toggle dark theme")})
         wait_until(app, lambda: launcher.themeToggleButton.text() == frm_main.LIGHT_DASHBOARD_BUTTON_TEXT, args.timeout, "dark theme")
 
+        show_launcher_page(app, launcher, "nodes")
+        record_step(log, args.output, {"step": "show nodes page"})
         record_step(log, args.output, {"step": click_button(app, launcher.refreshButton, "refresh stopped node")})
         wait_until(
             app,
@@ -896,7 +930,11 @@ def run_scenarios(args):
                 "clipboard": app.clipboard().text(),
             },
         )
+        show_launcher_page(app, launcher, "settings")
+        record_step(log, args.output, {"step": "show settings page"})
         record_step(log, args.output, {"step": click_button(app, launcher.force_debug_checkbox, "toggle force debug")})
+        show_launcher_page(app, launcher, "network")
+        record_step(log, args.output, {"step": "show network page"})
         record_step(log, args.output, {"step": click_button(app, launcher.dapp_button, "open dapp link")})
         record_step(log, args.output, {"step": click_button(app, launcher.explorer_button, "show explorer placeholder")})
         wait_until(
@@ -913,6 +951,8 @@ def run_scenarios(args):
                 "visual": capture_toast_visual_evidence(launcher, args.screenshot_dir, "explorer_placeholder"),
             },
         )
+        show_launcher_page(app, launcher, "docker")
+        record_step(log, args.output, {"step": "show docker page"})
         record_step(log, args.output, {"step": click_button(app, launcher.docker_download_button, "open docker download link")})
 
         def capture_and_cancel_add_node_dialog():
@@ -930,6 +970,8 @@ def run_scenarios(args):
             )
             click_dialog_button(app, dialog, "createNodeCancelButton")
 
+        show_launcher_page(app, launcher, "nodes")
+        record_step(log, args.output, {"step": "show nodes page"})
         QTimer.singleShot(100, capture_and_cancel_add_node_dialog)
         record_step(log, args.output, {"step": click_button(app, launcher.add_node_button, "open and cancel add node dialog")})
 
