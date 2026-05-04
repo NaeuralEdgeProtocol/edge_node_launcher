@@ -64,3 +64,17 @@ def test_stop_button_text_uses_readable_dark_color_on_yellow():
     for colors in (DARK_COLORS, LIGHT_COLORS):
         assert colors["toggle_button_stop_text"] == "#1F2937"
         assert colors["toggle_button_stop_text"] != "#C4AC26"
+
+
+def test_dark_theme_uses_neutral_surfaces_with_blue_as_accent():
+    assert DARK_COLORS["widget_bg"] == "#0F1117"
+    assert DARK_COLORS["graph_bg"] == "#14171F"
+    assert DARK_COLORS["log_view_bg"] == "#151A23"
+    assert DARK_COLORS["info_box_bg"] == "#151A23"
+    assert DARK_COLORS["graph_border"] == "#2F3A4A"
+    assert DARK_COLORS["graph_cpu_color"] == "#4EA3FF"
+    assert DARK_COLORS["widget_bg"] not in {
+        DARK_COLORS["graph_bg"],
+        DARK_COLORS["log_view_bg"],
+        DARK_COLORS["info_box_bg"],
+    }

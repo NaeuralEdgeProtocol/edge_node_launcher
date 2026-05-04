@@ -439,7 +439,8 @@ def test_centered_combo_light_popup_uses_supported_qt_stylesheet(qtbot):
         combo.hidePopup()
 
     combo.set_theme(True)
-    assert "background-color: #082747" in combo.styleSheet()
+    assert "background-color: #151A23" in combo.styleSheet()
+    assert "border: 1px solid #445164" in combo.styleSheet()
     assert "color: transparent" in combo.lineEdit().styleSheet()
 
 

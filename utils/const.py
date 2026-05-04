@@ -248,34 +248,34 @@ DARK_COLORS = {
     "primary_action_hover": "#4458FF",
     "primary_action_text": "#FFFFFF",
     "primary_action_border": "transparent",
-    "secondary_action_bg": "#243447",
-    "secondary_action_hover": "#2E465E",
+    "secondary_action_bg": "#202734",
+    "secondary_action_hover": "#2A3342",
     "secondary_action_text": "#E8EEF8",
-    "secondary_action_border": "#40607A",
+    "secondary_action_border": "#445164",
     "utility_action_bg": "transparent",
-    "utility_action_hover": "#263241",
+    "utility_action_hover": "#1A2130",
     "utility_action_text": "#C7D4E8",
-    "utility_action_border": "#395069",
-    "progress_border": "#1E90FF",
-    "progress_chunk": "#1E90FF",
-    "widget_bg": "#000C29",
-    "debug_checkbox_color": "white",  # Orange for dark theme debug checkbox
+    "utility_action_border": "#3A4658",
+    "progress_border": "#4EA3FF",
+    "progress_chunk": "#4EA3FF",
+    "widget_bg": "#0F1117",
+    "debug_checkbox_color": "white",
     
     # Log view specific colors
-    "log_view_bg": "#04254F",
+    "log_view_bg": "#151A23",
     "log_view_text": "white",
-    "log_view_border": "#1E90FF",
+    "log_view_border": "#2E6BFF",
     
     # Info box specific colors
-    "info_box_bg": "#04254F",
+    "info_box_bg": "#151A23",
     "info_box_text": "white",
-    "info_box_border": "#1E90FF",
+    "info_box_border": "#2E6BFF",
     
     # Graph specific colors
-    "graph_bg": "#001A3A",
-    "graph_border": "#10386A",
+    "graph_bg": "#14171F",
+    "graph_border": "#2F3A4A",
     "graph_text": "white",
-    "graph_cpu_color": "#1E90FF",
+    "graph_cpu_color": "#4EA3FF",
     "graph_memory_color": "#4CAF50",
     "graph_gpu_color": "#FFD700",
     "graph_gpu_memory_color": "#FF6B6B",
@@ -314,22 +314,22 @@ DARK_COLORS = {
 
     # ComboBox popup specific colors
     "combo_bg": "#F9F9F9",
-    "combo_border": "#10386A",
-    "combo_hover_bg": "#F0F7FF",
-    "combo_hover_border": "#0071EA",
+    "combo_border": "#2F3A4A",
+    "combo_hover_bg": "#202734",
+    "combo_hover_border": "#4EA3FF",
     "combo_arrow_color": "transparent",
     "combo_dropdown_bg": "#FFFFFF",
     "combo_dropdown_select_bg": "red",
     "combo_dropdown_select_color": "black",
-    "combobox_popup_border_color": "#1E90FF",
-    "combobox_popup_bg_color": "#04254F",
+    "combobox_popup_border_color": "#2E6BFF",
+    "combobox_popup_bg_color": "#151A23",
     "combobox_popup_item_hover_bg": "transparent",
     "combobox_popup_item_selected_bg": "#1B47F7",
     "combobox_popup_item_selected_text": "white",
     "combobox_text_color": "#333333",
     "combo_rectangle_text_color": "white",
-    "section_label_text": "#9DB6D8",
-    "section_label_border": "#10386A",
+    "section_label_text": "#A9B7C9",
+    "section_label_border": "#2F3A4A",
 }
 
 # Color definitions for light theme
@@ -356,7 +356,7 @@ LIGHT_COLORS = {
     "progress_border": "#D3D3D3",
     "progress_chunk": "#D3D3D3",
     "widget_bg": "#E6E6EA",
-    "debug_checkbox_color": "black",  # Blue for light theme debug checkbox
+    "debug_checkbox_color": "black",
     
     # Log view specific colors
     "log_view_bg": "#FFFFFF",
