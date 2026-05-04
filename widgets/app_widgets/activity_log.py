@@ -89,8 +89,8 @@ class ActivityLogWidget(QWidget):
         log_view.setAccessibleName("Activity log output")
         log_view.setReadOnly(True)
         log_view.setMinimumHeight(120)
-        log_view.setLineWrapMode(QTextEdit.NoWrap)
-        log_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        log_view.setLineWrapMode(QTextEdit.WidgetWidth)
+        log_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         log_view.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         log_view.document().setMaximumBlockCount(max_blocks)
         log_view.setFont(QFont("Courier New"))
@@ -137,7 +137,6 @@ class ActivityLogWidget(QWidget):
         def scroll_to_latest() -> None:
             if not sip.isdeleted(log_view):
                 log_view.ensureCursorVisible()
-                log_view.horizontalScrollBar().setValue(log_view.horizontalScrollBar().minimum())
 
         QTimer.singleShot(0, scroll_to_latest)
 

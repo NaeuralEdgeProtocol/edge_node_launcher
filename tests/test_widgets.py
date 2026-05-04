@@ -201,8 +201,8 @@ def test_activity_log_widget_appends_copies_and_clears(qtbot):
     assert widget.log_view.objectName() == "logView"
     assert widget.log_view.accessibleName() == "Activity log output"
     assert widget.log_view.isReadOnly()
-    assert widget.log_view.lineWrapMode() == QTextEdit.NoWrap
-    assert widget.log_view.horizontalScrollBarPolicy() == Qt.ScrollBarAsNeeded
+    assert widget.log_view.lineWrapMode() == QTextEdit.WidgetWidth
+    assert widget.log_view.horizontalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
     assert widget.log_view.document().maximumBlockCount() == 42
     assert not widget.copy_button.isEnabled()
     assert not widget.clear_button.isEnabled()
@@ -214,12 +214,13 @@ def test_activity_log_widget_appends_copies_and_clears(qtbot):
     assert "first" in widget.text()
     assert widget.copy_button.isEnabled()
     assert widget.clear_button.isEnabled()
-    assert widget.log_view.horizontalScrollBar().value() == widget.log_view.horizontalScrollBar().minimum()
+    assert widget.log_view.horizontalScrollBar().maximum() == widget.log_view.horizontalScrollBar().minimum()
 
     QApplication.clipboard().clear()
     qtbot.mouseClick(widget.copy_button, Qt.LeftButton)
 
     assert "long operational line" in QApplication.clipboard().text()
+    assert "x" * 500 in QApplication.clipboard().text()
 
     qtbot.mouseClick(widget.clear_button, Qt.LeftButton)
 

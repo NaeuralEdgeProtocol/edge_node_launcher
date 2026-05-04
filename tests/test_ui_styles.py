@@ -48,8 +48,8 @@ def test_dashboard_activity_log_panel_uses_semantic_styles():
         assert 'QToolButton[role="activityLogToolButton"]' in stylesheet
         assert "QTextEdit#logView QScrollBar:vertical" in stylesheet
         assert "QTextEdit#logView QScrollBar::handle:vertical" in stylesheet
-        assert "QTextEdit#logView QScrollBar:horizontal" in stylesheet
-        assert "QTextEdit#logView QScrollBar::handle:horizontal" in stylesheet
+        assert "QTextEdit#logView QScrollBar:horizontal" not in stylesheet
+        assert "QTextEdit#logView QScrollBar::handle:horizontal" not in stylesheet
         assert 'font-family: "Segoe UI";' in stylesheet
 
 

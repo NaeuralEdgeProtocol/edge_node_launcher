@@ -485,30 +485,6 @@ COMMON_STYLESHEET_TEMPLATE = """
   QTextEdit#logView QScrollBar::sub-page:vertical {{
     background: transparent;
   }}
-  QTextEdit#logView QScrollBar:horizontal {{
-    background-color: transparent;
-    border: none;
-    height: 10px;
-    margin: 0px 6px 3px 6px;
-  }}
-  QTextEdit#logView QScrollBar::handle:horizontal {{
-    background-color: {secondary_action_border};
-    border-radius: 4px;
-    min-width: 32px;
-  }}
-  QTextEdit#logView QScrollBar::handle:horizontal:hover {{
-    background-color: {combo_hover_border};
-  }}
-  QTextEdit#logView QScrollBar::add-line:horizontal,
-  QTextEdit#logView QScrollBar::sub-line:horizontal {{
-    width: 0px;
-    border: none;
-    background: transparent;
-  }}
-  QTextEdit#logView QScrollBar::add-page:horizontal,
-  QTextEdit#logView QScrollBar::sub-page:horizontal {{
-    background: transparent;
-  }}
   QLineEdit[role="dialogTextInput"] {{
     background-color: {secondary_action_bg};
     color: {text_color};

@@ -2449,8 +2449,8 @@ def test_main_window_log_view_has_stable_identity_and_dimensions(qtbot, monkeypa
     assert launcher.logView.isReadOnly()
     assert launcher.logView.minimumHeight() == 120
     assert launcher.logView.maximumHeight() > 150
-    assert launcher.logView.lineWrapMode() == QTextEdit.NoWrap
-    assert launcher.logView.horizontalScrollBarPolicy() == Qt.ScrollBarAsNeeded
+    assert launcher.logView.lineWrapMode() == QTextEdit.WidgetWidth
+    assert launcher.logView.horizontalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
     assert launcher.logView.document().maximumBlockCount() == frm_main.MAIN_ACTIVITY_LOG_MAX_BLOCKS
     assert launcher.logView.font().family() == "Courier New"
 
@@ -2461,12 +2461,13 @@ def test_main_window_log_view_has_stable_identity_and_dimensions(qtbot, monkeypa
     launcher.add_log("long operational line " + ("x" * 500), debug=True)
     qtbot.wait(20)
 
-    assert launcher.logView.horizontalScrollBar().value() == launcher.logView.horizontalScrollBar().minimum()
+    assert launcher.logView.horizontalScrollBar().maximum() == launcher.logView.horizontalScrollBar().minimum()
 
     QApplication.clipboard().clear()
     qtbot.mouseClick(launcher.activity_log_copy_button, Qt.LeftButton)
 
     assert "long operational line" in QApplication.clipboard().text()
+    assert "x" * 500 in QApplication.clipboard().text()
 
     qtbot.mouseClick(launcher.activity_log_clear_button, Qt.LeftButton)
 
