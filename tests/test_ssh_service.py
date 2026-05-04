@@ -107,3 +107,59 @@ def test_execute_command_timeout_kills_process(monkeypatch):
     assert "SSH command timed out after 3 seconds" in stderr
     assert return_code == 124
     assert process.killed
+
+
+def test_check_connection_returns_false_when_unconfigured(monkeypatch):
+    def fail_run(*args, **kwargs):
+        raise AssertionError("unconfigured SSH check should not spawn a process")
+
+    monkeypatch.setattr(ssh_service.subprocess, "run", fail_run)
+
+    assert not ssh_service.SSHService().check_connection()
+
+
+def test_check_connection_uses_timeout_and_hidden_windows_flags(monkeypatch):
+    calls = []
+
+    class FakeResult:
+        returncode = 0
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return FakeResult()
+
+    monkeypatch.setattr(ssh_service.os, "name", "nt")
+    monkeypatch.setattr(
+        ssh_service.subprocess,
+        "CREATE_NO_WINDOW",
+        ssh_service.WINDOWS_CREATE_NO_WINDOW,
+        raising=False,
+    )
+    monkeypatch.setattr(ssh_service.subprocess, "run", fake_run)
+
+    service = ssh_service.SSHService()
+    service.configure(ssh_service.SSHConfig(host="192.0.2.10", user="ratio"))
+
+    assert service.check_connection(timeout=5)
+    assert calls == [
+        (
+            ["ssh", "ratio@192.0.2.10", "-o", "ConnectTimeout=5", "exit"],
+            {
+                "capture_output": True,
+                "timeout": 5,
+                "creationflags": ssh_service.WINDOWS_CREATE_NO_WINDOW,
+            },
+        )
+    ]
+
+
+def test_check_connection_timeout_returns_false(monkeypatch):
+    def fake_run(command, **kwargs):
+        raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr(ssh_service.subprocess, "run", fake_run)
+
+    service = ssh_service.SSHService()
+    service.configure(ssh_service.SSHConfig(host="192.0.2.10", user="ratio"))
+
+    assert not service.check_connection(timeout=5)

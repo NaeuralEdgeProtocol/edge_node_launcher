@@ -109,9 +109,22 @@ class SSHService:
         Returns:
             True if connection successful, False otherwise
         """
+        if not self.ssh_command:
+            return False
+
         try:
             cmd = self.ssh_command + ['-o', f'ConnectTimeout={timeout}', 'exit']
-            process = subprocess.run(cmd, capture_output=True, timeout=timeout)
+            kwargs = {
+                "capture_output": True,
+                "timeout": timeout,
+            }
+            if os.name == 'nt':
+                kwargs["creationflags"] = getattr(
+                    subprocess,
+                    "CREATE_NO_WINDOW",
+                    WINDOWS_CREATE_NO_WINDOW,
+                )
+            process = subprocess.run(cmd, **kwargs)
             return process.returncode == 0
         except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
             return False
