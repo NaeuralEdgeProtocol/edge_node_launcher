@@ -22,7 +22,13 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from tools.e2e_paths import prepare_evidence_paths, write_json_log
-from tools.e2e_visual import assert_title_bar_visible, rect_snapshot, window_snapshot
+from tools.e2e_visual import (
+    assert_lifecycle_controls_busy,
+    assert_title_bar_visible,
+    lifecycle_controls_snapshot,
+    rect_snapshot,
+    window_snapshot,
+)
 
 PRIMARY_CONTAINER = "r1nodee2e"
 SECOND_CONTAINER = "r1nodee2e2"
@@ -313,7 +319,16 @@ def wait_until(app, predicate, timeout, label, interval=0.5):
     raise TimeoutError(f"Timed out waiting for {label}: {last_error}")
 
 
-def wait_for_launch_activity(app, launcher, log, output_path, timeout, label, screenshot_dir=""):
+def wait_for_launch_activity(
+    app,
+    launcher,
+    log,
+    output_path,
+    timeout,
+    label,
+    screenshot_dir="",
+    expected_busy_toggle_text=None,
+):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         app.processEvents()
@@ -333,6 +348,12 @@ def wait_for_launch_activity(app, launcher, log, output_path, timeout, label, sc
             or lifecycle["docker_pull_in_progress"]
             or lifecycle["pending_launch_context"]
         ):
+            lifecycle_controls = lifecycle_controls_snapshot(launcher)
+            if expected_busy_toggle_text is not None:
+                assert_lifecycle_controls_busy(
+                    lifecycle_controls,
+                    expected_toggle_text=expected_busy_toggle_text,
+                )
             record_step(
                 log,
                 output_path,
@@ -343,6 +364,7 @@ def wait_for_launch_activity(app, launcher, log, output_path, timeout, label, sc
                     "dialog_screenshots": capture_visible_dialog_screenshots(app, screenshot_dir, label),
                     "docker_pull_in_progress": lifecycle["docker_pull_in_progress"],
                     "pending_launch_context": lifecycle["pending_launch_context"],
+                    "lifecycle_controls": lifecycle_controls,
                 },
             )
             return
@@ -606,6 +628,7 @@ def run_scenarios(args):
             45,
             "primary launch activity",
             screenshot_dir=args.screenshot_dir,
+            expected_busy_toggle_text=frm_main.LIFECYCLE_BUSY_TOGGLE_TEXT["start"],
         )
         wait_for_container_running(
             app,
