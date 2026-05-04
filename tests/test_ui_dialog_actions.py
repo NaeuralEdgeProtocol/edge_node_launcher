@@ -20,8 +20,14 @@ def test_docker_check_dialog_buttons_are_clickable(qtbot, monkeypatch):
     assert download_dialog.accessibleName() == "Docker Check"
     assert download_dialog.message.objectName() == "dockerCheckMessageLabel"
     assert download_dialog.message.accessibleName() == "Docker status message"
+    assert download_dialog.message.wordWrap()
+    assert download_dialog.button_row.objectName() == "dockerCheckButtonRow"
+    assert download_dialog.button_row.accessibleName() == "Docker check actions"
     assert download_dialog.download_button.objectName() == "dockerCheckDownloadButton"
     assert download_dialog.download_button.accessibleName() == "Download Docker"
+    assert download_dialog.download_button.toolTip() == "Open Docker Desktop download page"
+    assert download_dialog.download_button.property("actionRole") == "primary"
+    assert download_dialog.download_button.minimumHeight() >= 44
     qtbot.mouseClick(download_dialog.download_button, Qt.LeftButton)
     assert opened_urls == ["https://www.docker.com/products/docker-desktop"]
 
@@ -30,6 +36,8 @@ def test_docker_check_dialog_buttons_are_clickable(qtbot, monkeypatch):
 
     assert retry_dialog.retry_button.objectName() == "dockerCheckRetryButton"
     assert retry_dialog.retry_button.accessibleName() == "Try Docker check again"
+    assert retry_dialog.retry_button.toolTip() == "Check Docker again"
+    assert retry_dialog.retry_button.property("actionRole") == "secondary"
     with qtbot.waitSignal(retry_dialog.accepted):
         qtbot.mouseClick(retry_dialog.retry_button, Qt.LeftButton)
 
@@ -38,6 +46,8 @@ def test_docker_check_dialog_buttons_are_clickable(qtbot, monkeypatch):
 
     assert quit_dialog.quit_button.objectName() == "dockerCheckQuitButton"
     assert quit_dialog.quit_button.accessibleName() == "Quit launcher"
+    assert quit_dialog.quit_button.toolTip() == "Close the launcher"
+    assert quit_dialog.quit_button.property("actionRole") == "destructive"
     with qtbot.waitSignal(quit_dialog.rejected):
         qtbot.mouseClick(quit_dialog.quit_button, Qt.LeftButton)
 
@@ -50,6 +60,27 @@ def test_docker_check_quit_button_has_readable_yellow_contrast(qtbot):
 
     assert "#1F2937" in stylesheet
     assert "#C4AC26" not in stylesheet
+    assert 'border-radius: 8px' in stylesheet
+    assert 'border-radius: 15px' not in stylesheet
+
+
+def test_docker_check_dialog_centers_on_visible_parent(qtbot):
+    parent = QDialog()
+    parent.setGeometry(100, 120, 700, 500)
+    qtbot.addWidget(parent)
+    parent.show()
+    qtbot.waitUntil(parent.isVisible)
+
+    dialog = docker_check_module.DockerCheckDialog(parent)
+    qtbot.addWidget(dialog)
+    dialog.show()
+    qtbot.waitUntil(dialog.isVisible)
+
+    parent_center = parent.frameGeometry().center()
+    dialog_center = dialog.frameGeometry().center()
+
+    assert abs(dialog_center.x() - parent_center.x()) <= 6
+    assert abs(dialog_center.y() - parent_center.y()) <= 6
 
 
 def test_image_pull_cancel_button_rejects_dialog(qtbot):
