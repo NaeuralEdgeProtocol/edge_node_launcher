@@ -42,7 +42,6 @@ from PyQt5.QtWidgets import (
   QListWidgetItem,
   QSizePolicy
 )
-from PyQt5 import sip
 from PyQt5.QtCore import (
     Qt, QTimer, QSize, QThread, QObject, pyqtSignal, QUrl, QSettings, QRect,
     QProcess, QPropertyAnimation, QModelIndex, QSortFilterProxyModel
@@ -73,7 +72,6 @@ from utils.docker_errors import extract_conflicting_container_id
 from utils.config_manager import ConfigManager, ContainerConfig
 from utils.container_selection import SelectedContainer, selected_container_from_combo, select_container_by_name
 from utils.lifecycle_copy import (
-  launch_dialog_copy,
   launch_success_notification,
   new_node_success_notification,
   stop_dialog_copy,
@@ -81,6 +79,7 @@ from utils.lifecycle_copy import (
 )
 from utils.lifecycle_state import LifecycleState
 from utils.window_geometry import calculate_initial_window_geometry, calculate_restored_window_geometry, calculate_visible_frame_client_geometry, format_rect
+from widgets.app_widgets.lifecycle_dialog_presenter import LifecycleDialogPresenter
 
 from utils.icon import ICON_BASE64
 
@@ -166,6 +165,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     
     # Track Docker pull state to prevent concurrent pulls
     self.__lifecycle_state = LifecycleState()
+    self._lifecycle_dialogs = LifecycleDialogPresenter(self)
     self.__docker_pull_in_progress = False
     self.__pending_launch_context = None
     self.__active_lifecycle_operation = None
@@ -830,59 +830,18 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   @staticmethod
   def _qt_object_deleted(obj) -> bool:
     """Return True when a Qt wrapper no longer owns a live C++ object."""
-    if obj is None:
-      return True
-
-    try:
-      return sip.isdeleted(obj)
-    except (RuntimeError, TypeError):
-      return True
+    return LifecycleDialogPresenter.qt_object_deleted(obj)
 
   def _clear_dialog_reference(self, dialog_attr: str, dialog=None) -> None:
     """Clear a dialog attribute when it still points at the supplied dialog."""
-    if not hasattr(self, dialog_attr):
-      return
-
-    try:
-      current_dialog = getattr(self, dialog_attr)
-    except RuntimeError:
-      setattr(self, dialog_attr, None)
-      return
-
-    if dialog is None or current_dialog is dialog:
-      setattr(self, dialog_attr, None)
+    self._lifecycle_dialogs.clear_reference(dialog_attr, dialog)
 
   def _dialog_reference(self, dialog_attr: str):
     """Return a live dialog reference or clear stale/deleted wrappers."""
-    if not hasattr(self, dialog_attr):
-      return None
-
-    try:
-      dialog = getattr(self, dialog_attr)
-    except RuntimeError:
-      setattr(self, dialog_attr, None)
-      return None
-
-    if dialog is None:
-      return None
-
-    if self._qt_object_deleted(dialog):
-      setattr(self, dialog_attr, None)
-      self.add_log(f"Cleared deleted {dialog_attr}", debug=True)
-      return None
-
-    return dialog
+    return self._lifecycle_dialogs.reference(dialog_attr)
 
   def _dialog_is_visible(self, dialog_attr: str) -> bool:
-    dialog = self._dialog_reference(dialog_attr)
-    if dialog is None:
-      return False
-
-    try:
-      return dialog.isVisible()
-    except RuntimeError:
-      self._clear_dialog_reference(dialog_attr, dialog)
-      return False
+    return self._lifecycle_dialogs.is_visible(dialog_attr)
 
   def _update_dialog_progress(
     self,
@@ -892,29 +851,16 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     require_visible: bool = False,
     process_events: bool = True,
   ) -> bool:
-    dialog = self._dialog_reference(dialog_attr)
-    if dialog is None:
-      return False
-    if require_visible and not self._dialog_is_visible(dialog_attr):
-      return False
-
-    try:
-      dialog.update_progress(message, process_events=process_events)
-      return True
-    except TypeError:
-      dialog.update_progress(message)
-      return True
-    except RuntimeError:
-      self._clear_dialog_reference(dialog_attr, dialog)
-      return False
+    return self._lifecycle_dialogs.update_progress(
+      dialog_attr,
+      message,
+      require_visible=require_visible,
+      process_events=process_events,
+    )
 
   def _update_launch_dialog_progress(self, message: str, *, process_events: bool = True) -> bool:
-    if self._update_dialog_progress("launcher_dialog", message, process_events=process_events):
-      return True
-    return self._update_dialog_progress(
-      "startup_dialog",
+    return self._lifecycle_dialogs.update_launch_progress(
       message,
-      require_visible=True,
       process_events=process_events,
     )
 
@@ -926,60 +872,21 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     message: str,
     progress_message: str = None,
   ):
-    dialog = LoadingDialog(
-      self,
+    return self._lifecycle_dialogs.show_loading_reference(
+      dialog_attr,
       title=title,
       message=message,
-      size=50,
+      progress_message=progress_message,
     )
-    setattr(self, dialog_attr, dialog)
-    dialog.show()
-
-    if progress_message:
-      self._update_dialog_progress(dialog_attr, progress_message)
-
-    self._queue_ui_refresh(dialog)
-    return dialog
 
   def _show_launch_loading_dialog(self, node_alias: str = None):
-    dialog_copy = launch_dialog_copy(node_alias)
-    return self._show_loading_dialog_reference(
-      "launcher_dialog",
-      title=dialog_copy.title,
-      message=dialog_copy.message,
-      progress_message="Preparing to launch Docker container...",
-    )
+    return self._lifecycle_dialogs.show_launch_loading(node_alias)
 
   def _show_new_node_loading_dialog(self, display_name: str = None):
-    dialog_copy = launch_dialog_copy(display_name, is_new_node=True)
-    return self._show_loading_dialog_reference(
-      "startup_dialog",
-      title=dialog_copy.title,
-      message=dialog_copy.message,
-    )
+    return self._lifecycle_dialogs.show_new_node_loading(display_name)
 
   def _safe_close_dialog_reference(self, dialog_attr: str, dialog=None) -> bool:
-    if dialog is None:
-      dialog = self._dialog_reference(dialog_attr)
-    if dialog is None:
-      return False
-
-    if self._dialog_reference(dialog_attr) is not dialog:
-      return False
-
-    try:
-      if hasattr(dialog, "safe_close"):
-        dialog.safe_close()
-      else:
-        dialog.close()
-      return True
-    except RuntimeError as e:
-      if "wrapped C/C++ object" in str(e):
-        self._clear_dialog_reference(dialog_attr, dialog)
-        self.add_log(f"Cleared deleted {dialog_attr}", debug=True)
-        return False
-      self.add_log(f"Error closing {dialog_attr}: {str(e)}", debug=True)
-      return False
+    return self._lifecycle_dialogs.safe_close_reference(dialog_attr, dialog)
 
   def _schedule_safe_close_dialog_reference(
     self,
@@ -989,19 +896,11 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     clear_delay_ms: int,
   ) -> bool:
     """Close and clear a dialog later without clearing a newer replacement."""
-    dialog = self._dialog_reference(dialog_attr)
-    if dialog is None:
-      return False
-
-    QTimer.singleShot(
-      close_delay_ms,
-      lambda dialog=dialog: self._safe_close_dialog_reference(dialog_attr, dialog),
+    return self._lifecycle_dialogs.schedule_safe_close_reference(
+      dialog_attr,
+      close_delay_ms=close_delay_ms,
+      clear_delay_ms=clear_delay_ms,
     )
-    QTimer.singleShot(
-      clear_delay_ms,
-      lambda dialog=dialog: self._clear_dialog_reference(dialog_attr, dialog),
-    )
-    return True
 
   def _schedule_safe_close_launch_dialog_references(
     self,
@@ -1009,57 +908,23 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     close_delay_ms: int = 0,
     clear_delay_ms: int = 500,
   ) -> None:
-    for dialog_attr in ("launcher_dialog", "startup_dialog"):
-      self._schedule_safe_close_dialog_reference(
-        dialog_attr,
-        close_delay_ms=close_delay_ms,
-        clear_delay_ms=clear_delay_ms,
-      )
+    self._lifecycle_dialogs.schedule_safe_close_launch_references(
+      close_delay_ms=close_delay_ms,
+      clear_delay_ms=clear_delay_ms,
+    )
 
   def _set_docker_pull_complete(self, success: bool, message: str) -> bool:
-    dialog = self._dialog_reference("docker_pull_dialog")
-    if dialog is None:
-      return False
-
-    try:
-      dialog.set_pull_complete(success, message)
-      return True
-    except RuntimeError:
-      self._clear_dialog_reference("docker_pull_dialog", dialog)
-      return False
+    return self._lifecycle_dialogs.set_docker_pull_complete(success, message)
 
   def _update_docker_pull_progress(self, line: str) -> bool:
-    dialog = self._dialog_reference("docker_pull_dialog")
-    if dialog is None:
-      return False
-
-    try:
-      dialog.update_pull_progress(line)
-      return True
-    except RuntimeError:
-      self._clear_dialog_reference("docker_pull_dialog", dialog)
-      return False
+    return self._lifecycle_dialogs.update_docker_pull_progress(line)
 
   def _close_docker_pull_dialog_reference(self) -> bool:
-    dialog = self._dialog_reference("docker_pull_dialog")
-    if dialog is None:
-      return False
-
-    closed = self._safe_close_dialog_reference("docker_pull_dialog", dialog)
-    self._clear_dialog_reference("docker_pull_dialog", dialog)
-    return closed
+    return self._lifecycle_dialogs.close_docker_pull_reference()
 
   def _close_dialog_reference(self, dialog_attr: str) -> bool:
     """Close a stored dialog reference, tolerating already-deleted Qt wrappers."""
-    dialog = self._dialog_reference(dialog_attr)
-    if dialog is None:
-      return False
-
-    closed = self._safe_close_dialog_reference(dialog_attr, dialog)
-    if closed:
-      self._clear_dialog_reference(dialog_attr, dialog)
-      self.add_log(f"Closed {dialog_attr}", debug=True)
-    return closed
+    return self._lifecycle_dialogs.close_reference(dialog_attr)
 
   def _is_shutting_down(self) -> bool:
     return getattr(self, "_EdgeNodeLauncher__shutting_down", False)

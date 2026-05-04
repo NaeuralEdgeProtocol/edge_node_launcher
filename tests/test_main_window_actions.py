@@ -14,6 +14,7 @@ from widgets.DockerPullDialog import DockerPullDialog
 from widgets.ToastWidget import NotificationType
 import widgets.app_widgets.dashboard_panel as dashboard_panel_module
 from widgets.app_widgets.activity_log import ActivityLogWidget
+from widgets.app_widgets.lifecycle_dialog_presenter import LifecycleDialogPresenter
 from widgets.app_widgets.sidebar_status_cards import NodeStatusPanel, ResourceStatusPanel
 
 
@@ -596,6 +597,19 @@ def test_new_node_loading_dialog_helper_preserves_initial_copy(qtbot, monkeypatc
     assert launcher.startup_dialog is dialog
     assert dialog.windowTitle() == "Starting Node"
     assert dialog.message_label.text() == "Please wait while node 'beta' is being launched..."
+
+
+def test_lifecycle_dialog_presenter_backs_launcher_dialog_helpers(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+
+    assert isinstance(launcher._lifecycle_dialogs, LifecycleDialogPresenter)
+
+    dialog = launcher._show_launch_loading_dialog("alpha")
+
+    assert launcher._dialog_reference("launcher_dialog") is dialog
+    assert launcher._lifecycle_dialogs.reference("launcher_dialog") is dialog
+    assert launcher._update_launch_dialog_progress("Launching Docker container...")
+    assert dialog.message_label.text() == "Launching Docker container..."
 
 
 def test_stop_return_code_failure_closes_dialog_and_clears_lifecycle(qtbot, monkeypatch):
