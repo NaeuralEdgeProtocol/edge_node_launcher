@@ -1,3 +1,4 @@
+from utils import config_manager
 from utils.config_manager import ConfigManager, ContainerConfig
 
 
@@ -99,3 +100,49 @@ def test_config_manager_ignores_invalid_main_window_geometry(tmp_path):
     }
 
     assert manager.get_main_window_geometry() is None
+
+
+def test_config_manager_volume_check_uses_timeout_and_hides_windows_console(monkeypatch, tmp_path):
+    manager = ConfigManager(config_dir=str(tmp_path))
+    calls = []
+    create_no_window = 0x08000000
+
+    class FakeResult:
+        returncode = 0
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return FakeResult()
+
+    monkeypatch.setattr(config_manager.os, "name", "nt")
+    monkeypatch.setattr(
+        config_manager.subprocess,
+        "CREATE_NO_WINDOW",
+        create_no_window,
+        raising=False,
+    )
+    monkeypatch.setattr(config_manager.subprocess, "run", fake_run)
+
+    assert manager.volume_exists_in_docker("r1vol") is True
+    assert calls == [
+        (
+            ["docker", "volume", "inspect", "r1vol"],
+            {
+                "capture_output": True,
+                "text": True,
+                "timeout": config_manager.DOCKER_VOLUME_CHECK_TIMEOUT,
+                "creationflags": create_no_window,
+            },
+        )
+    ]
+
+
+def test_config_manager_volume_check_returns_false_on_timeout(monkeypatch, tmp_path):
+    manager = ConfigManager(config_dir=str(tmp_path))
+
+    def fake_run(command, **kwargs):
+        raise config_manager.subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr(config_manager.subprocess, "run", fake_run)
+
+    assert manager.volume_exists_in_docker("r1vol") is False

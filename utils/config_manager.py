@@ -1,9 +1,14 @@
 import os
 import json
 import logging
+import subprocess
 from pathlib import Path
 from typing import List, Dict, Optional, Any
 from utils.const import CONFIG_DIR
+
+DOCKER_VOLUME_CHECK_TIMEOUT = 10
+WINDOWS_CREATE_NO_WINDOW = 0x08000000
+
 
 # Container configuration structure
 class ContainerConfig:
@@ -217,26 +222,29 @@ class ConfigManager:
         Returns:
             bool: True if the volume exists, False otherwise
         """
+        command = ['docker', 'volume', 'inspect', volume_name]
+        kwargs = {
+            "capture_output": True,
+            "text": True,
+            "timeout": DOCKER_VOLUME_CHECK_TIMEOUT,
+        }
+        if os.name == 'nt':
+            kwargs["creationflags"] = getattr(
+                subprocess,
+                "CREATE_NO_WINDOW",
+                WINDOWS_CREATE_NO_WINDOW,
+            )
+
         try:
-            import subprocess
-            import os
-            
-            # Command to check if volume exists
-            command = ['docker', 'volume', 'inspect', volume_name]
-            
-            # Execute command
-            if os.name == 'nt':
-                result = subprocess.run(
-                    command,
-                    capture_output=True,
-                    text=True,
-                    creationflags=subprocess.CREATE_NO_WINDOW
-                )
-            else:
-                result = subprocess.run(command, capture_output=True, text=True)
-                
-            # Return True if command was successful (volume exists)
+            result = subprocess.run(command, **kwargs)
             return result.returncode == 0
+        except subprocess.TimeoutExpired:
+            logging.warning(
+                "Docker volume check timed out after %s seconds for %s",
+                DOCKER_VOLUME_CHECK_TIMEOUT,
+                volume_name,
+            )
+            return False
         except Exception as e:
             logging.error(f"Error checking if volume exists: {str(e)}")
             return False
