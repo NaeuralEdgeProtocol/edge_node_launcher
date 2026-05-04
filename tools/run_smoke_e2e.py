@@ -93,12 +93,23 @@ def wait_until(app, predicate, timeout, label, interval=0.1):
 def window_snapshot(launcher):
     frame = launcher.frameGeometry()
     client = launcher.geometry()
-    return {
+    snapshot = {
         "title": launcher.windowTitle(),
         "client": {"x": client.x(), "y": client.y(), "w": client.width(), "h": client.height()},
         "frame": {"x": frame.x(), "y": frame.y(), "w": frame.width(), "h": frame.height()},
         "visible": launcher.isVisible(),
     }
+    if hasattr(launcher, "_available_screen_geometry"):
+        available = launcher._available_screen_geometry()
+        snapshot["available"] = rect_snapshot(available)
+        snapshot["title_bar_visible"] = frame.y() >= available.y()
+        snapshot["frame_inside_available"] = (
+            frame.x() >= available.x()
+            and frame.y() >= available.y()
+            and frame.x() + frame.width() <= available.x() + available.width()
+            and frame.y() + frame.height() <= available.y() + available.height()
+        )
+    return snapshot
 
 
 def rect_snapshot(rect):
@@ -605,7 +616,12 @@ def run_scenarios(args):
     app.processEvents()
 
     try:
-        record_step(log, args.output, {"step": "window shown", "window": window_snapshot(launcher)})
+        shown_window = window_snapshot(launcher)
+        record_step(log, args.output, {"step": "window shown", "window": shown_window})
+        if not shown_window.get("title_bar_visible", True):
+            raise AssertionError(
+                f"window title bar is outside the available screen area: {shown_window}"
+            )
         startup_visual = capture_visual_evidence(launcher, args.screenshot_dir, "startup")
         record_step(log, args.output, {"step": "captured startup visual evidence", "visual": startup_visual})
         if not startup_visual["sidebar"]["passed"]:
