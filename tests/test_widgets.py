@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QGridLayout,
     QLabel,
     QProgressBar,
     QScrollArea,
@@ -315,6 +316,7 @@ def test_sidebar_status_card_panels_expose_stable_controls(qtbot):
     assert node_panel.copyEthButton.toolTip() == "Copy Ethereum address"
     assert not node_panel.copyAddrButton.isVisible()
     assert not node_panel.copyEthButton.isVisible()
+    assert node_panel.findChild(QGridLayout, "nodeMetadataGrid") is not None
 
     for label in (
         node_panel.nameDisplay,

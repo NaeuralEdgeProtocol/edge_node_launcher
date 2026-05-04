@@ -2,6 +2,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QGroupBox,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -174,13 +175,13 @@ class NodeStatusPanel(QGroupBox):
         button.setAccessibleName(accessible_name)
         button.setToolTip(tooltip)
         button.clicked.connect(handler)
-        button.setFixedSize(28, 28)
+        button.setFixedSize(24, 24)
         button.hide()
         return button
 
     def _init_layout(self) -> None:
         layout = QVBoxLayout()
-        layout.setContentsMargins(5, 6, 5, 6)
+        layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(3)
         layout.addWidget(self.node_status_title)
         layout.addWidget(self.edgeImageBadge)
@@ -196,10 +197,7 @@ class NodeStatusPanel(QGroupBox):
         layout.addLayout(self._create_address_row(self.addressDisplay, self.copyAddrButton))
         layout.addLayout(self._create_address_row(self.ethAddressDisplay, self.copyEthButton))
         layout.addWidget(self.nameDisplay)
-        layout.addWidget(self.node_uptime)
-        layout.addWidget(self.node_epoch)
-        layout.addWidget(self.node_epoch_avail)
-        layout.addWidget(self.node_version)
+        layout.addLayout(self._create_metadata_grid())
         self.setLayout(layout)
 
     def set_edge_image_badge(self, text: str, tooltip: str = "", visible: bool = True) -> None:
@@ -214,6 +212,20 @@ class NodeStatusPanel(QGroupBox):
         row.addWidget(label, 1)
         row.addWidget(button)
         return row
+
+    def _create_metadata_grid(self) -> QGridLayout:
+        grid = QGridLayout()
+        grid.setObjectName("nodeMetadataGrid")
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(6)
+        grid.setVerticalSpacing(1)
+        grid.addWidget(self.node_uptime, 0, 0)
+        grid.addWidget(self.node_epoch, 0, 1)
+        grid.addWidget(self.node_epoch_avail, 1, 0)
+        grid.addWidget(self.node_version, 1, 1)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        return grid
 
 
 class ResourceStatusPanel(QGroupBox):
