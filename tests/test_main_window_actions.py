@@ -2017,6 +2017,22 @@ def test_add_new_node_does_not_override_active_lifecycle(qtbot, monkeypatch):
     assert getattr(launcher, "startup_dialog", None) is None
 
 
+def test_register_and_select_new_node_updates_config_selector_and_handler(qtbot, monkeypatch):
+    launcher, fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+
+    container_config = launcher._register_and_select_new_node("r1node2", "r1vol2", "beta")
+
+    assert container_config.name == "r1node2"
+    assert container_config.volume == "r1vol2"
+    assert container_config.node_alias == "beta"
+    assert fake_config.get_container("r1node2") is container_config
+    assert launcher._selected_container_name() == "r1node2"
+    assert fake_handler.container_name == "r1node2"
+    assert fake_handler.container_names[-1] == "r1node2"
+    assert "T" in container_config.created_at
+    assert "T" in container_config.last_used
+
+
 def test_main_window_graph_plots_stay_inside_styled_containers(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
     layout = launcher.graphView.layout()

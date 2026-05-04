@@ -2726,7 +2726,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     """Add a new node with the given container name and volume name,
        select it in the UI, and start it immediately."""
     try:
-      from datetime import datetime
       if not self._try_begin_lifecycle_operation("add_node", container_name):
         return
 
@@ -2751,39 +2750,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       if self._skip_lifecycle_callback_if_shutting_down("add-node continuation", container_name):
         return
 
-      from datetime import datetime
-
       # Mark that user is intentionally starting a new container (clear stop flag)
       self.user_stopped_container = False
-    
-      # 1) Create & store this container's config
-      container_config = ContainerConfig(
-        name=container_name,
-        volume=volume_name,
-        created_at=datetime.now().isoformat(),
-        last_used=datetime.now().isoformat(),
-        node_alias=display_name
-      )
-      self.config_manager.add_container(container_config)
-
-      # 2) Refresh the list in the combo box, so it includes the new container
-      self.refresh_container_list()
-
-      # 3) Programmatically select the newly created container in the ComboBox
-      #    We typically match itemData(...) to the container_name
-      index = -1
-      for i in range(self.container_combo.count()):
-        if self.container_combo.itemData(i) == container_name:
-          index = i
-          break
-
-      if index >= 0:
-        self.container_combo.setCurrentIndex(index)
-
-      # 4) Tell the Docker handler to manage this newly selected container
-      self.docker_handler.set_container_name(container_name)
-
-      # 5) Actually start (launch) the container so it shows "active" in the UI
+      self._register_and_select_new_node(container_name, volume_name, display_name)
       self.launch_container(volume_name)
 
       self.add_log(f"Successfully created and started new node: {container_name}", color="green")
@@ -2799,6 +2768,21 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         close_delay_ms=0,
         clear_delay_ms=500,
       )
+
+  def _register_and_select_new_node(self, container_name: str, volume_name: str, display_name: str = None) -> ContainerConfig:
+    """Create config for a new node, refresh selection, and target Docker operations."""
+    container_config = ContainerConfig(
+      name=container_name,
+      volume=volume_name,
+      created_at=datetime.now().isoformat(),
+      last_used=datetime.now().isoformat(),
+      node_alias=display_name,
+    )
+    self.config_manager.add_container(container_config)
+    self.refresh_container_list()
+    self._select_container_by_name(container_name)
+    self.docker_handler.set_container_name(container_name)
+    return container_config
 
   def launch_container(self, volume_name: str = None):
     """Launch the currently selected container with a mounted volume.
