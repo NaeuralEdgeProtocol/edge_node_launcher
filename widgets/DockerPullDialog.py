@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
 import re
 import logging
+import hashlib
 
 class DockerPullDialog(QDialog):
     """Dialog for Docker image pull progress."""
@@ -79,7 +80,6 @@ class DockerPullDialog(QDialog):
             QFrame {
                 background-color: #1e293b;
                 border-radius: 8px;
-                padding: 15px;
             }
         """)
         
@@ -115,7 +115,7 @@ class DockerPullDialog(QDialog):
         scroll_content.setAccessibleName("Docker pull layer list content")
         scroll_layout = QVBoxLayout(scroll_content)
         scroll_layout.setSpacing(12)
-        scroll_layout.setContentsMargins(15, 15, 15, 15)
+        scroll_layout.setContentsMargins(12, 12, 12, 12)
         
         # Layer label
         layer_label = QLabel("Layer Progress:")
@@ -161,6 +161,67 @@ class DockerPullDialog(QDialog):
     def _layer_object_suffix(layer_id):
         safe_layer_id = re.sub(r"[^A-Za-z0-9_]", "_", layer_id)
         return safe_layer_id[:48]
+
+    @staticmethod
+    def _synthetic_layer_id(line):
+        normalized = line.strip().encode("utf-8")
+        return hashlib.sha1(normalized).hexdigest()[:12]
+
+    def _create_layer_row(self, layer_id, label_text, status, accessible_name):
+        layer_layout = QHBoxLayout()
+        layer_layout.setSpacing(12)
+        object_suffix = self._layer_object_suffix(layer_id)
+
+        layer_label = QLabel(label_text)
+        layer_label.setObjectName(f"dockerPullLayerLabel_{object_suffix}")
+        layer_label.setAccessibleName(accessible_name)
+        layer_label.setFixedWidth(90)
+        layer_label.setStyleSheet("color: #60a5fa; font-weight: bold; font-family: monospace; font-size: 13px;")
+
+        status_label = QLabel(status)
+        status_label.setObjectName(f"dockerPullLayerStatus_{object_suffix}")
+        status_label.setAccessibleName(f"{accessible_name} status")
+        status_label.setStyleSheet("color: #e2e8f0; font-family: monospace; font-size: 13px;")
+        status_label.setWordWrap(True)
+        status_label.setMinimumWidth(132)
+        status_label.setMaximumWidth(180)
+        status_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+        layer_progress = QProgressBar()
+        layer_progress.setObjectName(f"dockerPullLayerProgress_{object_suffix}")
+        layer_progress.setAccessibleName(f"{accessible_name} progress")
+        layer_progress.setRange(0, 100)
+        layer_progress.setValue(0)
+        layer_progress.setMinimumHeight(20)
+        layer_progress.setMinimumWidth(160)
+        layer_progress.setStyleSheet("""
+            QProgressBar {
+                border: 1px solid #475569;
+                border-radius: 5px;
+                text-align: center;
+                height: 20px;
+                background-color: #334155;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QProgressBar::chunk {
+                background-color: #3b82f6;
+                border-radius: 5px;
+            }
+        """)
+
+        layer_layout.addWidget(layer_label)
+        layer_layout.addWidget(layer_progress, 1)
+        layer_layout.addWidget(status_label)
+
+        widgets = {
+            'layout': layer_layout,
+            'label': layer_label,
+            'progress': layer_progress,
+            'status': status_label
+        }
+        self.layer_layout.addLayout(layer_layout)
+        return widgets
     
     @pyqtSlot(str)
     def update_pull_progress(self, line):
@@ -199,57 +260,12 @@ class DockerPullDialog(QDialog):
                 self.total_layers += 1
                 logging.info(f"New layer detected: {layer_id} - Total layers: {self.total_layers}")
                 
-                # Create progress bar for this layer
-                layer_layout = QHBoxLayout()
-                layer_layout.setSpacing(12)
-                object_suffix = self._layer_object_suffix(layer_id)
-                
-                layer_label = QLabel(f"{layer_id[:8]}...")
-                layer_label.setObjectName(f"dockerPullLayerLabel_{object_suffix}")
-                layer_label.setAccessibleName(f"Docker layer {layer_id[:8]}")
-                layer_label.setFixedWidth(90)
-                layer_label.setStyleSheet("color: #60a5fa; font-weight: bold; font-family: monospace; font-size: 13px;")
-                
-                status_label = QLabel(status)
-                status_label.setObjectName(f"dockerPullLayerStatus_{object_suffix}")
-                status_label.setAccessibleName(f"Docker layer {layer_id[:8]} status")
-                status_label.setStyleSheet("color: #e2e8f0; font-family: monospace; font-size: 13px;")
-                status_label.setWordWrap(True)
-                
-                layer_progress = QProgressBar()
-                layer_progress.setObjectName(f"dockerPullLayerProgress_{object_suffix}")
-                layer_progress.setAccessibleName(f"Docker layer {layer_id[:8]} progress")
-                layer_progress.setRange(0, 100)
-                layer_progress.setValue(0)
-                layer_progress.setMinimumHeight(20)
-                layer_progress.setStyleSheet("""
-                    QProgressBar {
-                        border: 1px solid #475569;
-                        border-radius: 5px;
-                        text-align: center;
-                        height: 20px;
-                        background-color: #334155;
-                        font-size: 12px;
-                        font-weight: bold;
-                    }
-                    QProgressBar::chunk {
-                        background-color: #3b82f6;
-                        border-radius: 5px;
-                    }
-                """)
-                
-                layer_layout.addWidget(layer_label)
-                layer_layout.addWidget(layer_progress, 1)  # Give progress bar stretch factor
-                layer_layout.addWidget(status_label)
-                
-                self.layer_widgets[layer_id] = {
-                    'layout': layer_layout,
-                    'label': layer_label,
-                    'progress': layer_progress,
-                    'status': status_label
-                }
-                
-                self.layer_layout.addLayout(layer_layout)
+                self.layer_widgets[layer_id] = self._create_layer_row(
+                    layer_id,
+                    f"{layer_id[:8]}...",
+                    status,
+                    f"Docker layer {layer_id[:8]}",
+                )
             
             # Update layer status
             self.layers[layer_id]['status'] = status
@@ -289,8 +305,8 @@ class DockerPullDialog(QDialog):
         # Handle newer Docker output format with direct status updates
         elif "Downloading" in line or "Extracting" in line or "Download complete" in line or "Pull complete" in line:
             # For newer Docker output that doesn't always include layer IDs
-            # Create a synthetic layer ID based on the line content
-            line_hash = str(hash(line) % 10000).zfill(12)  # Create a 12-char hash as ID
+            # Create a stable synthetic layer ID based on the line content
+            line_hash = self._synthetic_layer_id(line)
             status = line.strip()
             
             # Initialize layer if not seen before
@@ -304,57 +320,12 @@ class DockerPullDialog(QDialog):
                 self.total_layers += 1
                 logging.info(f"New status line detected: {status} - Total layers: {self.total_layers}")
                 
-                # Create progress bar for this status
-                layer_layout = QHBoxLayout()
-                layer_layout.setSpacing(12)
-                object_suffix = self._layer_object_suffix(line_hash)
-                
-                layer_label = QLabel("Layer")
-                layer_label.setObjectName(f"dockerPullLayerLabel_{object_suffix}")
-                layer_label.setAccessibleName("Docker layer")
-                layer_label.setFixedWidth(90)
-                layer_label.setStyleSheet("color: #60a5fa; font-weight: bold; font-family: monospace; font-size: 13px;")
-                
-                status_label = QLabel(status)
-                status_label.setObjectName(f"dockerPullLayerStatus_{object_suffix}")
-                status_label.setAccessibleName("Docker layer status")
-                status_label.setStyleSheet("color: #e2e8f0; font-family: monospace; font-size: 13px;")
-                status_label.setWordWrap(True)
-                
-                layer_progress = QProgressBar()
-                layer_progress.setObjectName(f"dockerPullLayerProgress_{object_suffix}")
-                layer_progress.setAccessibleName("Docker layer progress")
-                layer_progress.setRange(0, 100)
-                layer_progress.setValue(0)
-                layer_progress.setMinimumHeight(20)
-                layer_progress.setStyleSheet("""
-                    QProgressBar {
-                        border: 1px solid #475569;
-                        border-radius: 5px;
-                        text-align: center;
-                        height: 20px;
-                        background-color: #334155;
-                        font-size: 12px;
-                        font-weight: bold;
-                    }
-                    QProgressBar::chunk {
-                        background-color: #3b82f6;
-                        border-radius: 5px;
-                    }
-                """)
-                
-                layer_layout.addWidget(layer_label)
-                layer_layout.addWidget(layer_progress, 1)  # Give progress bar stretch factor
-                layer_layout.addWidget(status_label)
-                
-                self.layer_widgets[line_hash] = {
-                    'layout': layer_layout,
-                    'label': layer_label,
-                    'progress': layer_progress,
-                    'status': status_label
-                }
-                
-                self.layer_layout.addLayout(layer_layout)
+                self.layer_widgets[line_hash] = self._create_layer_row(
+                    line_hash,
+                    "Layer",
+                    status,
+                    "Docker layer",
+                )
             
             # Update layer status
             self.layers[line_hash]['status'] = status

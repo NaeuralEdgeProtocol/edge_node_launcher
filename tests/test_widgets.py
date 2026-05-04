@@ -534,6 +534,24 @@ def test_docker_pull_dialog_updates_layer_progress_with_named_children(qtbot):
     assert dialog.findChild(QLabel, "dockerPullLayerStatus_abcdef123456").accessibleName() == "Docker layer abcdef12 status"
     assert dialog.findChild(QProgressBar, "dockerPullLayerProgress_abcdef123456").value() == 50
     assert dialog.findChild(QProgressBar, "dockerPullLayerProgress_abcdef123456").accessibleName() == "Docker layer abcdef12 progress"
+    assert dialog.findChild(QProgressBar, "dockerPullLayerProgress_abcdef123456").minimumWidth() == 160
+    assert dialog.findChild(QLabel, "dockerPullLayerStatus_abcdef123456").maximumWidth() == 180
+    assert dialog.findChild(QLabel, "dockerPullLayerStatus_abcdef123456").alignment() & Qt.AlignRight
+
+
+def test_docker_pull_dialog_uses_stable_synthetic_layer_ids(qtbot):
+    dialog = DockerPullDialog()
+    qtbot.addWidget(dialog)
+    line = "Downloading 2.0MB/4.0MB"
+    object_suffix = dialog._synthetic_layer_id(line)
+
+    dialog.update_pull_progress(line)
+
+    assert len(object_suffix) == 12
+    assert object_suffix == DockerPullDialog._synthetic_layer_id(line)
+    assert dialog.findChild(QLabel, f"dockerPullLayerLabel_{object_suffix}").text() == "Layer"
+    assert dialog.findChild(QLabel, f"dockerPullLayerStatus_{object_suffix}").text() == line
+    assert dialog.findChild(QProgressBar, f"dockerPullLayerProgress_{object_suffix}").value() == 50
 
 
 def test_node_info_widget_baseline_clear_and_uptime_format(qtbot):
