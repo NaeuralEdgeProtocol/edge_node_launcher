@@ -1737,6 +1737,24 @@ def test_launch_success_clears_dialog_reference_immediately(qtbot, monkeypatch):
     ]
 
 
+def test_resolve_launch_volume_name_uses_config_explicit_and_default(qtbot, monkeypatch):
+    launcher, fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    fake_config.volume_exists_in_docker = lambda volume_name: volume_name == "r1vol"
+
+    assert launcher._resolve_launch_volume_name("r1node") == "r1vol"
+    assert launcher._resolve_launch_volume_name("r1node", "custom-volume") == "custom-volume"
+    assert launcher._resolve_launch_volume_name("r1node", "") == frm_main.get_volume_name("r1node")
+    assert launcher._resolve_launch_volume_name("r1missing") == frm_main.get_volume_name("r1missing")
+
+    log_text = "\n".join(launcher.log_buffer)
+    if launcher.logView is not None:
+        log_text += launcher.logView.toPlainText()
+    assert "Using existing volume name from config: r1vol" in log_text
+    assert "Using existing volume: r1vol" in log_text
+    assert "Warning: No volume name provided for container r1node. Using default." in log_text
+    assert "Generated volume name:" in log_text
+
+
 def test_launch_preparation_does_not_run_blocking_docker_checks_on_ui_thread(qtbot, monkeypatch):
     launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
 

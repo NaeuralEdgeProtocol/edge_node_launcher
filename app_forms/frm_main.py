@@ -2813,31 +2813,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     self._begin_lifecycle_operation("launch", container_name)
     
-    # If volume_name is not provided, try to get it from config
-    if volume_name is None:
-        container_config = self.config_manager.get_container(container_name)
-        if container_config and container_config.volume:
-            volume_name = container_config.volume
-            self.add_log(f"Using existing volume name from config: {volume_name}", debug=True)
-        else:
-            # Generate volume name based on container name
-            volume_name = get_volume_name(container_name)
-            self.add_log(f"Generated volume name: {volume_name}", debug=True)
-    
     # Mark that user is intentionally launching the container (clear stop flag)
     self.user_stopped_container = False
-    
-    # Ensure volume_name is not None or empty
-    if not volume_name:
-        self.add_log(f"Warning: No volume name provided for container {container_name}. Using default.", color="yellow")
-        volume_name = get_volume_name(container_name)
-    
-    # Check if volume exists in Docker
-    volume_exists = self.config_manager.volume_exists_in_docker(volume_name)
-    if not volume_exists:
-        self.add_log(f"Volume {volume_name} does not exist. It will be created automatically.", debug=True)
-    else:
-        self.add_log(f"Using existing volume: {volume_name}", debug=True)
+    volume_name = self._resolve_launch_volume_name(container_name, volume_name)
     
     self.add_log(f'Launching container {container_name} with volume {volume_name}...')
     
@@ -2870,6 +2848,29 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         error_msg = f"Failed to launch container: {str(e)}"
         self.add_log(error_msg, color="red")
         self.toast.show_notification(NotificationType.ERROR, error_msg)
+
+  def _resolve_launch_volume_name(self, container_name: str, volume_name: str = None) -> str:
+    """Resolve and log the Docker volume used for a launch request."""
+    if volume_name is None:
+        container_config = self.config_manager.get_container(container_name)
+        if container_config and container_config.volume:
+            volume_name = container_config.volume
+            self.add_log(f"Using existing volume name from config: {volume_name}", debug=True)
+        else:
+            volume_name = get_volume_name(container_name)
+            self.add_log(f"Generated volume name: {volume_name}", debug=True)
+
+    if not volume_name:
+        self.add_log(f"Warning: No volume name provided for container {container_name}. Using default.", color="yellow")
+        volume_name = get_volume_name(container_name)
+
+    volume_exists = self.config_manager.volume_exists_in_docker(volume_name)
+    if not volume_exists:
+        self.add_log(f"Volume {volume_name} does not exist. It will be created automatically.", debug=True)
+    else:
+        self.add_log(f"Using existing volume: {volume_name}", debug=True)
+
+    return volume_name
 
   def _perform_container_launch(self, container_name, volume_name):
     """Perform the actual container launch operation after the dialog is shown."""
