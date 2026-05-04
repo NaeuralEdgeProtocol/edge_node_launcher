@@ -1755,6 +1755,60 @@ def test_resolve_launch_volume_name_uses_config_explicit_and_default(qtbot, monk
     assert "Generated volume name:" in log_text
 
 
+def test_launch_dialog_handoff_creates_dialog_before_launch(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launch_requests = []
+    delayed_calls = []
+
+    launcher._perform_container_launch = (
+        lambda container_name, volume_name: launch_requests.append((container_name, volume_name))
+    )
+    monkeypatch.setattr(
+        frm_main.QTimer,
+        "singleShot",
+        lambda delay_ms, callback: delayed_calls.append((delay_ms, callback)),
+    )
+
+    launcher._launch_with_dialog_handoff("r1node", "r1vol")
+
+    assert launcher.launcher_dialog is not None
+    assert launcher.launcher_dialog.message_label.text() == "Preparing to launch Docker container..."
+    handoff_calls = [callback for delay_ms, callback in delayed_calls if delay_ms == 100]
+    assert len(handoff_calls) == 1
+    assert launch_requests == []
+
+    handoff_calls[0]()
+
+    assert launch_requests == [("r1node", "r1vol")]
+
+
+def test_launch_dialog_handoff_reuses_visible_startup_dialog(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launch_requests = []
+    delayed_calls = []
+    launcher.startup_dialog = frm_main.LoadingDialog(
+        launcher,
+        title="Starting Node",
+        message="Please wait",
+    )
+    qtbot.addWidget(launcher.startup_dialog)
+    launcher.startup_dialog.show()
+    launcher._perform_container_launch = (
+        lambda container_name, volume_name: launch_requests.append((container_name, volume_name))
+    )
+    monkeypatch.setattr(
+        frm_main.QTimer,
+        "singleShot",
+        lambda delay_ms, callback: delayed_calls.append((delay_ms, callback)),
+    )
+
+    launcher._launch_with_dialog_handoff("r1node", "r1vol")
+
+    assert not any(delay_ms == 100 for delay_ms, _callback in delayed_calls)
+    assert launch_requests == [("r1node", "r1vol")]
+    assert launcher.startup_dialog.message_label.text() == "Launching Docker container..."
+
+
 def test_launch_preparation_does_not_run_blocking_docker_checks_on_ui_thread(qtbot, monkeypatch):
     launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
 

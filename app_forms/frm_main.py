@@ -2820,24 +2820,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.add_log(f'Launching container {container_name} with volume {volume_name}...')
     
     try:
-        # Show loading dialog if not already showing one from add_new_node or toggle_container
-        startup_dialog_visible = self._lifecycle_dialogs.is_visible("startup_dialog")
-        launcher_dialog_visible = self._lifecycle_dialogs.reference("launcher_dialog") is not None
-        
-        if not startup_dialog_visible and not launcher_dialog_visible:
-            container_config = self.config_manager.get_container(container_name)
-            node_alias = container_config.node_alias if container_config and container_config.node_alias else None
-            self._lifecycle_dialogs.show_launch_loading(node_alias)
-            
-            # Add a small delay to ensure dialog is fully rendered
-            QTimer.singleShot(100, lambda: self._perform_container_launch(container_name, volume_name))
-        else:
-            # If we already have a dialog visible, just perform the launch
-            # Update whichever launch dialog is currently active.
-            self._lifecycle_dialogs.update_launch_progress("Launching Docker container...")
-                
-            # Perform the launch operation
-            self._perform_container_launch(container_name, volume_name)
+        self._launch_with_dialog_handoff(container_name, volume_name)
             
     except Exception as e:
         # Stop loading indicator on error
@@ -2871,6 +2854,21 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.add_log(f"Using existing volume: {volume_name}", debug=True)
 
     return volume_name
+
+  def _launch_with_dialog_handoff(self, container_name: str, volume_name: str) -> None:
+    """Show or reuse launch UI before continuing into Docker launch preparation."""
+    startup_dialog_visible = self._lifecycle_dialogs.is_visible("startup_dialog")
+    launcher_dialog_visible = self._lifecycle_dialogs.reference("launcher_dialog") is not None
+
+    if not startup_dialog_visible and not launcher_dialog_visible:
+        container_config = self.config_manager.get_container(container_name)
+        node_alias = container_config.node_alias if container_config and container_config.node_alias else None
+        self._lifecycle_dialogs.show_launch_loading(node_alias)
+        QTimer.singleShot(100, lambda: self._perform_container_launch(container_name, volume_name))
+        return
+
+    self._lifecycle_dialogs.update_launch_progress("Launching Docker container...")
+    self._perform_container_launch(container_name, volume_name)
 
   def _perform_container_launch(self, container_name, volume_name):
     """Perform the actual container launch operation after the dialog is shown."""
