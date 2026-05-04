@@ -297,6 +297,10 @@ def test_sidebar_status_card_panels_expose_stable_controls(qtbot):
     assert node_panel.node_status_title.objectName() == "nodeStatusCardTitle"
     assert node_panel.node_status_title.text() == "Node Details"
     assert node_panel.node_status_title.property("role") == "sidebarCardTitle"
+    assert node_panel.edgeImageBadge.objectName() == "edgeImageBadge"
+    assert node_panel.edgeImageBadge.property("role") == "edgeImageBadge"
+    assert node_panel.edgeImageBadge.accessibleName() == "Edge Node Docker image"
+    assert not node_panel.edgeImageBadge.isVisible()
     assert node_panel.addressDisplay.objectName() == "nodeAddressDisplay"
     assert node_panel.addressDisplay.property("statusField") == "address"
     assert node_panel.addressDisplay.font().family() == "Courier New"
@@ -325,8 +329,12 @@ def test_sidebar_status_card_panels_expose_stable_controls(qtbot):
 
     node_panel.copyAddrButton.click()
     node_panel.copyEthButton.click()
+    node_panel.set_edge_image_badge("Devnet", "Using devnet image")
 
     assert calls == ["node", "eth"]
+    assert not node_panel.edgeImageBadge.isHidden()
+    assert node_panel.edgeImageBadge.text() == "Devnet"
+    assert node_panel.edgeImageBadge.toolTip() == "Using devnet image"
 
     assert resource_panel.objectName() == "resourcesBox"
     assert resource_panel.property("role") == "resourcePanel"

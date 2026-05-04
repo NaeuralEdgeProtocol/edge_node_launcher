@@ -109,6 +109,18 @@ To install and run Edge Node Launcher, follow these steps:
    .venv/bin/python main.py
    ```
 
+   Local devnet testing can explicitly select the devnet edge-node image:
+   ```sh
+   # Windows
+   .venv/Scripts/python.exe main.py --edge-image ratio1/edge_node:devnet
+
+   # macOS/Linux
+   R1_EDGE_NODE_IMAGE=ratio1/edge_node:devnet .venv/bin/python main.py
+   ```
+
+   Packaged production builds always use `ratio1/edge_node:mainnet`; non-mainnet
+   image overrides are for source/E2E testing only.
+
 ## Building the Application
 
 The repository uses GitHub Actions to build and release binaries for different platforms (Windows, Ubuntu 22.04, and Ubuntu 20.04). The build process includes:

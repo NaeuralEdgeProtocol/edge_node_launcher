@@ -1,6 +1,7 @@
 from utils import docker_commands
 from utils import docker as docker_utils
 from utils.const import DOCKER_VOLUME_PATH
+from utils.edge_image_config import DEVNET_EDGE_NODE_IMAGE, configure_edge_node_image
 
 
 class FakeRegistry:
@@ -26,6 +27,18 @@ def test_launch_command_uses_expected_container_volume_and_image(monkeypatch):
     assert command[command.index("--name") + 1] == "r1node"
     assert command[command.index("-v") + 1] == f"ratio1_vol:{DOCKER_VOLUME_PATH}"
     assert command[-1] == docker_commands.DOCKER_IMAGE
+
+
+def test_launch_command_uses_configured_devnet_image(monkeypatch):
+    configure_edge_node_image(cli_image="devnet", environ={}, production_mode=False)
+    handler = make_handler(monkeypatch)
+    monkeypatch.setattr(handler, "check_nvidia_gpu_available", lambda: False)
+    monkeypatch.setattr(docker_commands.platform, "machine", lambda: "AMD64")
+    monkeypatch.setattr(docker_commands.platform, "system", lambda: "Windows")
+
+    command = handler.get_launch_command("ratio1_vol")
+
+    assert command[-1] == DEVNET_EDGE_NODE_IMAGE
 
 
 def test_launch_command_adds_gpu_flag_when_available(monkeypatch):

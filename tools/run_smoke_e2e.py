@@ -146,6 +146,7 @@ def sidebar_visual_snapshot(launcher):
         "refreshNodeInfoButton",
         "themeToggleButton",
         "forceDebugCheckbox",
+        "edgeImageBadge",
     )
     for object_name in control_names:
         control = launcher.findChild(QWidget, object_name)

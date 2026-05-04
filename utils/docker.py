@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import (QDialog, QInputDialog, QLabel,
 
 from .const import *
 from .docker_commands import DockerCommandHandler
+from .edge_image_config import get_edge_node_image
 from .screen_geometry import screen_geometry
 from widgets.dialogs.DockerCheckDialog import DockerCheckDialog
 
@@ -230,7 +231,7 @@ class _DockerUtilsMixin:
   
   def __setup_docker_run(self):
     self.add_log('Setting up Docker run command...')
-    self.docker_image = DOCKER_IMAGE + ":" + self.docker_tag
+    self.docker_image = get_edge_node_image()
     
     # Base Docker commands.
     base_clean = ['docker', 'rm', self.docker_container_name]

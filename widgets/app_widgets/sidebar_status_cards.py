@@ -83,6 +83,17 @@ class NodeStatusPanel(QGroupBox):
             "nodeStatusCardTitle",
             "Node details card",
         )
+        self.edgeImageBadge = QLabel("")
+        self.edgeImageBadge.setObjectName("edgeImageBadge")
+        self.edgeImageBadge.setProperty("role", "edgeImageBadge")
+        self.edgeImageBadge.setAccessibleName("Edge Node Docker image")
+        self.edgeImageBadge.setFont(QFont("Segoe UI", 8, QFont.DemiBold))
+        self.edgeImageBadge.setAlignment(Qt.AlignCenter)
+        self.edgeImageBadge.setMinimumHeight(22)
+        self.edgeImageBadge.setWordWrap(False)
+        self.edgeImageBadge.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.edgeImageBadge.hide()
+
         self.loading_indicator = LoadingIndicator(size=30)
         self.loading_indicator.hide()
 
@@ -172,6 +183,7 @@ class NodeStatusPanel(QGroupBox):
         layout.setContentsMargins(5, 6, 5, 6)
         layout.setSpacing(3)
         layout.addWidget(self.node_status_title)
+        layout.addWidget(self.edgeImageBadge)
 
         loading_layout = QHBoxLayout()
         loading_layout.setContentsMargins(0, 0, 0, 0)
@@ -189,6 +201,11 @@ class NodeStatusPanel(QGroupBox):
         layout.addWidget(self.node_epoch_avail)
         layout.addWidget(self.node_version)
         self.setLayout(layout)
+
+    def set_edge_image_badge(self, text: str, tooltip: str = "", visible: bool = True) -> None:
+        self.edgeImageBadge.setText(text)
+        self.edgeImageBadge.setToolTip(tooltip)
+        self.edgeImageBadge.setVisible(bool(visible and text))
 
     def _create_address_row(self, label: QLabel, button: QPushButton) -> QHBoxLayout:
         row = QHBoxLayout()

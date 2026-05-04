@@ -6,9 +6,18 @@ import os
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt
 from app_forms.frm_main import EdgeNodeLauncher
+from utils.edge_image_config import configure_edge_node_image, consume_edge_image_cli_args
 from utils.icon_helper import apply_icon_to_app
 
 if __name__ == '__main__':
+    try:
+        edge_image_arg, qt_argv = consume_edge_image_cli_args(sys.argv)
+        sys.argv[:] = qt_argv
+        image_config = configure_edge_node_image(cli_image=edge_image_arg)
+    except ValueError as exc:
+        print(str(exc))
+        sys.exit(2)
+
     # Handle high DPI displays
     if hasattr(Qt, 'AA_EnableHighDpiScaling'):
         QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
@@ -17,6 +26,8 @@ if __name__ == '__main__':
     
     # Create application
     app = QApplication(sys.argv)
+    if not image_config.is_mainnet:
+        print(f"Using local Edge Node Docker image override: {image_config.image}")
     
     # Set app name for better integration
     app.setApplicationName("EdgeNodeLauncher")

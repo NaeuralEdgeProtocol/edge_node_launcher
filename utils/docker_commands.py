@@ -16,9 +16,10 @@ from models.NodeHistory import NodeHistory
 from models.StartupConfig import StartupConfig
 from models.ConfigApp import ConfigApp
 from utils.const import DOCKER_VOLUME_PATH
+from utils.edge_image_config import PRODUCTION_EDGE_NODE_IMAGE, get_edge_node_image
 
 # Docker configuration
-DOCKER_IMAGE = "ratio1/edge_node:mainnet"
+DOCKER_IMAGE = PRODUCTION_EDGE_NODE_IMAGE
 DOCKER_TAG = "latest"
 
 # Timeout configurations
@@ -435,7 +436,8 @@ class DockerCommandHandler:
             bool: True if image exists, False otherwise
         """
         # Check if image exists
-        command = ['docker', 'images', '-q', DOCKER_IMAGE]
+        docker_image = get_edge_node_image()
+        command = ['docker', 'images', '-q', docker_image]
         stdout, stderr, return_code = self.execute_command(command, timeout=DOCKER_STATUS_TIMEOUT)
         
         if stdout.strip():  # Image exists
@@ -452,8 +454,9 @@ class DockerCommandHandler:
             error_callback: Error callback function
             output_callback: Optional callback for streaming output
         """
-        logging.info(f"Starting Docker image pull for {DOCKER_IMAGE}")
-        pull_command = ['docker', 'pull', DOCKER_IMAGE]
+        docker_image = get_edge_node_image()
+        logging.info(f"Starting Docker image pull for {docker_image}")
+        pull_command = ['docker', 'pull', docker_image]
         logging.info(f"Executing pull command: {' '.join(pull_command)}")
         
         # Use streaming thread for real-time updates
@@ -576,8 +579,7 @@ class DockerCommandHandler:
         else:
             logging.warning(f"No volume specified for container {self.container_name}")
         
-        # Add the image name from DOCKER_IMAGE constant
-        command.append(DOCKER_IMAGE)
+        command.append(get_edge_node_image())
         
         return command
 

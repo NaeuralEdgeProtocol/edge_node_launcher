@@ -29,12 +29,13 @@ from tools.e2e_visual import (
     rect_snapshot,
     window_snapshot,
 )
+from utils.edge_image_config import DEVNET_EDGE_NODE_IMAGE, PRODUCTION_EDGE_NODE_IMAGE, configure_edge_node_image
 
 PRIMARY_CONTAINER = "r1nodee2e"
 SECOND_CONTAINER = "r1nodee2e2"
 PRIMARY_VOLUME = "r1vole2e"
 SECOND_VOLUME = "r1vole2e2"
-DEFAULT_DOCKER_IMAGE = "ratio1/edge_node:mainnet"
+DEFAULT_DOCKER_IMAGE = PRODUCTION_EDGE_NODE_IMAGE
 DEFAULT_STARTUP_TEMPLATE = REPO_ROOT.parent / "edge_node" / ".config_startup.json"
 RENAME_DIALOG_TITLES = ("Rename Node", "Change Node Name")
 
@@ -533,12 +534,20 @@ def run_scenarios(args):
     import utils.docker as docker_mixin
     from utils.config_manager import ConfigManager, ContainerConfig
 
+    image_config = configure_edge_node_image(cli_image=args.image, production_mode=False)
+
     log = {
         "started_at": datetime.now().isoformat(),
         "destructive": True,
         "containers": [PRIMARY_CONTAINER, SECOND_CONTAINER],
         "volumes": [PRIMARY_VOLUME, SECOND_VOLUME],
         "image": args.image,
+        "image_config": {
+            "image": image_config.image,
+            "source": image_config.source,
+            "production_mode": image_config.production_mode,
+            "override_allowed": image_config.override_allowed,
+        },
         "image_removed_for_loader": args.remove_image,
         "offline_config": args.offline_config,
         "startup_template": str(args.startup_template),
@@ -567,7 +576,6 @@ def run_scenarios(args):
     )
 
     frm_main.DOCKER_CONTAINER_NAME = PRIMARY_CONTAINER
-    docker_commands.DOCKER_IMAGE = args.image
     original_get_launch_command = docker_commands.DockerCommandHandler.get_launch_command
 
     def get_launch_command_with_e2e_config(self, volume_name=None, *extra_args, **kwargs):
@@ -803,6 +811,14 @@ def main():
     parser.add_argument("--remove-image", action="store_true", help="Remove the launcher Docker image before starting.")
     parser.add_argument("--image", default=DEFAULT_DOCKER_IMAGE, help="Docker image to pull and run.")
     parser.add_argument(
+        "--devnet-real-data",
+        action="store_true",
+        help=(
+            "Use ratio1/edge_node:devnet and do not inject the offline E2E startup config. "
+            "Pair with --no-cleanup when you want to keep the test volume for manual license attachment."
+        ),
+    )
+    parser.add_argument(
         "--offline-config",
         action="store_true",
         default=True,
@@ -830,6 +846,9 @@ def main():
     parser.add_argument("--output", default="")
     parser.add_argument("--screenshot-dir", default="")
     args = parser.parse_args()
+    if args.devnet_real_data:
+        args.image = DEVNET_EDGE_NODE_IMAGE
+        args.offline_config = False
     prepare_evidence_paths(args)
     log = run_scenarios(args)
     if log.get("result") != "passed":

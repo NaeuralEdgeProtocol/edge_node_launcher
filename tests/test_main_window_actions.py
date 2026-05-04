@@ -11,6 +11,7 @@ import app_forms.frm_main as frm_main
 from models.NodeHistory import NodeHistory
 from models.NodeInfo import NodeInfo
 from utils.config_manager import ContainerConfig
+from utils.edge_image_config import DEVNET_EDGE_NODE_IMAGE, configure_edge_node_image
 from widgets.DockerPullDialog import DOCKER_PULL_DIALOG_STYLE_COLORS, DockerPullDialog
 from widgets.ToastWidget import NotificationType
 import widgets.app_widgets.dashboard_panel as dashboard_panel_module
@@ -283,6 +284,22 @@ def test_main_window_navigation_buttons_use_mocked_side_effects(qtbot, monkeypat
     assert launcher.toast.notifications == [
         (NotificationType.INFO, "Ratio1 Explorer is not yet implemented")
     ]
+
+
+def test_devnet_image_override_routes_dapp_and_shows_badge(qtbot, monkeypatch):
+    configure_edge_node_image(cli_image=DEVNET_EDGE_NODE_IMAGE, environ={}, production_mode=False)
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+    opened_urls = []
+    monkeypatch.setattr(webbrowser, "open", opened_urls.append)
+
+    assert launcher.current_environment == "devnet"
+    assert launcher.edgeImageBadge.isVisible()
+    assert launcher.edgeImageBadge.text() == "Devnet"
+    assert DEVNET_EDGE_NODE_IMAGE in launcher.edgeImageBadge.toolTip()
+
+    qtbot.mouseClick(launcher.dapp_button, Qt.LeftButton)
+
+    assert opened_urls == [frm_main.DAPP_URLS["devnet"]]
 
 
 def test_add_log_does_not_process_events_synchronously(qtbot, monkeypatch):
@@ -2826,6 +2843,9 @@ def test_status_panels_have_semantic_roles(qtbot, monkeypatch):
     assert launcher.node_status_title.property("role") == "sidebarCardTitle"
     assert launcher.node_status_title.accessibleName() == "Node details card"
     assert launcher.node_status_title.font().family() != "Courier New"
+    assert launcher.edgeImageBadge.objectName() == "edgeImageBadge"
+    assert launcher.edgeImageBadge.property("role") == "edgeImageBadge"
+    assert not launcher.edgeImageBadge.isVisible()
     assert launcher.resource_status_title.objectName() == "resourceStatusCardTitle"
     assert launcher.resource_status_title.text() == "Host Resources"
     assert launcher.resource_status_title.property("role") == "sidebarCardTitle"
@@ -2834,6 +2854,7 @@ def test_status_panels_have_semantic_roles(qtbot, monkeypatch):
     assert info_box.findChild(QPushButton, "copyAddrButton") is launcher.copyAddrButton
     assert info_box.findChild(QPushButton, "copyEthButton") is launcher.copyEthButton
     assert info_box.findChild(QLabel, "nodeStatusCardTitle") is launcher.node_status_title
+    assert info_box.findChild(QLabel, "edgeImageBadge") is launcher.edgeImageBadge
     assert resources_box.findChild(QLabel, "resourceStatusCardTitle") is launcher.resource_status_title
     assert resources_box.findChild(QLabel, "memoryResourceDisplay") is launcher.memoryDisplay
     assert resources_box.findChild(QLabel, "cpuResourceDisplay") is launcher.vcpusDisplay

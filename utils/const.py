@@ -823,6 +823,17 @@ COMMON_STYLESHEET_TEMPLATE = """
     padding: 0px 4px 6px 4px;
     margin: 0px 2px 4px 2px;
   }}
+  QGroupBox[role="statusPanel"] QLabel[role="edgeImageBadge"] {{
+    color: {toggle_button_stop_text};
+    background-color: {toggle_button_stop_bg};
+    border: 1px solid {toggle_button_stop_border};
+    border-radius: 7px;
+    font-family: "Segoe UI";
+    font-size: 8pt;
+    font-weight: 600;
+    padding: 2px 6px;
+    margin: 0px 2px 4px 2px;
+  }}
   QGroupBox[role="statusPanel"] QLabel[statusField="address"] {{
     font-family: "Courier New";
   }}

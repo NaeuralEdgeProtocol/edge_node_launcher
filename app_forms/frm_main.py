@@ -68,6 +68,7 @@ from utils.updater import _UpdaterMixin, UpdateCheckThread
 from utils.system_resources import _SystemResourcesMixin
 from utils.docker_utils import get_volume_name, generate_container_name
 from utils.docker_errors import extract_conflicting_container_id
+from utils.edge_image_config import get_edge_node_image_config
 from utils.config_manager import ConfigManager, ContainerConfig
 from utils.container_selection import SelectedContainer, selected_container_from_combo, select_container_by_name
 from utils.lifecycle_copy import (
@@ -149,8 +150,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self._window_geometry_log_timer.timeout.connect(self._flush_window_geometry_log)
     self._pending_window_geometry_context = "changed"
 
-    # Set current environment (you'll need to get this from your configuration)
-    self.current_environment = DEFAULT_ENVIRONMENT
+    self.edge_image_config = get_edge_node_image_config()
+    self.current_environment = self.edge_image_config.environment_key
 
     self.__current_node_uptime = -1
     self.__current_node_epoch = -1
@@ -213,6 +214,11 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.show_initial_window()
     self.add_log(f'Edge Node Launcher v{self.__version__} started. Running in production: {self.runs_in_production}, running with debugger: {self.runs_with_debugger()}, running in ipython: {self.runs_from_ipython()},  running from exe: {not self.not_running_from_exe()}')
     self.add_log(f'Running from: {self.__cwd}')
+    self.add_log(f'Edge Node Docker image: {self.edge_image_config.image} (source: {self.edge_image_config.source})')
+    if self.edge_image_config.ignored_reason:
+      self.add_log(self.edge_image_config.ignored_reason, color="yellow")
+    elif not self.edge_image_config.is_mainnet:
+      self.add_log('Local testing image override is active. Packaged production runs use mainnet only.', color="yellow")
 
     platform_info, os_name, os_version = get_platform_and_os_info()
     self.add_log(f'Platform: {platform_info}')
@@ -757,6 +763,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     resource_panel = panel.resource_status_panel
 
     self.node_status_title = node_panel.node_status_title
+    self.edgeImageBadge = node_panel.edgeImageBadge
     self.loading_indicator = node_panel.loading_indicator
     self.addressDisplay = node_panel.addressDisplay
     self.copyAddrButton = node_panel.copyAddrButton
@@ -772,6 +779,22 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.memoryDisplay = resource_panel.memoryDisplay
     self.vcpusDisplay = resource_panel.vcpusDisplay
     self.storageDisplay = resource_panel.storageDisplay
+    self._update_edge_image_badge()
+
+  def _update_edge_image_badge(self) -> None:
+    if not hasattr(self, "edgeImageBadge"):
+      return
+
+    if self.edge_image_config.is_mainnet:
+      self.edgeImageBadge.hide()
+      return
+
+    self.edgeImageBadge.setText(self.edge_image_config.display_name)
+    self.edgeImageBadge.setToolTip(
+      f"Local testing Docker image: {self.edge_image_config.image}. "
+      "Packaged production runs use mainnet only."
+    )
+    self.edgeImageBadge.show()
 
   def initUI(self):
     self.setWindowTitle(WINDOW_TITLE)

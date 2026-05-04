@@ -71,10 +71,23 @@ def run_main_application():
         from PyQt5.QtWidgets import QApplication
         from PyQt5.QtCore import Qt
         from app_forms.frm_main import EdgeNodeLauncher
+        from utils.edge_image_config import configure_edge_node_image, consume_edge_image_cli_args
         from utils.icon_helper import apply_icon_to_app
         
         # Patch subprocess first
         patch_subprocess_module()
+
+        edge_image_arg, qt_argv = consume_edge_image_cli_args(sys.argv)
+        sys.argv[:] = qt_argv
+        image_config = configure_edge_node_image(cli_image=edge_image_arg)
+        logging.info(
+            "Using Edge Node Docker image: %s (source=%s, production=%s)",
+            image_config.image,
+            image_config.source,
+            image_config.production_mode,
+        )
+        if image_config.ignored_reason:
+            logging.warning(image_config.ignored_reason)
         
         # Handle high DPI displays
         if hasattr(Qt, 'AA_EnableHighDpiScaling'):
