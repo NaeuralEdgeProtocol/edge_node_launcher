@@ -12,6 +12,9 @@ import subprocess
 
 from models.AnsibleHosts import AnsibleHostsManager
 
+SSH_STATUS_TIMEOUT_SECONDS = 8
+
+
 class SSHCheckThread(QThread):
     status_updated = pyqtSignal(str, bool)  # host, is_online
     
@@ -58,9 +61,12 @@ class SSHCheckThread(QThread):
             result = subprocess.run(
                 cmd, 
                 capture_output=True, 
-                timeout=8,  # 8 second timeout
+                timeout=SSH_STATUS_TIMEOUT_SECONDS,
                 text=True
             )
+
+            if self.isInterruptionRequested():
+                return
             
             # Check if the command was successful and returned the expected output
             if result.returncode == 0 and 'Connection successful' in result.stdout:
@@ -74,6 +80,8 @@ class SSHCheckThread(QThread):
                 self.status_updated.emit(self.host, False)
                 
         except subprocess.TimeoutExpired as e:
+            if self.isInterruptionRequested():
+                return
             print(f"SSH connection to {self.host} timed out after {e.timeout} seconds")
             print(f"Command: {' '.join(e.cmd)}")
             if hasattr(e, 'stdout') and e.stdout:
@@ -82,6 +90,8 @@ class SSHCheckThread(QThread):
                 print(f"  stderr: {e.stderr}")
             self.status_updated.emit(self.host, False)
         except subprocess.CalledProcessError as e:
+            if self.isInterruptionRequested():
+                return
             print(f"SSH connection to {self.host} failed with error: {str(e)}")
             print(f"Return code: {e.returncode}")
             if hasattr(e, 'stdout') and e.stdout:
@@ -90,6 +100,8 @@ class SSHCheckThread(QThread):
                 print(f"  stderr: {e.stderr}")
             self.status_updated.emit(self.host, False)
         except Exception as e:
+            if self.isInterruptionRequested():
+                return
             print(f"SSH check error for {self.host}: {str(e)}")
             import traceback
             traceback.print_exc()
@@ -144,6 +156,7 @@ class HostSelector(QWidget):
         self.setAccessibleName("Host selector")
         self.hosts_manager = hosts_manager or AnsibleHostsManager()
         self.status_threads = {}  # Keep track of status check threads
+        self.status_thread = None
         self.status_indicators = {}  # Keep track of status indicators
         self._is_pro_mode = False  # Track pro mode state
         self.initUI(auto_refresh=auto_refresh)
@@ -255,7 +268,43 @@ class HostSelector(QWidget):
         # Check status of current host
         if self.host_combo.currentText():
             self.check_host_status(self.host_combo.currentText())
-            
+
+    def _cleanup_status_thread(self, host_name: str, thread):
+        if self.status_threads.get(host_name) is thread:
+            self.status_threads.pop(host_name, None)
+        if self.status_thread is thread:
+            self.status_thread = None
+        try:
+            thread.deleteLater()
+        except RuntimeError:
+            pass
+
+    def _request_status_thread_stop(self, thread):
+        try:
+            if thread and thread.isRunning():
+                thread.requestInterruption()
+        except RuntimeError:
+            pass
+
+    def _active_status_thread_for(self, host_name: str):
+        thread = self.status_threads.get(host_name)
+        if thread is None:
+            return None
+        try:
+            if thread.isRunning():
+                return thread
+        except RuntimeError:
+            pass
+        self.status_threads.pop(host_name, None)
+        return None
+
+    def _cancel_status_checks(self):
+        if hasattr(self, "status_timer") and self.status_timer.isActive():
+            self.status_timer.stop()
+        for thread in list(self.status_threads.values()):
+            self._request_status_thread_stop(thread)
+        self._request_status_thread_stop(self.status_thread)
+
     def check_host_status(self, host_name: str):
         """Check if a host is online."""
         if not host_name:
@@ -268,15 +317,13 @@ class HostSelector(QWidget):
             return
             
         try:
-            # Stop any running status check
-            if hasattr(self, 'status_thread') and self.status_thread and self.status_thread.isRunning():
-                try:
-                    self.status_thread.terminate()
-                    self.status_thread.wait(1000)  # Wait up to 1 second for thread to terminate
-                    if self.status_thread.isRunning():
-                        print(f"Warning: Status check thread for {host_name} could not be terminated")
-                except Exception as e:
-                    print(f"Error terminating status thread: {str(e)}")
+            active_thread = self._active_status_thread_for(host_name)
+            if active_thread is not None:
+                print(f"Status check for {host_name} is already running")
+                return
+
+            if self.status_thread is not None:
+                self._request_status_thread_stop(self.status_thread)
                 
             # Get SSH command for the host
             ssh_command_str = self.hosts_manager.get_ssh_command(host_name)
@@ -305,6 +352,13 @@ class HostSelector(QWidget):
             # Start status check thread
             self.status_thread = SSHCheckThread(host_name, ssh_command)
             self.status_thread.status_updated.connect(self._on_status_updated)
+            self.status_thread.finished.connect(
+                lambda checked_host=host_name, checked_thread=self.status_thread: self._cleanup_status_thread(
+                    checked_host,
+                    checked_thread,
+                )
+            )
+            self.status_threads[host_name] = self.status_thread
             self.status_thread.start()
             
         except Exception as e:
@@ -314,6 +368,10 @@ class HostSelector(QWidget):
             self.current_status.setProperty("is_online", False)
             self.current_status.set_status(False)
             self.host_status_updated.emit(host_name, False)
+
+    def closeEvent(self, event):
+        self._cancel_status_checks()
+        super().closeEvent(event)
 
     def _on_status_updated(self, host_name, is_online):
         """Handle status update from the check thread.
