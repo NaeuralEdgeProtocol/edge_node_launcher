@@ -461,6 +461,54 @@ COMMON_STYLESHEET_TEMPLATE = """
     padding: 8px;
     margin-bottom: 6px;
   }}
+  QTextEdit#logView QScrollBar:vertical {{
+    background-color: transparent;
+    border: none;
+    width: 10px;
+    margin: 6px 3px 6px 0px;
+  }}
+  QTextEdit#logView QScrollBar::handle:vertical {{
+    background-color: {secondary_action_border};
+    border-radius: 4px;
+    min-height: 32px;
+  }}
+  QTextEdit#logView QScrollBar::handle:vertical:hover {{
+    background-color: {combo_hover_border};
+  }}
+  QTextEdit#logView QScrollBar::add-line:vertical,
+  QTextEdit#logView QScrollBar::sub-line:vertical {{
+    height: 0px;
+    border: none;
+    background: transparent;
+  }}
+  QTextEdit#logView QScrollBar::add-page:vertical,
+  QTextEdit#logView QScrollBar::sub-page:vertical {{
+    background: transparent;
+  }}
+  QTextEdit#logView QScrollBar:horizontal {{
+    background-color: transparent;
+    border: none;
+    height: 10px;
+    margin: 0px 6px 3px 6px;
+  }}
+  QTextEdit#logView QScrollBar::handle:horizontal {{
+    background-color: {secondary_action_border};
+    border-radius: 4px;
+    min-width: 32px;
+  }}
+  QTextEdit#logView QScrollBar::handle:horizontal:hover {{
+    background-color: {combo_hover_border};
+  }}
+  QTextEdit#logView QScrollBar::add-line:horizontal,
+  QTextEdit#logView QScrollBar::sub-line:horizontal {{
+    width: 0px;
+    border: none;
+    background: transparent;
+  }}
+  QTextEdit#logView QScrollBar::add-page:horizontal,
+  QTextEdit#logView QScrollBar::sub-page:horizontal {{
+    background: transparent;
+  }}
   PlotWidget, QWidget[class="plot-container"] {{
     background-color: {graph_bg};
     border: 1px solid {graph_border};
