@@ -852,35 +852,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       process_events=process_events,
     )
 
-  def _schedule_safe_close_dialog_reference(
-    self,
-    dialog_attr: str,
-    *,
-    close_delay_ms: int,
-    clear_delay_ms: int,
-  ) -> bool:
-    """Close and clear a dialog later without clearing a newer replacement."""
-    return self._lifecycle_dialogs.schedule_safe_close_reference(
-      dialog_attr,
-      close_delay_ms=close_delay_ms,
-      clear_delay_ms=clear_delay_ms,
-    )
-
-  def _schedule_safe_close_launch_dialog_references(
-    self,
-    *,
-    close_delay_ms: int = 0,
-    clear_delay_ms: int = 500,
-  ) -> None:
-    self._lifecycle_dialogs.schedule_safe_close_launch_references(
-      close_delay_ms=close_delay_ms,
-      clear_delay_ms=clear_delay_ms,
-    )
-
-  def _close_dialog_reference(self, dialog_attr: str) -> bool:
-    """Close a stored dialog reference, tolerating already-deleted Qt wrappers."""
-    return self._lifecycle_dialogs.close_reference(dialog_attr)
-
   def _is_shutting_down(self) -> bool:
     return getattr(self, "_EdgeNodeLauncher__shutting_down", False)
 
@@ -936,7 +907,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         # Close any open dialogs forcefully
         dialog_attrs = ['startup_dialog', 'launcher_dialog', 'toggle_dialog', 'docker_pull_dialog']
         for dialog_attr in dialog_attrs:
-            self._close_dialog_reference(dialog_attr)
+            self._lifecycle_dialogs.close_reference(dialog_attr)
         
         # Force close any remaining child widgets
         try:
@@ -1243,7 +1214,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         # Stop loading indicator on error
         self.loading_indicator.stop()
         
-        self._schedule_safe_close_dialog_reference(
+        self._lifecycle_dialogs.schedule_safe_close_reference(
             "launcher_dialog",
             close_delay_ms=0,
             clear_delay_ms=500,
@@ -2789,7 +2760,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     except Exception as e:
       self.add_log(f"Failed to create new node: {str(e)}", color="red")
       self._end_lifecycle_operation(container_name)
-      self._schedule_safe_close_dialog_reference(
+      self._lifecycle_dialogs.schedule_safe_close_reference(
         "startup_dialog",
         close_delay_ms=0,
         clear_delay_ms=500,
@@ -2844,7 +2815,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       self.add_log(f"Failed to create new node: {str(e)}", color="red")
       self._end_lifecycle_operation(container_name)
     finally:
-      self._schedule_safe_close_dialog_reference(
+      self._lifecycle_dialogs.schedule_safe_close_reference(
         "startup_dialog",
         close_delay_ms=0,
         clear_delay_ms=500,
@@ -2915,7 +2886,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         # Stop loading indicator on error
         self.loading_indicator.stop()
         
-        self._schedule_safe_close_launch_dialog_references()
+        self._lifecycle_dialogs.schedule_safe_close_launch_references()
             
         error_msg = f"Failed to launch container: {str(e)}"
         self.add_log(error_msg, color="red")
@@ -2941,7 +2912,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             self.add_log(f"Docker pull already in progress, skipping launch of {container_name}", color="yellow")
             self._end_lifecycle_operation(container_name)
             
-            self._schedule_safe_close_launch_dialog_references()
+            self._lifecycle_dialogs.schedule_safe_close_launch_references()
             
             # Stop loading indicator
             self.loading_indicator.stop()
@@ -2954,7 +2925,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.loading_indicator.stop()
         
         # Close the existing launcher dialog if it's open
-        self._schedule_safe_close_dialog_reference(
+        self._lifecycle_dialogs.schedule_safe_close_reference(
             "launcher_dialog",
             close_delay_ms=0,
             clear_delay_ms=500,
@@ -3013,7 +2984,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         # Stop loading indicator on error
         self.loading_indicator.stop()
         
-        self._schedule_safe_close_launch_dialog_references()
+        self._lifecycle_dialogs.schedule_safe_close_launch_references()
             
         error_msg = f"Failed to launch container: {str(e)}"
         self.add_log(error_msg, color="red")
@@ -3078,8 +3049,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.loading_indicator.stop()
     self._update_launch_dialog_progress(f"Error: {error_msg}", process_events=False)
 
-    self._close_dialog_reference("launcher_dialog")
-    self._close_dialog_reference("startup_dialog")
+    self._lifecycle_dialogs.close_reference("launcher_dialog")
+    self._lifecycle_dialogs.close_reference("startup_dialog")
     self.add_log(error_msg, color="red")
     self.toast.show_notification(NotificationType.ERROR, error_msg)
     self._end_lifecycle_operation(container_name)
@@ -3104,16 +3075,12 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     self.loading_indicator.stop()
     self._update_launch_dialog_progress("Container launched successfully!")
-    self._close_launch_dialog_references()
+    self._lifecycle_dialogs.close_launch_references()
 
     container_config = self.config_manager.get_container(container_name)
     node_alias = container_config.node_alias if container_config and container_config.node_alias else None
     self.toast.show_notification(NotificationType.SUCCESS, launch_success_notification(node_alias))
     self._end_lifecycle_operation(container_name)
-
-  def _close_launch_dialog_references(self) -> None:
-    for dialog_attr in ("launcher_dialog", "startup_dialog"):
-      self._close_dialog_reference(dialog_attr)
 
   def _retry_launch_after_container_conflict(
     self,
@@ -3237,7 +3204,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         # Stop loading indicator on error
         self.loading_indicator.stop()
         
-        self._schedule_safe_close_launch_dialog_references()
+        self._lifecycle_dialogs.schedule_safe_close_launch_references()
             
         error_msg = f"Failed to launch container: {str(e)}"
         self.add_log(error_msg, color="red")

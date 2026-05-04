@@ -551,7 +551,7 @@ def test_scheduled_dialog_close_does_not_clear_replaced_dialog(qtbot, monkeypatc
 
     monkeypatch.setattr(frm_main.QTimer, "singleShot", lambda delay, callback: callbacks.append((delay, callback)))
 
-    assert launcher._schedule_safe_close_dialog_reference(
+    assert launcher._lifecycle_dialogs.schedule_safe_close_reference(
         "launcher_dialog",
         close_delay_ms=500,
         clear_delay_ms=1000,
@@ -575,7 +575,7 @@ def test_immediate_dialog_close_does_not_clear_replaced_dialog(qtbot, monkeypatc
 
     first_dialog.safe_close = replace_during_close
 
-    assert launcher._close_dialog_reference("launcher_dialog") is True
+    assert launcher._lifecycle_dialogs.close_reference("launcher_dialog") is True
     assert launcher.launcher_dialog is replacement_dialog
 
 
