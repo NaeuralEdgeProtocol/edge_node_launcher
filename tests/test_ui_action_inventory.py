@@ -13,10 +13,12 @@ ACTION_SOURCE_FILES = [
     Path("widgets/dialogs/DockerCheckDialog.py"),
     Path("widgets/dialogs/RenameNodeDialog.py"),
     Path("widgets/app_widgets/config_editor.py"),
+    Path("widgets/app_widgets/activity_log.py"),
     Path("widgets/app_widgets/container_list.py"),
     Path("widgets/app_widgets/log_console.py"),
     Path("widgets/app_widgets/metrics_widget.py"),
     Path("widgets/app_widgets/node_info.py"),
+    Path("widgets/app_widgets/sidebar_status_cards.py"),
 ]
 
 ACTION_IDS = [
@@ -57,6 +59,8 @@ ACTION_IDS = [
     "nodeInfoCopyAddressButton",
     "nodeInfoCopyEthButton",
     "nodeInfoRefreshButton",
+    "activityLogCopyButton",
+    "activityLogClearButton",
 ]
 
 CONTROL_PATTERN = re.compile(
@@ -81,12 +85,20 @@ def _has_action_id_source(source: str, action_id: str) -> bool:
     if f'.setObjectName("{action_id}")' in source:
         return True
 
-    helper_pattern = re.compile(
-        r"_create_sidebar_action_button\(\s*(?:[^\n]*\n){0,6}\s*"
-        rf'"{re.escape(action_id)}"',
-        re.MULTILINE,
-    )
-    return bool(helper_pattern.search(source))
+    for helper_name in (
+        "_create_sidebar_action_button",
+        "_create_action_button",
+        "_create_copy_button",
+    ):
+        helper_pattern = re.compile(
+            rf"{helper_name}\(\s*(?:[^\n]*\n){{0,6}}\s*"
+            rf'"{re.escape(action_id)}"',
+            re.MULTILINE,
+        )
+        if helper_pattern.search(source):
+            return True
+
+    return False
 
 
 def test_ui_action_ids_are_unique():

@@ -25,7 +25,7 @@ from PyQt5.QtWidgets import (
   QComboBox,
   QMessageBox,
   QFileDialog,
-  QLineEdit, QGroupBox,
+  QLineEdit,
   QGraphicsDropShadowEffect,
   QTabWidget,
   QDialogButtonBox,
@@ -56,11 +56,11 @@ from PyQt5.QtSvg import QSvgRenderer
 from models.NodeInfo import NodeInfo
 from models.NodeHistory import NodeHistory
 from widgets.ToastWidget import ToastWidget, NotificationType
-from widgets.ElidedLabel import ElidedLabel
 from widgets.dialogs.AddNodeDialog import AddNodeDialog
 from widgets.dialogs.RenameNodeDialog import RenameNodeDialog
 from widgets.app_widgets.activity_log import ActivityLogWidget
 from widgets.app_widgets.metric_plot_grid import METRIC_EMPTY_STATE_TEXT, create_metrics_graph_grid
+from widgets.app_widgets.sidebar_status_cards import NodeStatusPanel, ResourceStatusPanel
 from utils.const import *
 from utils.docker import _DockerUtilsMixin
 from utils.docker_commands import DockerCommandHandler
@@ -75,9 +75,7 @@ from utils.window_geometry import calculate_initial_window_geometry, calculate_r
 
 from utils.icon import ICON_BASE64
 
-from app_forms.frm_utils import (
-  get_icon_from_base64, LoadingIndicator
-)
+from app_forms.frm_utils import get_icon_from_base64
 
 from ver import __VER__ as __version__
 from widgets.dialogs.AuthorizedAddressedDialog import AuthorizedAddressesDialog
@@ -719,55 +717,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     button.clicked.connect(handler)
     return button
 
-  def _configure_sidebar_status_label(self, label: QLabel) -> QLabel:
-    label.setWordWrap(False)
-    label.setMinimumWidth(0)
-    label.setMinimumHeight(20)
-    label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
-    return label
-
-  def _configure_sidebar_status_value(self, label: QLabel) -> QLabel:
-    return self._configure_sidebar_status_label(label)
-
-  def _configure_sidebar_status_field(
-    self,
-    label: QLabel,
-    field_role: str,
-    accessible_name: str,
-    *,
-    is_address: bool = False,
-    is_row_value: bool = False,
-  ) -> QLabel:
-    label.setProperty("statusField", field_role)
-    label.setAccessibleName(accessible_name)
-    label.setFont(QFont("Courier New" if is_address else "Segoe UI", 9))
-    if is_row_value:
-      return self._configure_sidebar_status_value(label)
-    return self._configure_sidebar_status_label(label)
-
-  def _configure_sidebar_resource_field(
-    self,
-    label: QLabel,
-    field_role: str,
-    accessible_name: str,
-  ) -> QLabel:
-    label.setProperty("resourceField", field_role)
-    label.setAccessibleName(accessible_name)
-    label.setFont(QFont("Segoe UI", 9))
-    label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-    return self._configure_sidebar_status_label(label)
-
-  def _create_sidebar_card_title(self, text: str, object_name: str, accessible_name: str) -> QLabel:
-    label = QLabel(text)
-    label.setObjectName(object_name)
-    label.setProperty("role", "sidebarCardTitle")
-    label.setAccessibleName(accessible_name)
-    label.setFont(QFont("Segoe UI", 9, QFont.DemiBold))
-    label.setMinimumHeight(24)
-    label.setWordWrap(False)
-    label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-    return label
-
   def _create_sidebar_panel(self) -> QWidget:
     """Create the left navigation and status sidebar."""
     menu_widget = QWidget()
@@ -881,155 +830,28 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     return menu_widget
 
-  def _create_node_status_panel(self) -> QGroupBox:
-    info_box = QGroupBox()
-    info_box.setObjectName("infoBox")
-    info_box.setProperty("role", "statusPanel")
-    info_box.setContentsMargins(5, 0, 5, 0)
+  def _create_node_status_panel(self) -> NodeStatusPanel:
+    panel = NodeStatusPanel(self.copy_address, self.copy_eth_address, parent=self)
+    self.node_status_title = panel.node_status_title
+    self.loading_indicator = panel.loading_indicator
+    self.addressDisplay = panel.addressDisplay
+    self.copyAddrButton = panel.copyAddrButton
+    self.ethAddressDisplay = panel.ethAddressDisplay
+    self.copyEthButton = panel.copyEthButton
+    self.nameDisplay = panel.nameDisplay
+    self.node_uptime = panel.node_uptime
+    self.node_epoch = panel.node_epoch
+    self.node_epoch_avail = panel.node_epoch_avail
+    self.node_version = panel.node_version
+    return panel
 
-    info_box_layout = QVBoxLayout()
-    info_box_layout.setContentsMargins(5, 6, 5, 6)
-    info_box_layout.setSpacing(3)
-
-    self.node_status_title = self._create_sidebar_card_title(
-      "Node Details",
-      "nodeStatusCardTitle",
-      "Node details card",
-    )
-    info_box_layout.addWidget(self.node_status_title)
-
-    self.loading_indicator = LoadingIndicator(size=30)
-    self.loading_indicator.hide()
-    loading_layout = QHBoxLayout()
-    loading_layout.setContentsMargins(0, 0, 0, 0)
-    loading_layout.setSpacing(0)
-    loading_layout.addStretch()
-    loading_layout.addWidget(self.loading_indicator)
-    loading_layout.addStretch()
-    info_box_layout.addLayout(loading_layout)
-
-    addr_layout = QHBoxLayout()
-    addr_layout.setContentsMargins(0, 0, 0, 0)
-    addr_layout.setSpacing(4)
-    self.addressDisplay = ElidedLabel('', elide_mode=Qt.ElideMiddle, compact_prefix=("Address: ", "Addr: "))
-    self.addressDisplay.setObjectName("nodeAddressDisplay")
-    self._configure_sidebar_status_field(
-      self.addressDisplay,
-      "address",
-      "Node address",
-      is_address=True,
-      is_row_value=True,
-    )
-    addr_layout.addWidget(self.addressDisplay, 1)
-
-    self.copyAddrButton = QPushButton()
-    self.copyAddrButton.setToolTip(COPY_ADDRESS_TOOLTIP)
-    self.copyAddrButton.setAccessibleName("Copy node address")
-    self.copyAddrButton.clicked.connect(self.copy_address)
-    self.copyAddrButton.setFixedSize(28, 28)
-    self.copyAddrButton.setObjectName("copyAddrButton")
-    self.copyAddrButton.hide()
-    addr_layout.addWidget(self.copyAddrButton)
-    info_box_layout.addLayout(addr_layout)
-
-    eth_addr_layout = QHBoxLayout()
-    eth_addr_layout.setContentsMargins(0, 0, 0, 0)
-    eth_addr_layout.setSpacing(4)
-    self.ethAddressDisplay = ElidedLabel('', elide_mode=Qt.ElideMiddle, compact_prefix=("ETH Address: ", "ETH: "))
-    self.ethAddressDisplay.setObjectName("nodeEthAddressDisplay")
-    self._configure_sidebar_status_field(
-      self.ethAddressDisplay,
-      "address",
-      "ETH address",
-      is_address=True,
-      is_row_value=True,
-    )
-    eth_addr_layout.addWidget(self.ethAddressDisplay, 1)
-
-    self.copyEthButton = QPushButton()
-    self.copyEthButton.setToolTip(COPY_ETH_ADDRESS_TOOLTIP)
-    self.copyEthButton.setAccessibleName("Copy ETH address")
-    self.copyEthButton.clicked.connect(self.copy_eth_address)
-    self.copyEthButton.setFixedSize(28, 28)
-    self.copyEthButton.setObjectName("copyEthButton")
-    self.copyEthButton.hide()
-    eth_addr_layout.addWidget(self.copyEthButton)
-    info_box_layout.addLayout(eth_addr_layout)
-
-    self.nameDisplay = ElidedLabel('')
-    self.nameDisplay.setObjectName("nodeNameDisplay")
-    self._configure_sidebar_status_field(self.nameDisplay, "metadata", "Node name")
-    info_box_layout.addWidget(self.nameDisplay)
-
-    self.node_uptime = ElidedLabel(f"{UPTIME_LABEL} {EMPTY_DASH_TEXT}")
-    self.node_uptime.setObjectName("nodeUptimeDisplay")
-    self._configure_sidebar_status_field(self.node_uptime, "metadata", "Node uptime")
-    info_box_layout.addWidget(self.node_uptime)
-
-    self.node_epoch = ElidedLabel(f"{EPOCH_LABEL} {EMPTY_DASH_TEXT}")
-    self.node_epoch.setObjectName("nodeEpochDisplay")
-    self._configure_sidebar_status_field(self.node_epoch, "metadata", "Node epoch")
-    info_box_layout.addWidget(self.node_epoch)
-
-    self.node_epoch_avail = ElidedLabel(
-      f"{EPOCH_AVAIL_LABEL} {EMPTY_DASH_TEXT}",
-      compact_prefix=(f"{EPOCH_AVAIL_LABEL} ", "Epoch avail: "),
-    )
-    self.node_epoch_avail.setObjectName("nodeEpochAvailabilityDisplay")
-    self._configure_sidebar_status_field(self.node_epoch_avail, "metadata", "Node epoch availability")
-    info_box_layout.addWidget(self.node_epoch_avail)
-
-    self.node_version = ElidedLabel(f"{NODE_VERSION_LABEL} {EMPTY_DASH_TEXT}")
-    self.node_version.setObjectName("nodeVersionDisplay")
-    self._configure_sidebar_status_field(self.node_version, "metadata", "Node version")
-    info_box_layout.addWidget(self.node_version)
-
-    info_box.setLayout(info_box_layout)
-    return info_box
-
-  def _create_resource_status_panel(self) -> QGroupBox:
-    resources_box = QGroupBox()
-    resources_box.setObjectName("resourcesBox")
-    resources_box.setProperty("role", "resourcePanel")
-    resources_box.setContentsMargins(5, 0, 5, 0)
-
-    resources_box_layout = QVBoxLayout()
-    resources_box_layout.setContentsMargins(5, 6, 5, 6)
-    resources_box_layout.setSpacing(3)
-
-    self.resource_status_title = self._create_sidebar_card_title(
-      "Host Resources",
-      "resourceStatusCardTitle",
-      "Host resources card",
-    )
-    resources_box_layout.addWidget(self.resource_status_title)
-
-    self.memoryDisplay = ElidedLabel(
-      f"{MEMORY_LABEL} {MEMORY_NOT_AVAILABLE}",
-      compact_prefix=(f"{MEMORY_LABEL} ", "Mem: "),
-    )
-    self.memoryDisplay.setObjectName("memoryResourceDisplay")
-    self._configure_sidebar_resource_field(self.memoryDisplay, "memory", "Memory usage")
-    resources_box_layout.addWidget(self.memoryDisplay)
-
-    self.vcpusDisplay = ElidedLabel(
-      f"{VCPUS_LABEL} {VCPUS_NOT_AVAILABLE}",
-      compact_prefix=(f"{VCPUS_LABEL} ", "CPU: "),
-    )
-    self.vcpusDisplay.setObjectName("cpuResourceDisplay")
-    self._configure_sidebar_resource_field(self.vcpusDisplay, "cpu", "CPU usage")
-    resources_box_layout.addWidget(self.vcpusDisplay)
-
-    self.storageDisplay = ElidedLabel(
-      f"{STORAGE_LABEL} {STORAGE_NOT_AVAILABLE}",
-      compact_prefix=(f"{STORAGE_LABEL} ", "Disk: "),
-    )
-    self.storageDisplay.setObjectName("storageResourceDisplay")
-    self._configure_sidebar_resource_field(self.storageDisplay, "storage", "Storage usage")
-    resources_box_layout.addWidget(self.storageDisplay)
-
-    resources_box.setLayout(resources_box_layout)
-    return resources_box
+  def _create_resource_status_panel(self) -> ResourceStatusPanel:
+    panel = ResourceStatusPanel(parent=self)
+    self.resource_status_title = panel.resource_status_title
+    self.memoryDisplay = panel.memoryDisplay
+    self.vcpusDisplay = panel.vcpusDisplay
+    self.storageDisplay = panel.storageDisplay
+    return panel
 
   def _create_sidebar_settings_section(self) -> QVBoxLayout:
     bottom_button_area = QVBoxLayout()

@@ -12,6 +12,7 @@ from models.NodeInfo import NodeInfo
 from utils.config_manager import ContainerConfig
 from widgets.ToastWidget import NotificationType
 from widgets.app_widgets.activity_log import ActivityLogWidget
+from widgets.app_widgets.sidebar_status_cards import NodeStatusPanel, ResourceStatusPanel
 
 
 REAL_PLOT_DATA = frm_main.EdgeNodeLauncher.plot_data
@@ -1722,6 +1723,8 @@ def test_status_panels_have_semantic_roles(qtbot, monkeypatch):
 
     assert info_box is not None
     assert resources_box is not None
+    assert isinstance(info_box, NodeStatusPanel)
+    assert isinstance(resources_box, ResourceStatusPanel)
     assert info_box.property("role") == "statusPanel"
     assert resources_box.property("role") == "resourcePanel"
     assert launcher.node_status_title.objectName() == "nodeStatusCardTitle"

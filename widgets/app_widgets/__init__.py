@@ -5,6 +5,7 @@ from widgets.app_widgets.metrics_widget import MetricsWidget
 from widgets.app_widgets.metric_plot_grid import METRIC_EMPTY_STATE_TEXT, MetricPlotWidget, create_metrics_graph_grid
 from widgets.app_widgets.log_console import LogConsoleWidget
 from widgets.app_widgets.config_editor import ConfigEditorWidget
+from widgets.app_widgets.sidebar_status_cards import NodeStatusPanel, ResourceStatusPanel
 
 __all__ = [
     'ContainerListWidget',
@@ -16,4 +17,6 @@ __all__ = [
     'create_metrics_graph_grid',
     'LogConsoleWidget',
     'ConfigEditorWidget',
+    'NodeStatusPanel',
+    'ResourceStatusPanel',
 ]

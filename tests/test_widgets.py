@@ -31,6 +31,7 @@ from widgets.app_widgets.metric_plot_grid import (
 )
 from widgets.app_widgets.metrics_widget import MetricsWidget
 from widgets.app_widgets.node_info import NodeInfoWidget
+from widgets.app_widgets.sidebar_status_cards import NodeStatusPanel, ResourceStatusPanel
 
 
 def test_container_list_updates_selection_and_emits_toggle(qtbot):
@@ -220,6 +221,65 @@ def test_activity_log_widget_appends_copies_and_clears(qtbot):
     assert widget.text() == ""
     assert not widget.copy_button.isEnabled()
     assert not widget.clear_button.isEnabled()
+
+
+def test_sidebar_status_card_panels_expose_stable_controls(qtbot):
+    calls = []
+    node_panel = NodeStatusPanel(
+        lambda: calls.append("node"),
+        lambda: calls.append("eth"),
+    )
+    resource_panel = ResourceStatusPanel()
+    qtbot.addWidget(node_panel)
+    qtbot.addWidget(resource_panel)
+
+    assert node_panel.objectName() == "infoBox"
+    assert node_panel.property("role") == "statusPanel"
+    assert node_panel.node_status_title.objectName() == "nodeStatusCardTitle"
+    assert node_panel.node_status_title.text() == "Node Details"
+    assert node_panel.node_status_title.property("role") == "sidebarCardTitle"
+    assert node_panel.addressDisplay.objectName() == "nodeAddressDisplay"
+    assert node_panel.addressDisplay.property("statusField") == "address"
+    assert node_panel.addressDisplay.font().family() == "Courier New"
+    assert node_panel.ethAddressDisplay.objectName() == "nodeEthAddressDisplay"
+    assert node_panel.ethAddressDisplay.property("statusField") == "address"
+    assert node_panel.copyAddrButton.objectName() == "copyAddrButton"
+    assert node_panel.copyAddrButton.accessibleName() == "Copy node address"
+    assert node_panel.copyAddrButton.toolTip() == "Copy address"
+    assert node_panel.copyEthButton.objectName() == "copyEthButton"
+    assert node_panel.copyEthButton.accessibleName() == "Copy ETH address"
+    assert node_panel.copyEthButton.toolTip() == "Copy Ethereum address"
+    assert not node_panel.copyAddrButton.isVisible()
+    assert not node_panel.copyEthButton.isVisible()
+
+    for label in (
+        node_panel.nameDisplay,
+        node_panel.node_uptime,
+        node_panel.node_epoch,
+        node_panel.node_epoch_avail,
+        node_panel.node_version,
+    ):
+        assert label.property("statusField") == "metadata"
+        assert label.font().family() == "Segoe UI"
+        assert label.minimumHeight() == 20
+        assert label.sizePolicy().verticalPolicy() == QSizePolicy.Fixed
+
+    node_panel.copyAddrButton.click()
+    node_panel.copyEthButton.click()
+
+    assert calls == ["node", "eth"]
+
+    assert resource_panel.objectName() == "resourcesBox"
+    assert resource_panel.property("role") == "resourcePanel"
+    assert resource_panel.resource_status_title.objectName() == "resourceStatusCardTitle"
+    assert resource_panel.resource_status_title.text() == "Host Resources"
+    assert resource_panel.resource_status_title.property("role") == "sidebarCardTitle"
+    assert resource_panel.memoryDisplay.objectName() == "memoryResourceDisplay"
+    assert resource_panel.memoryDisplay.property("resourceField") == "memory"
+    assert resource_panel.vcpusDisplay.objectName() == "cpuResourceDisplay"
+    assert resource_panel.vcpusDisplay.property("resourceField") == "cpu"
+    assert resource_panel.storageDisplay.objectName() == "storageResourceDisplay"
+    assert resource_panel.storageDisplay.property("resourceField") == "storage"
 
 
 def test_centered_combo_light_popup_uses_supported_qt_stylesheet(qtbot):

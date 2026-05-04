@@ -1,6 +1,6 @@
 # UI Action Matrix
 
-Last checked: 2026-05-03
+Last checked: 2026-05-04
 
 This file lists launcher controls that trigger behavior and need stable object names for
 tests, UI automation, accessibility review, and refactor safety. Static tests enforce that
@@ -19,6 +19,8 @@ object name near construction.
 | Node info | `refreshNodeInfoButton` | button | Refreshes node metadata from Docker. | Static inventory, mocked main-window click |
 | Node info | `copyAddrButton` | button | Copies node address. | Static inventory, mocked main-window click |
 | Node info | `copyEthButton` | button | Copies ETH address. | Static inventory, mocked main-window click |
+| Activity Log | `activityLogCopyButton` | tool button | Copies visible Activity Log text. | Static inventory, widget click, smoke E2E |
+| Activity Log | `activityLogClearButton` | tool button | Clears visible Activity Log text. | Static inventory, widget click, smoke E2E |
 | Bottom actions | `renameNodeButton` | button | Opens rename-node dialog. | Static inventory, mocked main-window guard/save, destructive Docker rename E2E |
 | Bottom actions | `themeToggleButton` | button | Switches light or dark theme. | Static inventory, mocked main-window click |
 | Bottom actions | `forceDebugCheckbox` | checkbox | Enables or disables debug logging. | Static inventory, mocked main-window click |
