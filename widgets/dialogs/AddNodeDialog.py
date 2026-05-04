@@ -1,6 +1,14 @@
 from typing import Callable, Optional
 
-from PyQt5.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
+from PyQt5.QtWidgets import (
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 
 CreateNodeCallback = Callable[[str, str, Optional[str], QDialog], None]
@@ -29,22 +37,36 @@ class AddNodeDialog(QDialog):
         self.setWindowTitle("Add New Node")
         self.setObjectName("addNodeDialog")
         self.setAccessibleName("Add New Node")
-        self.setMinimumWidth(400)
+        self.setMinimumWidth(420)
 
         layout = QVBoxLayout()
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
         self.info_label = QLabel(self._capacity_copy(ram_check or {}, existing_node_count))
         self.info_label.setObjectName("createNodeCapacityLabel")
         self.info_label.setAccessibleName("Node capacity summary")
         self.info_label.setWordWrap(True)
+        self.info_label.setMinimumWidth(360)
         layout.addWidget(self.info_label)
 
-        button_layout = QHBoxLayout()
+        self.button_row = QWidget()
+        self.button_row.setObjectName("createNodeButtonRow")
+        self.button_row.setAccessibleName("Create node actions")
+        button_layout = QHBoxLayout(self.button_row)
+        button_layout.setContentsMargins(0, 0, 0, 0)
+        button_layout.setSpacing(12)
         self.create_button = QPushButton("Create Node")
         self.create_button.setObjectName("createNodeConfirmButton")
         self.create_button.setAccessibleName("Create node")
+        self.create_button.setToolTip("Create and launch another local node")
+        self.create_button.setProperty("actionRole", "primary")
+        self._prepare_button(self.create_button)
         self.cancel_button = QPushButton("Cancel")
         self.cancel_button.setObjectName("createNodeCancelButton")
         self.cancel_button.setAccessibleName("Cancel node creation")
+        self.cancel_button.setToolTip("Cancel node creation")
+        self.cancel_button.setProperty("actionRole", "secondary")
+        self._prepare_button(self.cancel_button)
 
         if button_styler:
             button_styler(self.create_button, "start")
@@ -52,13 +74,18 @@ class AddNodeDialog(QDialog):
 
         button_layout.addWidget(self.create_button)
         button_layout.addWidget(self.cancel_button)
-        layout.addLayout(button_layout)
+        layout.addWidget(self.button_row)
 
         self.setLayout(layout)
         self.setStyleSheet(stylesheet)
 
         self.create_button.clicked.connect(self._handle_create_clicked)
         self.cancel_button.clicked.connect(self.reject)
+
+    @staticmethod
+    def _prepare_button(button: QPushButton):
+        button.setMinimumHeight(44)
+        button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
     @staticmethod
     def _capacity_copy(ram_check: dict, existing_node_count: int) -> str:

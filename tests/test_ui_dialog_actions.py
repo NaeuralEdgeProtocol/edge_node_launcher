@@ -1,5 +1,5 @@
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QLineEdit, QPushButton, QScrollArea
+from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QLineEdit, QPushButton, QScrollArea, QSizePolicy
 
 import widgets.dialogs.DockerCheckDialog as docker_check_module
 from ui.ProgressDialog import ImagePullProgressDialog
@@ -188,13 +188,25 @@ def test_add_node_dialog_capacity_copy_and_create_guard(qtbot):
     assert dialog.objectName() == "addNodeDialog"
     assert dialog.accessibleName() == "Add New Node"
     assert dialog.windowTitle() == "Add New Node"
+    assert dialog.minimumWidth() == 420
     assert dialog.info_label.objectName() == "createNodeCapacityLabel"
     assert dialog.info_label.accessibleName() == "Node capacity summary"
+    assert dialog.info_label.wordWrap()
+    assert dialog.info_label.minimumWidth() == 360
+    assert dialog.button_row.objectName() == "createNodeButtonRow"
+    assert dialog.button_row.accessibleName() == "Create node actions"
     assert "System Capacity:" in label_copy
     assert "- Total RAM: 32.0 GB" in label_copy
     assert "- RAM per node: 16 GB" in label_copy
     assert create_button.accessibleName() == "Create node"
+    assert create_button.toolTip() == "Create and launch another local node"
+    assert create_button.property("actionRole") == "primary"
+    assert create_button.minimumHeight() >= 44
+    assert create_button.sizePolicy().horizontalPolicy() == QSizePolicy.Expanding
     assert cancel_button.accessibleName() == "Cancel node creation"
+    assert cancel_button.toolTip() == "Cancel node creation"
+    assert cancel_button.property("actionRole") == "secondary"
+    assert cancel_button.minimumHeight() >= 44
     assert styled == [
         ("createNodeConfirmButton", "start"),
         ("createNodeCancelButton", "stop"),
