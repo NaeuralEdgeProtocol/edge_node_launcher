@@ -18,6 +18,8 @@ from models.NodeInfo import NodeInfo
 from widgets.DockerPullDialog import DockerPullDialog
 from widgets.LoadingDialog import LoadingDialog
 from widgets.CenteredComboBox import CenteredComboBox
+from widgets.loading_indicator import LoadingIndicator
+from app_forms.frm_utils import LoadingIndicator as LegacyLoadingIndicator
 from widgets.app_widgets.activity_log import ActivityLogWidget
 from widgets.app_widgets.config_editor import ConfigEditorWidget
 from widgets.app_widgets.container_list import CONTAINER_LIST_EMPTY_TEXT, ContainerListWidget
@@ -292,8 +294,11 @@ def test_centered_combo_light_popup_uses_supported_qt_stylesheet(qtbot):
     assert combo.sizePolicy().horizontalPolicy() == QSizePolicy.Expanding
     assert "background-color: #F8FAFC" in combo.styleSheet()
     assert "width: 30px" in combo.styleSheet()
-    assert "#1F2937" in combo.lineEdit().styleSheet()
+    assert "color: transparent" in combo.lineEdit().styleSheet()
+    assert "selection-color: transparent" in combo.lineEdit().styleSheet()
     assert combo.lineEdit().textMargins().right() == 28
+    assert combo.lineEdit().isHidden()
+    assert combo.currentText() == "alpha"
 
     combo.showPopup()
     qtbot.wait(50)
@@ -307,7 +312,7 @@ def test_centered_combo_light_popup_uses_supported_qt_stylesheet(qtbot):
 
     combo.set_theme(True)
     assert "background-color: #082747" in combo.styleSheet()
-    assert "#E8EEF8" in combo.lineEdit().styleSheet()
+    assert "color: transparent" in combo.lineEdit().styleSheet()
 
 
 def test_loading_dialog_progress_does_not_process_events_synchronously(qtbot, monkeypatch):
@@ -343,6 +348,24 @@ def test_loading_dialog_exposes_visual_snapshot_targets(qtbot):
     assert dialog.message_label.accessibleName() == "Loading dialog message"
     assert dialog.loading_indicator.objectName() == "loadingDialogIndicator"
     assert dialog.loading_indicator.accessibleName() == "Loading indicator"
+
+
+def test_loading_indicator_lives_in_widgets_with_legacy_alias(qtbot):
+    indicator = LoadingIndicator(size=32)
+    qtbot.addWidget(indicator)
+
+    assert LegacyLoadingIndicator is LoadingIndicator
+    assert indicator.size().width() == 32
+    assert indicator.size().height() == 32
+
+    indicator.start()
+    assert indicator.timer.isActive()
+
+    indicator.rotate()
+    assert indicator.angle == 30
+
+    indicator.stop()
+    assert not indicator.timer.isActive()
 
 
 def test_docker_pull_dialog_exposes_stable_visual_targets(qtbot):

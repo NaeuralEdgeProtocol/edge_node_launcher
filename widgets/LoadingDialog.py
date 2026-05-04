@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel
 from PyQt5.QtCore import Qt, QTimer, pyqtSlot
 import platform
-from app_forms.frm_utils import LoadingIndicator
+from widgets.loading_indicator import LoadingIndicator
 
 class LoadingDialog(QDialog):
     """Reusable loading dialog widget that can be used throughout the application.

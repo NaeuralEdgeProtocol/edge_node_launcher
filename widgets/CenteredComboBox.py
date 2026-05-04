@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import QApplication, QComboBox, QSizePolicy, QStyledItemDelegate
 from PyQt5.QtCore import Qt, QObject, QEvent, QTimer, QRect, QSize
-from PyQt5.QtGui import QColor, QIcon, QPainter, QPen
+from PyQt5.QtGui import QColor, QFontMetrics, QIcon, QPainter, QPen
 from utils.const import DARK_STYLESHEET, DARK_COLORS, LIGHT_COLORS
 
 
@@ -32,6 +32,8 @@ _COMBO_THEME_COLORS = {
         "popup_selected_text": DARK_COLORS["combobox_popup_item_selected_text"],
     },
 }
+
+_SELECTED_TEXT_MARGIN = 36
 
 
 def _combo_stylesheet(colors):
@@ -72,7 +74,9 @@ def _line_edit_stylesheet(colors):
     return f"""
 QLineEdit {{
     background: transparent;
-    color: {colors["text"]};
+    color: transparent;
+    selection-color: transparent;
+    selection-background-color: transparent;
     border: none;
     padding: 0px;
     margin: 0px;
@@ -152,6 +156,8 @@ class CenteredComboBox(QComboBox):
 
         # Make the line edit behave like selected combo text.
         self.lineEdit().setFrame(False)
+        self.lineEdit().hide()
+        self.lineEdit().setAttribute(Qt.WA_TransparentForMouseEvents, True)
 
         self.lineEdit().installEventFilter(ClickToOpenFilter(self))
         # Disable all text interactions:
@@ -178,12 +184,27 @@ class CenteredComboBox(QComboBox):
         self.setMaxVisibleItems(10)
         
     def paintEvent(self, event):
-        """Draw the themed combo and add a lightweight dropdown chevron."""
+        """Draw the themed combo, selected text, and dropdown chevron."""
         super().paintEvent(event)
 
         colors = _COMBO_THEME_COLORS[self.is_dark_theme()]
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
+
+        text_rect = self.rect().adjusted(
+            _SELECTED_TEXT_MARGIN,
+            0,
+            -_SELECTED_TEXT_MARGIN,
+            0,
+        )
+        painter.setPen(QColor(colors["text"]))
+        selected_text = QFontMetrics(self.font()).elidedText(
+            self.currentText(),
+            Qt.ElideMiddle,
+            text_rect.width(),
+        )
+        painter.drawText(text_rect, Qt.AlignCenter | Qt.AlignVCenter, selected_text)
+
         pen = QPen(QColor(colors["arrow"]), 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
         painter.setPen(pen)
         center_y = self.height() // 2
@@ -197,6 +218,7 @@ class CenteredComboBox(QComboBox):
         self.setStyleSheet(_combo_stylesheet(colors))
         self.lineEdit().setStyleSheet(_line_edit_stylesheet(colors))
         self.lineEdit().setTextMargins(28, 0, 28, 0)
+        self.lineEdit().hide()
         self.update()
 
     def addItem(self, text, userData=None):

@@ -4,12 +4,12 @@ import traceback
 from datetime import datetime
 import random
 import subprocess
-import math
 
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QAbstractButton, QCheckBox, QRadioButton, QLabel
-from PyQt5.QtCore import Qt, QRect, QRectF, QPropertyAnimation, QTimer, QSize
-from PyQt5.QtGui import QFont, QPixmap, QIcon, QPainter, QColor, QBrush, QPen
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QAbstractButton, QCheckBox, QRadioButton
+from PyQt5.QtCore import Qt, QRect, QRectF, QPropertyAnimation
+from PyQt5.QtGui import QFont, QPixmap, QIcon, QPainter, QColor, QBrush
 from pyqtgraph import AxisItem
+from widgets.loading_indicator import LoadingIndicator
 
 # List of adjectives and nouns for generating container names
 ADJECTIVES = [
@@ -214,65 +214,3 @@ class ToggleButton1(QAbstractButton):
     self.update()
 
   circle_position = property(get_circle_position, set_circle_position)
-
-class LoadingIndicator(QLabel):
-    def __init__(self, parent=None, size=40):
-        super().__init__(parent)
-        self.angle = 0
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.rotate)
-        self.setFixedSize(QSize(size, size))
-        self._size = size
-        self._color = QColor("#4CAF50")  # Default green color
-        
-    def start(self):
-        """Start the loading animation."""
-        self.show()
-        self.timer.start(50)  # Update every 50ms
-        
-    def stop(self):
-        """Stop the loading animation."""
-        self.timer.stop()
-        self.hide()
-        
-    def rotate(self):
-        """Rotate the spinner by 30 degrees."""
-        self.angle = (self.angle + 30) % 360
-        self.update()
-        
-    def setColor(self, color):
-        """Set the color of the spinner."""
-        self._color = QColor(color)
-        self.update()
-        
-    def paintEvent(self, event):
-        """Paint the spinning indicator."""
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        
-        # Calculate center and radius
-        center = self.rect().center()
-        radius = (min(self.width(), self.height()) - 4) / 2
-        
-        # Set up the pen for drawing
-        pen = QPen(self._color)
-        pen.setWidth(3)
-        painter.setPen(pen)
-        
-        # Draw 8 lines with varying opacity
-        for i in range(8):
-            # Calculate opacity based on position
-            opacity = 1.0 - (i * 0.1)
-            self._color.setAlphaF(opacity)
-            pen.setColor(self._color)
-            painter.setPen(pen)
-            
-            # Calculate line position
-            angle_rad = math.radians(self.angle + (i * 45))
-            start_x = center.x() + (radius * 0.5 * math.cos(angle_rad))
-            start_y = center.y() + (radius * 0.5 * math.sin(angle_rad))
-            end_x = center.x() + (radius * math.cos(angle_rad))
-            end_y = center.y() + (radius * math.sin(angle_rad))
-            
-            # Draw the line
-            painter.drawLine(int(start_x), int(start_y), int(end_x), int(end_y))

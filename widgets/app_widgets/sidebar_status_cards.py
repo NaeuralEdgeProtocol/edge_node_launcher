@@ -9,7 +9,6 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from app_forms.frm_utils import LoadingIndicator
 from utils.const import (
     COPY_ADDRESS_TOOLTIP,
     COPY_ETH_ADDRESS_TOOLTIP,
@@ -26,6 +25,7 @@ from utils.const import (
     VCPUS_NOT_AVAILABLE,
 )
 from widgets.ElidedLabel import ElidedLabel
+from widgets.loading_indicator import LoadingIndicator
 
 
 def _configure_sidebar_label(label: QLabel) -> QLabel:
