@@ -19,6 +19,7 @@ ACTION_SOURCE_FILES = [
     Path("widgets/app_widgets/metrics_widget.py"),
     Path("widgets/app_widgets/node_info.py"),
     Path("widgets/app_widgets/sidebar_controls.py"),
+    Path("widgets/app_widgets/sidebar_panel.py"),
     Path("widgets/app_widgets/sidebar_status_cards.py"),
 ]
 
@@ -88,6 +89,7 @@ def _has_action_id_source(source: str, action_id: str) -> bool:
 
     for helper_name in (
         "_create_sidebar_action_button",
+        "create_sidebar_action_button",
         "_create_action_button",
         "_create_copy_button",
     ):

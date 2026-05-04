@@ -6,6 +6,7 @@ from widgets.app_widgets.metric_plot_grid import METRIC_EMPTY_STATE_TEXT, Metric
 from widgets.app_widgets.log_console import LogConsoleWidget
 from widgets.app_widgets.config_editor import ConfigEditorWidget
 from widgets.app_widgets.sidebar_controls import create_sidebar_action_button, create_sidebar_section_label
+from widgets.app_widgets.sidebar_panel import SidebarPanel
 from widgets.app_widgets.sidebar_status_cards import NodeStatusPanel, ResourceStatusPanel
 
 __all__ = [
@@ -20,6 +21,7 @@ __all__ = [
     'ConfigEditorWidget',
     'create_sidebar_action_button',
     'create_sidebar_section_label',
+    'SidebarPanel',
     'NodeStatusPanel',
     'ResourceStatusPanel',
 ]

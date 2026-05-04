@@ -34,6 +34,7 @@ from widgets.app_widgets.metric_plot_grid import (
 from widgets.app_widgets.metrics_widget import MetricsWidget
 from widgets.app_widgets.node_info import NodeInfoWidget
 from widgets.app_widgets.sidebar_controls import create_sidebar_action_button, create_sidebar_section_label
+from widgets.app_widgets.sidebar_panel import SidebarPanel
 from widgets.app_widgets.sidebar_status_cards import NodeStatusPanel, ResourceStatusPanel
 
 
@@ -314,6 +315,71 @@ def test_sidebar_control_factories_expose_stable_metadata(qtbot):
     qtbot.mouseClick(button, Qt.LeftButton)
 
     assert calls == ["clicked"]
+
+
+def test_sidebar_panel_exposes_stable_launcher_controls(qtbot):
+    calls = []
+
+    def record(name):
+        return lambda *args: calls.append(name)
+
+    panel = SidebarPanel(
+        is_dark=True,
+        force_debug=True,
+        add_node_handler=record("add"),
+        container_selected_handler=record("select"),
+        rename_handler=record("rename"),
+        toggle_handler=record("toggle"),
+        docker_download_handler=record("docker"),
+        dapp_handler=record("dapp"),
+        explorer_handler=record("explorer"),
+        refresh_handler=record("refresh"),
+        copy_address_handler=record("copy_address"),
+        copy_eth_handler=record("copy_eth"),
+        theme_toggle_handler=record("theme"),
+        force_debug_handler=record("debug"),
+    )
+    qtbot.addWidget(panel)
+
+    assert panel.objectName() == "sidebarPanel"
+    assert panel.property("role") == "navigationSidebar"
+    assert panel.findChild(QWidget, "sidebarPanel") is None
+    assert panel.add_node_button.objectName() == "addNodeButton"
+    assert panel.container_combo.objectName() == "nodeSelectorCombo"
+    assert panel.container_combo.accessibleName() == "Node selector"
+    assert panel.renameNodeButton.objectName() == "renameNodeButton"
+    assert panel.toggleButton.objectName() == "startNodeButton"
+    assert panel.docker_download_button.objectName() == "downloadDockerButton"
+    assert panel.dapp_button.objectName() == "openDappButton"
+    assert panel.explorer_button.objectName() == "openExplorerButton"
+    assert panel.refreshButton.objectName() == "refreshNodeInfoButton"
+    assert panel.node_status_panel.objectName() == "infoBox"
+    assert panel.resource_status_panel.objectName() == "resourcesBox"
+    assert panel.themeToggleButton.objectName() == "themeToggleButton"
+    assert panel.force_debug_checkbox.objectName() == "forceDebugCheckbox"
+    assert panel.force_debug_checkbox.isChecked()
+
+    qtbot.mouseClick(panel.add_node_button, Qt.LeftButton)
+    qtbot.mouseClick(panel.renameNodeButton, Qt.LeftButton)
+    qtbot.mouseClick(panel.toggleButton, Qt.LeftButton)
+    qtbot.mouseClick(panel.docker_download_button, Qt.LeftButton)
+    qtbot.mouseClick(panel.dapp_button, Qt.LeftButton)
+    qtbot.mouseClick(panel.explorer_button, Qt.LeftButton)
+    qtbot.mouseClick(panel.refreshButton, Qt.LeftButton)
+    qtbot.mouseClick(panel.themeToggleButton, Qt.LeftButton)
+    panel.force_debug_checkbox.setChecked(False)
+
+    assert calls == [
+        "add",
+        "rename",
+        "toggle",
+        "docker",
+        "dapp",
+        "explorer",
+        "refresh",
+        "theme",
+        "debug",
+    ]
 
 
 def test_centered_combo_light_popup_uses_supported_qt_stylesheet(qtbot):

@@ -19,7 +19,6 @@ from PyQt5.QtWidgets import (
   QFrame,
   QDialog,
   QHBoxLayout,
-  QCheckBox,
   QStyle,
   QComboBox,
   QMessageBox,
@@ -49,7 +48,7 @@ from PyQt5.QtCore import (
     Qt, QTimer, QSize, QThread, QObject, pyqtSignal, QUrl, QSettings, QRect,
     QProcess, QPropertyAnimation, QModelIndex, QSortFilterProxyModel
 )
-from PyQt5.QtGui import QFont, QIcon, QPixmap, QPainter
+from PyQt5.QtGui import QIcon, QPixmap, QPainter
 from PyQt5.QtSvg import QSvgRenderer
 
 from models.NodeInfo import NodeInfo
@@ -63,7 +62,7 @@ from widgets.app_widgets.sidebar_controls import (
   create_sidebar_action_button as build_sidebar_action_button,
   create_sidebar_section_label as build_sidebar_section_label,
 )
-from widgets.app_widgets.sidebar_status_cards import NodeStatusPanel, ResourceStatusPanel
+from widgets.app_widgets.sidebar_panel import SidebarPanel
 from utils.const import *
 from utils.docker import _DockerUtilsMixin
 from utils.docker_commands import DockerCommandHandler
@@ -88,7 +87,6 @@ from models.ConfigApp import ConfigApp
 from widgets.HostSelector import HostSelector
 from widgets.ModeSwitch import ModeSwitch
 from widgets.dialogs.DockerCheckDialog import DockerCheckDialog
-from widgets.CenteredComboBox import CenteredComboBox
 from widgets.LoadingDialog import LoadingDialog
 
 from ver import __VER__ as CURRENT_VERSION
@@ -707,168 +705,59 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
   def _create_sidebar_panel(self) -> QWidget:
     """Create the left navigation and status sidebar."""
-    menu_widget = QWidget()
-    menu_widget.setObjectName("sidebarPanel")
-    menu_widget.setProperty("role", "navigationSidebar")
-    menu_widget.setMinimumWidth(0)
-    menu_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
-
-    menu_layout = QVBoxLayout(menu_widget)
-    menu_layout.setAlignment(Qt.AlignTop)
-    menu_layout.setContentsMargins(0, 2, 8, 2)
-
-    top_button_area = QVBoxLayout()
-    top_button_area.setObjectName("topButtonArea")
-    top_button_area.setContentsMargins(5, 0, 8, 4)
-    top_button_area.addWidget(self.create_sidebar_section_label("Node", "nodeControlsSectionLabel"))
-
-    container_selector_layout = QVBoxLayout()
-    self.add_node_button = self._create_sidebar_action_button(
-        "Add New Node",
-        "addNodeButton",
-        "secondary",
-        ADD_NODE_TOOLTIP,
-        self.show_add_node_dialog,
+    menu_widget = SidebarPanel(
+        is_dark=self._current_stylesheet == DARK_STYLESHEET,
+        force_debug=self.__force_debug,
+        add_node_handler=self.show_add_node_dialog,
+        container_selected_handler=self._on_container_selected,
+        rename_handler=self.show_rename_dialog,
+        toggle_handler=self.toggle_container,
+        docker_download_handler=self.open_docker_download,
+        dapp_handler=self.dapp_button_clicked,
+        explorer_handler=self.explorer_button_clicked,
+        refresh_handler=self.force_refresh_all,
+        copy_address_handler=self.copy_address,
+        copy_eth_handler=self.copy_eth_address,
+        theme_toggle_handler=self.toggle_theme,
+        force_debug_handler=self.toggle_force_debug,
+        parent=self,
     )
-    container_selector_layout.addWidget(self.add_node_button)
-
-    self.container_combo = CenteredComboBox()
-    self.container_combo.setObjectName("nodeSelectorCombo")
-    self.container_combo.setAccessibleName("Node selector")
-    self.container_combo.setToolTip("Select active node")
-    self.container_combo.setFont(QFont("Courier New", 10))
-    self.container_combo.currentTextChanged.connect(self._on_container_selected)
-    self.container_combo.setMinimumHeight(36)
-    self.container_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-    is_dark = self._current_stylesheet == DARK_STYLESHEET
-    if hasattr(self.container_combo, 'set_theme'):
-        self.container_combo.set_theme(is_dark)
-    container_selector_layout.addWidget(self.container_combo)
-
-    top_button_area.addLayout(container_selector_layout)
-
-    self.renameNodeButton = self._create_sidebar_action_button(
-        RENAME_NODE_BUTTON_TEXT,
-        "renameNodeButton",
-        "secondary",
-        RENAME_NODE_TOOLTIP,
-        self.show_rename_dialog,
-    )
-    top_button_area.addWidget(self.renameNodeButton)
-
-    self.toggleButton = self._create_sidebar_action_button(
-        LAUNCH_CONTAINER_BUTTON_TEXT,
-        "startNodeButton",
-        "primary",
-        TOGGLE_NODE_TOOLTIP,
-        self.toggle_container,
-    )
+    self._bind_sidebar_panel_aliases(menu_widget)
     self.apply_button_style(self.toggleButton, 'toggle_start')
-    top_button_area.addWidget(self.toggleButton)
-
-    top_button_area.addWidget(self.create_sidebar_section_label("Network", "networkActionsSectionLabel"))
-
-    self.docker_download_button = self._create_sidebar_action_button(
-        DOWNLOAD_DOCKER_BUTTON_TEXT,
-        "downloadDockerButton",
-        "secondary",
-        DOCKER_DOWNLOAD_TOOLTIP,
-        self.open_docker_download,
-    )
-    top_button_area.addWidget(self.docker_download_button)
-
-    self.dapp_button = self._create_sidebar_action_button(
-        DAPP_BUTTON_TEXT,
-        "openDappButton",
-        "secondary",
-        DAPP_TOOLTIP,
-        self.dapp_button_clicked,
-    )
-    top_button_area.addWidget(self.dapp_button)
-
-    self.explorer_button = self._create_sidebar_action_button(
-        EXPLORER_BUTTON_TEXT,
-        "openExplorerButton",
-        "secondary",
-        EXPLORER_TOOLTIP,
-        self.explorer_button_clicked,
-    )
-    top_button_area.addWidget(self.explorer_button)
-
-    top_button_area.addSpacing(7)
-    top_button_area.addWidget(self.create_sidebar_section_label("Status", "statusSectionLabel"))
-
-    self.refreshButton = self._create_sidebar_action_button(
-        "Refresh Node Info",
-        "refreshNodeInfoButton",
-        "secondary",
-        REFRESH_NODE_INFO_TOOLTIP,
-        self.force_refresh_all,
-    )
-    top_button_area.addWidget(self.refreshButton)
-
-    top_button_area.addSpacing(7)
-    top_button_area.addWidget(self._create_node_status_panel())
-    top_button_area.addSpacing(7)
-    top_button_area.addWidget(self._create_resource_status_panel())
-
-    menu_layout.addLayout(top_button_area)
-    menu_layout.addSpacing(10)
-    menu_layout.addLayout(self._create_sidebar_settings_section())
 
     return menu_widget
 
-  def _create_node_status_panel(self) -> NodeStatusPanel:
-    panel = NodeStatusPanel(self.copy_address, self.copy_eth_address, parent=self)
-    self.node_status_title = panel.node_status_title
-    self.loading_indicator = panel.loading_indicator
-    self.addressDisplay = panel.addressDisplay
-    self.copyAddrButton = panel.copyAddrButton
-    self.ethAddressDisplay = panel.ethAddressDisplay
-    self.copyEthButton = panel.copyEthButton
-    self.nameDisplay = panel.nameDisplay
-    self.node_uptime = panel.node_uptime
-    self.node_epoch = panel.node_epoch
-    self.node_epoch_avail = panel.node_epoch_avail
-    self.node_version = panel.node_version
-    return panel
+  def _bind_sidebar_panel_aliases(self, panel: SidebarPanel) -> None:
+    self.add_node_button = panel.add_node_button
+    self.container_combo = panel.container_combo
+    self.renameNodeButton = panel.renameNodeButton
+    self.toggleButton = panel.toggleButton
+    self.docker_download_button = panel.docker_download_button
+    self.dapp_button = panel.dapp_button
+    self.explorer_button = panel.explorer_button
+    self.refreshButton = panel.refreshButton
+    self.themeToggleButton = panel.themeToggleButton
+    self.force_debug_checkbox = panel.force_debug_checkbox
 
-  def _create_resource_status_panel(self) -> ResourceStatusPanel:
-    panel = ResourceStatusPanel(parent=self)
-    self.resource_status_title = panel.resource_status_title
-    self.memoryDisplay = panel.memoryDisplay
-    self.vcpusDisplay = panel.vcpusDisplay
-    self.storageDisplay = panel.storageDisplay
-    return panel
+    node_panel = panel.node_status_panel
+    resource_panel = panel.resource_status_panel
 
-  def _create_sidebar_settings_section(self) -> QVBoxLayout:
-    bottom_button_area = QVBoxLayout()
-    bottom_button_area.setObjectName("bottomButtonArea")
-    bottom_button_area.setContentsMargins(5, 4, 8, 0)
-    bottom_button_area.addWidget(self.create_sidebar_section_label("Settings", "settingsSectionLabel"))
+    self.node_status_title = node_panel.node_status_title
+    self.loading_indicator = node_panel.loading_indicator
+    self.addressDisplay = node_panel.addressDisplay
+    self.copyAddrButton = node_panel.copyAddrButton
+    self.ethAddressDisplay = node_panel.ethAddressDisplay
+    self.copyEthButton = node_panel.copyEthButton
+    self.nameDisplay = node_panel.nameDisplay
+    self.node_uptime = node_panel.node_uptime
+    self.node_epoch = node_panel.node_epoch
+    self.node_epoch_avail = node_panel.node_epoch_avail
+    self.node_version = node_panel.node_version
 
-    self.themeToggleButton = self._create_sidebar_action_button(
-        LIGHT_DASHBOARD_BUTTON_TEXT,
-        "themeToggleButton",
-        "utility",
-        THEME_TOGGLE_TOOLTIP,
-        self.toggle_theme,
-    )
-    bottom_button_area.addWidget(self.themeToggleButton)
-
-    self.force_debug_checkbox = QCheckBox('Force Debug Mode')
-    self.force_debug_checkbox.setObjectName("forceDebugCheckbox")
-    self.force_debug_checkbox.setProperty("role", "settingsToggle")
-    self.force_debug_checkbox.setAccessibleName("Force Debug Mode")
-    self.force_debug_checkbox.setToolTip(FORCE_DEBUG_TOOLTIP)
-    self.force_debug_checkbox.setChecked(self.__force_debug)
-    self.force_debug_checkbox.setFont(QFont("Segoe UI", 9, QFont.Medium))
-    self.force_debug_checkbox.setMinimumHeight(32)
-
-    self.force_debug_checkbox.stateChanged.connect(self.toggle_force_debug)
-    bottom_button_area.addWidget(self.force_debug_checkbox)
-
-    return bottom_button_area
+    self.resource_status_title = resource_panel.resource_status_title
+    self.memoryDisplay = resource_panel.memoryDisplay
+    self.vcpusDisplay = resource_panel.vcpusDisplay
+    self.storageDisplay = resource_panel.storageDisplay
 
   def initUI(self):
     self.setWindowTitle(WINDOW_TITLE)
