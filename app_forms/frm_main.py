@@ -831,17 +831,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     """Return True when a Qt wrapper no longer owns a live C++ object."""
     return LifecycleDialogPresenter.qt_object_deleted(obj)
 
-  def _clear_dialog_reference(self, dialog_attr: str, dialog=None) -> None:
-    """Clear a dialog attribute when it still points at the supplied dialog."""
-    self._lifecycle_dialogs.clear_reference(dialog_attr, dialog)
-
-  def _dialog_reference(self, dialog_attr: str):
-    """Return a live dialog reference or clear stale/deleted wrappers."""
-    return self._lifecycle_dialogs.reference(dialog_attr)
-
-  def _dialog_is_visible(self, dialog_attr: str) -> bool:
-    return self._lifecycle_dialogs.is_visible(dialog_attr)
-
   def _update_dialog_progress(
     self,
     dialog_attr: str,
@@ -862,9 +851,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       message,
       process_events=process_events,
     )
-
-  def _safe_close_dialog_reference(self, dialog_attr: str, dialog=None) -> bool:
-    return self._lifecycle_dialogs.safe_close_reference(dialog_attr, dialog)
 
   def _schedule_safe_close_dialog_reference(
     self,
@@ -2907,8 +2893,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     
     try:
         # Show loading dialog if not already showing one from add_new_node or toggle_container
-        startup_dialog_visible = self._dialog_is_visible("startup_dialog")
-        launcher_dialog_visible = self._dialog_reference("launcher_dialog") is not None
+        startup_dialog_visible = self._lifecycle_dialogs.is_visible("startup_dialog")
+        launcher_dialog_visible = self._lifecycle_dialogs.reference("launcher_dialog") is not None
         
         if not startup_dialog_visible and not launcher_dialog_visible:
             container_config = self.config_manager.get_container(container_name)

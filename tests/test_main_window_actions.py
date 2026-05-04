@@ -606,7 +606,6 @@ def test_lifecycle_dialog_presenter_backs_launch_progress_helpers(qtbot, monkeyp
 
     dialog = launcher._lifecycle_dialogs.show_launch_loading("alpha")
 
-    assert launcher._dialog_reference("launcher_dialog") is dialog
     assert launcher._lifecycle_dialogs.reference("launcher_dialog") is dialog
     assert launcher._update_launch_dialog_progress("Launching Docker container...")
     assert dialog.message_label.text() == "Launching Docker container..."
