@@ -729,6 +729,16 @@ COMMON_STYLESHEET_TEMPLATE = """
     margin: 2px;
     background-color: transparent;
   }}
+  QGroupBox[role="statusPanel"] QLabel[role="sidebarCardTitle"],
+  QGroupBox[role="resourcePanel"] QLabel[role="sidebarCardTitle"] {{
+    color: {section_label_text};
+    border-bottom: 1px solid {section_label_border};
+    font-family: "Segoe UI";
+    font-size: 9pt;
+    font-weight: 600;
+    padding: 0px 4px 6px 4px;
+    margin: 0px 2px 4px 2px;
+  }}
   QGroupBox[role="statusPanel"] QLabel[statusField="address"] {{
     font-family: "Courier New";
   }}

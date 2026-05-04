@@ -732,6 +732,17 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
     return self._configure_sidebar_status_label(label)
 
+  def _create_sidebar_card_title(self, text: str, object_name: str, accessible_name: str) -> QLabel:
+    label = QLabel(text)
+    label.setObjectName(object_name)
+    label.setProperty("role", "sidebarCardTitle")
+    label.setAccessibleName(accessible_name)
+    label.setFont(QFont("Segoe UI", 9, QFont.DemiBold))
+    label.setMinimumHeight(24)
+    label.setWordWrap(False)
+    label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+    return label
+
   def _create_sidebar_panel(self) -> QWidget:
     """Create the left navigation and status sidebar."""
     menu_widget = QWidget()
@@ -854,6 +865,13 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     info_box_layout = QVBoxLayout()
     info_box_layout.setContentsMargins(5, 6, 5, 8)
 
+    self.node_status_title = self._create_sidebar_card_title(
+      "Node Details",
+      "nodeStatusCardTitle",
+      "Node details card",
+    )
+    info_box_layout.addWidget(self.node_status_title)
+
     self.loading_indicator = LoadingIndicator(size=30)
     self.loading_indicator.hide()
     loading_layout = QHBoxLayout()
@@ -944,6 +962,13 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     resources_box_layout = QVBoxLayout()
     resources_box_layout.setContentsMargins(5, 6, 5, 8)
+
+    self.resource_status_title = self._create_sidebar_card_title(
+      "Host Resources",
+      "resourceStatusCardTitle",
+      "Host resources card",
+    )
+    resources_box_layout.addWidget(self.resource_status_title)
 
     self.memoryDisplay = QLabel(f"{MEMORY_LABEL} {MEMORY_NOT_AVAILABLE}")
     self.memoryDisplay.setObjectName("memoryResourceDisplay")

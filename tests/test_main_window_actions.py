@@ -1638,8 +1638,20 @@ def test_status_panels_have_semantic_roles(qtbot, monkeypatch):
     assert resources_box is not None
     assert info_box.property("role") == "statusPanel"
     assert resources_box.property("role") == "resourcePanel"
+    assert launcher.node_status_title.objectName() == "nodeStatusCardTitle"
+    assert launcher.node_status_title.text() == "Node Details"
+    assert launcher.node_status_title.property("role") == "sidebarCardTitle"
+    assert launcher.node_status_title.accessibleName() == "Node details card"
+    assert launcher.node_status_title.font().family() != "Courier New"
+    assert launcher.resource_status_title.objectName() == "resourceStatusCardTitle"
+    assert launcher.resource_status_title.text() == "Host Resources"
+    assert launcher.resource_status_title.property("role") == "sidebarCardTitle"
+    assert launcher.resource_status_title.accessibleName() == "Host resources card"
+    assert launcher.resource_status_title.font().family() != "Courier New"
     assert info_box.findChild(QPushButton, "copyAddrButton") is launcher.copyAddrButton
     assert info_box.findChild(QPushButton, "copyEthButton") is launcher.copyEthButton
+    assert info_box.findChild(QLabel, "nodeStatusCardTitle") is launcher.node_status_title
+    assert resources_box.findChild(QLabel, "resourceStatusCardTitle") is launcher.resource_status_title
     assert resources_box.findChild(QLabel, "memoryResourceDisplay") is launcher.memoryDisplay
     assert resources_box.findChild(QLabel, "cpuResourceDisplay") is launcher.vcpusDisplay
     assert resources_box.findChild(QLabel, "storageResourceDisplay") is launcher.storageDisplay

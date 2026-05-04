@@ -10,6 +10,7 @@ def test_status_panels_are_styled_by_semantic_role():
     for stylesheet in (DARK_STYLESHEET, LIGHT_STYLESHEET):
         assert 'QGroupBox[role="statusPanel"]' in stylesheet
         assert 'QGroupBox[role="resourcePanel"]' in stylesheet
+        assert 'QLabel[role="sidebarCardTitle"]' in stylesheet
         assert "border-radius: 8px;" in stylesheet
         assert "#infoBox {" not in stylesheet
         assert "#resourcesBox {" not in stylesheet
