@@ -2916,7 +2916,10 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     )
 
     from widgets.DockerPullDialog import DockerPullDialog
-    self.docker_pull_dialog = DockerPullDialog(self)
+    self.docker_pull_dialog = DockerPullDialog(
+      self,
+      is_dark=self._current_stylesheet == DARK_STYLESHEET,
+    )
     self.docker_pull_dialog.pull_complete.connect(self._on_docker_pull_complete)
     self.docker_pull_dialog.show()
 

@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (
 
 from models.NodeHistory import NodeHistory
 from models.NodeInfo import NodeInfo
-from widgets.DockerPullDialog import DockerPullDialog
+from widgets.DockerPullDialog import DOCKER_PULL_DIALOG_STYLE_COLORS, DockerPullDialog
 from widgets.LoadingDialog import LoadingDialog
 from widgets.CenteredComboBox import CenteredComboBox
 from widgets.loading_indicator import LoadingIndicator
@@ -572,22 +572,44 @@ def test_docker_pull_dialog_exposes_stable_visual_targets(qtbot):
 
     assert dialog.objectName() == "dockerPullDialog"
     assert dialog.accessibleName() == "Pulling Docker Image"
-    assert dialog.findChild(QLabel, "dockerPullTitleLabel").text() == "Pulling Docker Image"
-    assert dialog.findChild(QLabel, "dockerPullTitleLabel").accessibleName() == "Docker pull title"
+    assert dialog.findChild(QLabel, "dockerPullTitleLabel") is dialog.title_label
+    assert dialog.title_label.text() == "Pulling Docker Image"
+    assert dialog.title_label.accessibleName() == "Docker pull title"
     assert dialog.findChild(QLabel, "dockerPullInfoLabel") is dialog.info_label
     assert dialog.info_label.accessibleName() == "Docker pull status"
     assert dialog.findChild(QProgressBar, "dockerPullOverallProgress") is dialog.overall_progress
     assert dialog.overall_progress.accessibleName() == "Docker pull overall progress"
-    assert dialog.findChild(QWidget, "dockerPullLayerFrame") is not None
-    assert dialog.findChild(QWidget, "dockerPullLayerScrollArea") is not None
-    assert dialog.findChild(QWidget, "dockerPullLayerScrollContent") is not None
-    assert dialog.findChild(QWidget, "dockerPullLayerFrame").accessibleName() == "Docker pull layer progress"
-    assert dialog.findChild(QWidget, "dockerPullLayerScrollArea").accessibleName() == "Docker pull layer list"
+    assert dialog.findChild(QWidget, "dockerPullLayerFrame") is dialog.layer_frame
+    assert dialog.findChild(QWidget, "dockerPullLayerScrollArea") is dialog.scroll_area
+    assert dialog.findChild(QWidget, "dockerPullLayerScrollContent") is dialog.scroll_content
+    assert dialog.layer_frame.accessibleName() == "Docker pull layer progress"
+    assert dialog.scroll_area.accessibleName() == "Docker pull layer list"
     assert dialog.findChild(QScrollArea, "dockerPullLayerScrollArea").horizontalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
-    assert dialog.findChild(QWidget, "dockerPullLayerScrollContent").accessibleName() == "Docker pull layer list content"
-    assert dialog.findChild(QLabel, "dockerPullLayerHeaderLabel").accessibleName() == "Layer progress heading"
+    assert dialog.scroll_content.accessibleName() == "Docker pull layer list content"
+    assert dialog.findChild(QLabel, "dockerPullLayerHeaderLabel") is dialog.layer_header_label
+    assert dialog.layer_header_label.accessibleName() == "Layer progress heading"
     assert dialog.findChild(QLabel, "dockerPullLayerEmptyState").text() == "Waiting for Docker layer output..."
     assert dialog.findChild(QLabel, "dockerPullLayerEmptyState").accessibleName() == "Docker pull waiting state"
+    assert DOCKER_PULL_DIALOG_STYLE_COLORS[True]["dialog_bg"] in dialog.styleSheet()
+
+
+def test_docker_pull_dialog_theme_styles_are_switchable(qtbot):
+    dialog = DockerPullDialog(is_dark=False)
+    qtbot.addWidget(dialog)
+
+    dialog.update_pull_progress("abcdef123456: Downloading 50%")
+
+    light_colors = DOCKER_PULL_DIALOG_STYLE_COLORS[False]
+    assert light_colors["dialog_bg"] in dialog.styleSheet()
+    assert light_colors["title_text"] in dialog.title_label.styleSheet()
+    assert light_colors["layer_accent"] in dialog.layer_widgets["abcdef123456"]["label"].styleSheet()
+
+    dialog.apply_theme(True)
+
+    dark_colors = DOCKER_PULL_DIALOG_STYLE_COLORS[True]
+    assert dark_colors["dialog_bg"] in dialog.styleSheet()
+    assert dark_colors["title_text"] in dialog.title_label.styleSheet()
+    assert dark_colors["layer_accent"] in dialog.layer_widgets["abcdef123456"]["label"].styleSheet()
 
 
 def test_docker_pull_dialog_updates_layer_progress_with_named_children(qtbot):

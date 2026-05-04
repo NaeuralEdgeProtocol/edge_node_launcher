@@ -11,7 +11,7 @@ import app_forms.frm_main as frm_main
 from models.NodeHistory import NodeHistory
 from models.NodeInfo import NodeInfo
 from utils.config_manager import ContainerConfig
-from widgets.DockerPullDialog import DockerPullDialog
+from widgets.DockerPullDialog import DOCKER_PULL_DIALOG_STYLE_COLORS, DockerPullDialog
 from widgets.ToastWidget import NotificationType
 import widgets.app_widgets.dashboard_panel as dashboard_panel_module
 from widgets.app_widgets.activity_log import ACTIVITY_LOG_COLOR_MAP, ActivityLogWidget
@@ -1318,6 +1318,17 @@ def test_docker_pull_completion_closes_dialog_reference(qtbot, monkeypatch):
     assert launcher.toast.notifications == [
         (NotificationType.ERROR, "Failed to pull Docker image: network error")
     ]
+
+
+def test_docker_pull_dialog_uses_current_launcher_theme(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    fake_handler.pull_image = lambda callback, error_callback, output_callback=None: None
+    launcher._current_stylesheet = frm_main.LIGHT_STYLESHEET
+
+    launcher._perform_container_launch("r1node", "r1vol")
+
+    assert launcher.docker_pull_dialog is not None
+    assert DOCKER_PULL_DIALOG_STYLE_COLORS[False]["dialog_bg"] in launcher.docker_pull_dialog.styleSheet()
 
 
 def test_docker_pull_close_does_not_clear_replaced_dialog(qtbot, monkeypatch):
