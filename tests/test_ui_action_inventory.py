@@ -18,6 +18,7 @@ ACTION_SOURCE_FILES = [
     Path("widgets/app_widgets/log_console.py"),
     Path("widgets/app_widgets/metrics_widget.py"),
     Path("widgets/app_widgets/node_info.py"),
+    Path("widgets/app_widgets/sidebar_controls.py"),
     Path("widgets/app_widgets/sidebar_status_cards.py"),
 ]
 

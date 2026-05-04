@@ -16,7 +16,6 @@ from PyQt5.QtWidgets import (
   QWidget,
   QVBoxLayout,
   QPushButton,
-  QLabel,
   QFrame,
   QDialog,
   QHBoxLayout,
@@ -60,6 +59,10 @@ from widgets.dialogs.AddNodeDialog import AddNodeDialog
 from widgets.dialogs.RenameNodeDialog import RenameNodeDialog
 from widgets.app_widgets.activity_log import ActivityLogWidget
 from widgets.app_widgets.metric_plot_grid import METRIC_EMPTY_STATE_TEXT, create_metrics_graph_grid
+from widgets.app_widgets.sidebar_controls import (
+  create_sidebar_action_button as build_sidebar_action_button,
+  create_sidebar_section_label as build_sidebar_section_label,
+)
 from widgets.app_widgets.sidebar_status_cards import NodeStatusPanel, ResourceStatusPanel
 from utils.const import *
 from utils.docker import _DockerUtilsMixin
@@ -341,14 +344,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     """)
 
   def create_sidebar_section_label(self, text, object_name):
-    label = QLabel(text)
-    label.setObjectName(object_name)
-    label.setAccessibleName(f"{text} section")
-    label.setProperty("role", "sidebarSection")
-    label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-    label.setFont(QFont("Segoe UI", 9, QFont.DemiBold))
-    label.setMinimumHeight(30)
-    return label
+    return build_sidebar_section_label(text, object_name)
 
   def check_docker_with_ui(self):
     """Check Docker status and handle UI interactions.
@@ -707,15 +703,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     return sidebar_scroll
 
   def _create_sidebar_action_button(self, text, object_name, action_role, tooltip, handler) -> QPushButton:
-    button = QPushButton(text)
-    button.setObjectName(object_name)
-    button.setProperty("actionRole", action_role)
-    button.setToolTip(tooltip)
-    button.setAccessibleName(text)
-    button.setMinimumWidth(0)
-    button.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
-    button.clicked.connect(handler)
-    return button
+    return build_sidebar_action_button(text, object_name, action_role, tooltip, handler)
 
   def _create_sidebar_panel(self) -> QWidget:
     """Create the left navigation and status sidebar."""

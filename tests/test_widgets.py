@@ -33,6 +33,7 @@ from widgets.app_widgets.metric_plot_grid import (
 )
 from widgets.app_widgets.metrics_widget import MetricsWidget
 from widgets.app_widgets.node_info import NodeInfoWidget
+from widgets.app_widgets.sidebar_controls import create_sidebar_action_button, create_sidebar_section_label
 from widgets.app_widgets.sidebar_status_cards import NodeStatusPanel, ResourceStatusPanel
 
 
@@ -282,6 +283,37 @@ def test_sidebar_status_card_panels_expose_stable_controls(qtbot):
     assert resource_panel.vcpusDisplay.property("resourceField") == "cpu"
     assert resource_panel.storageDisplay.objectName() == "storageResourceDisplay"
     assert resource_panel.storageDisplay.property("resourceField") == "storage"
+
+
+def test_sidebar_control_factories_expose_stable_metadata(qtbot):
+    calls = []
+    label = create_sidebar_section_label("Network", "networkActionsSectionLabel")
+    button = create_sidebar_action_button(
+        "Launch dApp",
+        "openDappButton",
+        "secondary",
+        "Open Ratio1 dApp",
+        lambda: calls.append("clicked"),
+    )
+    qtbot.addWidget(label)
+    qtbot.addWidget(button)
+
+    assert label.objectName() == "networkActionsSectionLabel"
+    assert label.accessibleName() == "Network section"
+    assert label.property("role") == "sidebarSection"
+    assert label.font().family() == "Segoe UI"
+    assert label.minimumHeight() == 30
+
+    assert button.objectName() == "openDappButton"
+    assert button.property("actionRole") == "secondary"
+    assert button.toolTip() == "Open Ratio1 dApp"
+    assert button.accessibleName() == "Launch dApp"
+    assert button.minimumWidth() == 0
+    assert button.sizePolicy().horizontalPolicy() == QSizePolicy.Ignored
+
+    qtbot.mouseClick(button, Qt.LeftButton)
+
+    assert calls == ["clicked"]
 
 
 def test_centered_combo_light_popup_uses_supported_qt_stylesheet(qtbot):
