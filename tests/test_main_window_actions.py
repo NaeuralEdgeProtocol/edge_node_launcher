@@ -1026,6 +1026,51 @@ def test_docker_pull_completion_uses_captured_launch_target(qtbot, monkeypatch):
     assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
 
 
+def test_continue_launch_after_pull_restores_target_and_schedules_launch(qtbot, monkeypatch):
+    launcher, fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    fake_config.add_container(
+        ContainerConfig(
+            name="r1node2",
+            volume="r1vol2",
+            node_alias="beta",
+        )
+    )
+    launcher.refresh_container_list()
+    assert launcher._select_container_by_name("r1node")
+    fake_handler.set_container_name("stale-node")
+    delayed_calls = []
+    launch_calls = []
+
+    launcher._perform_container_launch_after_pull = (
+        lambda container_name, volume_name: launch_calls.append((container_name, volume_name))
+    )
+    monkeypatch.setattr(
+        frm_main.QTimer,
+        "singleShot",
+        lambda delay_ms, callback: delayed_calls.append((delay_ms, callback)),
+    )
+
+    launcher._continue_launch_after_successful_pull(
+        {
+            "container_name": "r1node2",
+            "volume_name": "r1vol2",
+        }
+    )
+
+    assert fake_handler.container_name == "r1node2"
+    assert fake_handler.container_names[-1] == "r1node2"
+    assert launcher._selected_container_name() == "r1node2"
+    assert launcher.launcher_dialog is not None
+    assert launcher.launcher_dialog.message_label.text() == "Preparing to launch Docker container..."
+    handoff_calls = [callback for delay_ms, callback in delayed_calls if delay_ms == 100]
+    assert len(handoff_calls) == 1
+    assert launch_calls == []
+
+    handoff_calls[0]()
+
+    assert launch_calls == [("r1node2", "r1vol2")]
+
+
 def test_docker_pull_completion_closes_dialog_reference(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
     launcher.docker_pull_dialog = DockerPullDialog(launcher)

@@ -3006,16 +3006,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     # If pull was successful, continue with the launch target captured before the pull.
     if success:
         if launch_context:
-            container_name = launch_context["container_name"]
-            volume_name = launch_context["volume_name"]
-            self.docker_handler.set_container_name(container_name)
-            self._select_container_by_name(container_name)
-            container_config = self.config_manager.get_container(container_name)
-            node_alias = container_config.node_alias if container_config and container_config.node_alias else None
-            self._lifecycle_dialogs.show_launch_loading(node_alias)
-
-            # Continue with container launch after pull - use a short timer to ensure UI is updated first
-            QTimer.singleShot(100, lambda: self._perform_container_launch_after_pull(container_name, volume_name))
+            self._continue_launch_after_successful_pull(launch_context)
         else:
             self.add_log("Docker pull completed without a pending launch target", color="yellow")
             self._end_lifecycle_operation()
@@ -3024,6 +3015,19 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         if launch_context:
             self._end_lifecycle_operation(launch_context["container_name"])
         self.toast.show_notification(NotificationType.ERROR, f"Failed to pull Docker image: {message}")
+
+  def _continue_launch_after_successful_pull(self, launch_context: dict) -> None:
+    """Restore the captured launch target and continue after Docker pull."""
+    container_name = launch_context["container_name"]
+    volume_name = launch_context["volume_name"]
+    self.docker_handler.set_container_name(container_name)
+    self._select_container_by_name(container_name)
+    container_config = self.config_manager.get_container(container_name)
+    node_alias = container_config.node_alias if container_config and container_config.node_alias else None
+    self._lifecycle_dialogs.show_launch_loading(node_alias)
+
+    # Continue with container launch after pull - use a short timer to ensure UI is updated first.
+    QTimer.singleShot(100, lambda: self._perform_container_launch_after_pull(container_name, volume_name))
 
   def _finalize_launch_failure(self, container_name: str, error_msg: str) -> None:
     """Close launch UI state and report a terminal launch failure."""
