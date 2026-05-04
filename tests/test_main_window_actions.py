@@ -1338,6 +1338,55 @@ def test_launch_conflict_remove_failure_clears_lifecycle_and_reports_error(qtbot
     assert "Failed to remove conflicting container: permission denied" in log_text
 
 
+def test_launch_progress_updates_visible_startup_dialog_without_launcher(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launch_requests = []
+
+    def defer_launch(volume_name=None, callback=None, error_callback=None):
+        launch_requests.append((fake_handler.container_name, volume_name))
+
+    fake_handler.launch_container_threaded = defer_launch
+    launcher.startup_dialog = frm_main.LoadingDialog(
+        launcher,
+        title="Starting Node",
+        message="Please wait",
+    )
+    qtbot.addWidget(launcher.startup_dialog)
+    launcher.startup_dialog.show()
+    launcher._begin_lifecycle_operation("start", "r1node")
+
+    launcher._perform_container_launch_after_pull("r1node", "r1vol")
+
+    assert launch_requests == [("r1node", "r1vol")]
+    assert launcher.startup_dialog.message_label.text() == "Launching Docker container..."
+
+
+def test_finalize_launch_failure_clears_deleted_launch_dialogs(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launcher.launcher_dialog = frm_main.LoadingDialog(
+        launcher,
+        title="Launching Node",
+        message="Please wait",
+    )
+    launcher.startup_dialog = frm_main.LoadingDialog(
+        launcher,
+        title="Starting Node",
+        message="Please wait",
+    )
+    sip.delete(launcher.launcher_dialog)
+    sip.delete(launcher.startup_dialog)
+    launcher._begin_lifecycle_operation("launch", "r1node")
+
+    launcher._finalize_launch_failure("r1node", "network down")
+
+    assert launcher.launcher_dialog is None
+    assert launcher.startup_dialog is None
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+    assert launcher.toast.notifications == [
+        (NotificationType.ERROR, "network down")
+    ]
+
+
 def test_launch_success_clears_dialog_reference_immediately(qtbot, monkeypatch):
     launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
 

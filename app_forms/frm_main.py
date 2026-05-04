@@ -884,7 +884,14 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       self._clear_dialog_reference(dialog_attr, dialog)
       return False
 
-  def _update_dialog_progress(self, dialog_attr: str, message: str, *, require_visible: bool = False) -> bool:
+  def _update_dialog_progress(
+    self,
+    dialog_attr: str,
+    message: str,
+    *,
+    require_visible: bool = False,
+    process_events: bool = True,
+  ) -> bool:
     dialog = self._dialog_reference(dialog_attr)
     if dialog is None:
       return False
@@ -892,11 +899,24 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       return False
 
     try:
+      dialog.update_progress(message, process_events=process_events)
+      return True
+    except TypeError:
       dialog.update_progress(message)
       return True
     except RuntimeError:
       self._clear_dialog_reference(dialog_attr, dialog)
       return False
+
+  def _update_launch_dialog_progress(self, message: str, *, process_events: bool = True) -> bool:
+    if self._update_dialog_progress("launcher_dialog", message, process_events=process_events):
+      return True
+    return self._update_dialog_progress(
+      "startup_dialog",
+      message,
+      require_visible=True,
+      process_events=process_events,
+    )
 
   def _safe_close_dialog_reference(self, dialog_attr: str, dialog=None) -> bool:
     if dialog is None:
@@ -3277,27 +3297,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   def _finalize_launch_failure(self, container_name: str, error_msg: str) -> None:
     """Close launch UI state and report a terminal launch failure."""
     self.loading_indicator.stop()
-
-    if hasattr(self, 'launcher_dialog') and self.launcher_dialog is not None:
-      try:
-        self.launcher_dialog.update_progress(f"Error: {error_msg}", process_events=False)
-      except TypeError:
-        self.launcher_dialog.update_progress(f"Error: {error_msg}")
-      except RuntimeError:
-        pass
-
-    startup_dialog = getattr(self, 'startup_dialog', None)
-    if (
-      startup_dialog is not None
-      and not self._qt_object_deleted(startup_dialog)
-      and startup_dialog.isVisible()
-    ):
-      try:
-        startup_dialog.update_progress(f"Error: {error_msg}", process_events=False)
-      except TypeError:
-        startup_dialog.update_progress(f"Error: {error_msg}")
-      except RuntimeError:
-        pass
+    self._update_launch_dialog_progress(f"Error: {error_msg}", process_events=False)
 
     self._close_dialog_reference("launcher_dialog")
     self._close_dialog_reference("startup_dialog")
@@ -3323,8 +3323,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.loading_indicator.start()
         
         # Update loading dialog with progress
-        if hasattr(self, 'launcher_dialog') and self.launcher_dialog is not None :
-            self.launcher_dialog.update_progress("Launching Docker container...")
+        self._update_launch_dialog_progress("Launching Docker container...")
         
         # Define success callback for threaded operation
         def on_launch_success(result):
@@ -3336,11 +3335,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                 self._finalize_launch_failure(container_name, f"Failed to launch container: {stderr}")
                 return
             
-            # Update loading dialogs with progress    
-            if hasattr(self, 'launcher_dialog') and self.launcher_dialog is not None :
-                self.launcher_dialog.update_progress("Container launched, updating configuration...")
-            elif hasattr(self, 'startup_dialog') and self.startup_dialog is not None and self.startup_dialog.isVisible():
-                self.startup_dialog.update_progress("Container launched, updating configuration...")
+            # Update loading dialogs with progress
+            self._update_launch_dialog_progress("Container launched, updating configuration...")
             
             # Update last used timestamp in config
             from datetime import datetime
@@ -3353,10 +3349,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                 self.add_log(f"Updated volume name in config: {volume_name}", debug=True)
             
             # Update loading dialogs with progress
-            if hasattr(self, 'launcher_dialog') and self.launcher_dialog is not None :
-                self.launcher_dialog.update_progress("Updating user interface...")
-            elif hasattr(self, 'startup_dialog') and self.startup_dialog is not None and self.startup_dialog.isVisible():
-                self.startup_dialog.update_progress("Updating user interface...")
+            self._update_launch_dialog_progress("Updating user interface...")
             
             # Update UI after launch
             self.post_launch_setup()
@@ -3368,10 +3361,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             self.loading_indicator.stop()
             
             # Update loading dialogs with completion message
-            if hasattr(self, 'launcher_dialog') and self.launcher_dialog is not None :
-                self.launcher_dialog.update_progress("Container launched successfully!")
-            elif hasattr(self, 'startup_dialog') and self.startup_dialog is not None and self.startup_dialog.isVisible():
-                self.startup_dialog.update_progress("Container launched successfully!")
+            self._update_launch_dialog_progress("Container launched successfully!")
             
             self._close_launch_dialog_references()
             
@@ -3391,10 +3381,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             # Check if this is a "container already exists" error
             if "Conflict" in error_msg and "is already in use" in error_msg:
                 # Update loading dialogs with specific error message
-                if hasattr(self, 'launcher_dialog') and self.launcher_dialog is not None :
-                    self.launcher_dialog.update_progress("Container name conflict detected. Trying again with container removal...")
-                elif hasattr(self, 'startup_dialog') and self.startup_dialog is not None and self.startup_dialog.isVisible():
-                    self.startup_dialog.update_progress("Container name conflict detected. Trying again with container removal...")
+                self._update_launch_dialog_progress("Container name conflict detected. Trying again with container removal...")
                 
                 # Try to forcefully remove the container and retry launch
                 try:
