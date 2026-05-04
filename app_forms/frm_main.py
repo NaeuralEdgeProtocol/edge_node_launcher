@@ -3363,6 +3363,44 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       self.add_log(f"Failed to resolve container conflict: {retry_err}", color="red")
       return False
 
+  def _create_post_pull_launch_callbacks(self, container_name: str, volume_name: str):
+    """Create callbacks for the Docker launch worker that runs after image pull."""
+    def on_launch_success(result):
+      if self._skip_lifecycle_callback_if_shutting_down("launch success", container_name):
+        return
+
+      _stdout, stderr, return_code = result
+      if return_code != 0:
+        self._finalize_launch_failure(
+          container_name,
+          f"Failed to launch container: {stderr}",
+        )
+        return
+
+      self._finalize_launch_success(container_name, volume_name)
+
+    def on_launch_error(error_msg):
+      if self._skip_lifecycle_callback_if_shutting_down("launch error", container_name):
+        return
+
+      self.loading_indicator.stop()
+
+      if self._retry_launch_after_container_conflict(
+        container_name,
+        volume_name,
+        error_msg,
+        on_launch_success,
+        on_launch_error,
+      ):
+        return
+
+      self._finalize_launch_failure(
+        container_name,
+        f"Failed to launch container: {error_msg}",
+      )
+
+    return on_launch_success, on_launch_error
+
   def _perform_container_launch_after_pull(self, container_name, volume_name):
     """Perform the container launch operation after Docker pull is complete."""
     try:
@@ -3376,37 +3414,10 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         
         # Update loading dialog with progress
         self._update_launch_dialog_progress("Launching Docker container...")
-        
-        # Define success callback for threaded operation
-        def on_launch_success(result):
-            if self._skip_lifecycle_callback_if_shutting_down("launch success", container_name):
-                return
-
-            stdout, stderr, return_code = result
-            if return_code != 0:
-                self._finalize_launch_failure(container_name, f"Failed to launch container: {stderr}")
-                return
-
-            self._finalize_launch_success(container_name, volume_name)
-        
-        # Define error callback for threaded operation
-        def on_launch_error(error_msg):
-            if self._skip_lifecycle_callback_if_shutting_down("launch error", container_name):
-                return
-
-            # Stop loading indicator on error
-            self.loading_indicator.stop()
-
-            if self._retry_launch_after_container_conflict(
-                container_name,
-                volume_name,
-                error_msg,
-                on_launch_success,
-                on_launch_error,
-            ):
-                return
-            
-            self._finalize_launch_failure(container_name, f"Failed to launch container: {error_msg}")
+        on_launch_success, on_launch_error = self._create_post_pull_launch_callbacks(
+            container_name,
+            volume_name,
+        )
         
         # Launch the container in a thread (without pulling again)
         self.docker_handler.launch_container_threaded(volume_name, on_launch_success, on_launch_error)

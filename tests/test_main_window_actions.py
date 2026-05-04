@@ -1444,6 +1444,29 @@ def test_launch_conflict_remove_success_retries_and_finalizes(qtbot, monkeypatch
     ]
 
 
+def test_post_pull_launch_success_callback_routes_return_code_failure(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    failures = []
+    successes = []
+
+    launcher._finalize_launch_failure = (
+        lambda container_name, error_msg: failures.append((container_name, error_msg))
+    )
+    launcher._finalize_launch_success = (
+        lambda container_name, volume_name: successes.append((container_name, volume_name))
+    )
+
+    on_launch_success, _on_launch_error = launcher._create_post_pull_launch_callbacks(
+        "r1node",
+        "r1vol",
+    )
+
+    on_launch_success(("stdout", "permission denied", 1))
+
+    assert failures == [("r1node", "Failed to launch container: permission denied")]
+    assert successes == []
+
+
 def test_launch_progress_updates_visible_startup_dialog_without_launcher(qtbot, monkeypatch):
     launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
     launch_requests = []
