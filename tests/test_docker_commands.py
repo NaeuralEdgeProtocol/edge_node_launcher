@@ -78,8 +78,9 @@ def test_launch_container_threaded_defers_launch_command_build_until_worker(monk
 def test_list_containers_parses_docker_ps_output(monkeypatch):
     handler = make_handler(monkeypatch)
 
-    def fake_execute(command):
+    def fake_execute(command, timeout=None):
         assert command[:3] == ["docker", "ps", "--format"]
+        assert timeout == docker_commands.DOCKER_STATUS_TIMEOUT
         return "r1node\tUp 2 minutes\tabc123\nr1node2\tExited (0)\tdef456\n", "", 0
 
     monkeypatch.setattr(handler, "execute_command", fake_execute)
@@ -90,6 +91,118 @@ def test_list_containers_parses_docker_ps_output(monkeypatch):
         {"name": "r1node", "status": "Up 2 minutes", "id": "abc123", "running": True},
         {"name": "r1node2", "status": "Exited (0)", "id": "def456", "running": False},
     ]
+
+
+def test_execute_command_uses_timeout_and_hides_windows_console(monkeypatch):
+    handler = make_handler(monkeypatch)
+    calls = []
+    create_no_window = 0x08000000
+
+    class FakeResult:
+        stdout = "ok"
+        stderr = ""
+        returncode = 0
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return FakeResult()
+
+    monkeypatch.setattr(docker_commands.os, "name", "nt")
+    monkeypatch.setattr(docker_commands.subprocess, "CREATE_NO_WINDOW", create_no_window, raising=False)
+    monkeypatch.setattr(docker_commands.subprocess, "run", fake_run)
+
+    assert handler.execute_command(["docker", "ps"], timeout=7) == ("ok", "", 0)
+
+    assert calls == [
+        (
+            ["docker", "ps"],
+            {
+                "capture_output": True,
+                "text": True,
+                "timeout": 7,
+                "creationflags": create_no_window,
+            },
+        )
+    ]
+
+
+def test_execute_command_returns_timeout_error(monkeypatch):
+    handler = make_handler(monkeypatch)
+
+    def fake_run(command, **kwargs):
+        raise docker_commands.subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr(docker_commands.subprocess, "run", fake_run)
+
+    stdout, stderr, return_code = handler.execute_command(["docker", "ps"], timeout=3)
+
+    assert stdout == ""
+    assert stderr == "Command timed out after 3 seconds: docker ps"
+    assert return_code == 124
+
+
+def test_inspect_container_uses_short_status_timeout(monkeypatch):
+    handler = make_handler(monkeypatch)
+    calls = []
+
+    def fake_execute(command, timeout=None):
+        calls.append((command, timeout))
+        return ('[{"State": {"Running": true}}]', "", 0)
+
+    monkeypatch.setattr(handler, "execute_command", fake_execute)
+
+    assert handler.inspect_container("r1node") == {"State": {"Running": True}}
+    assert calls == [
+        (["docker", "inspect", "r1node"], docker_commands.DOCKER_STATUS_TIMEOUT)
+    ]
+
+
+def test_direct_command_thread_uses_remote_timeout_and_prefix(monkeypatch):
+    calls = []
+
+    class FakeResult:
+        stdout = "started"
+        stderr = ""
+        returncode = 0
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return FakeResult()
+
+    monkeypatch.setattr(docker_commands.os, "name", "posix")
+    monkeypatch.setattr(docker_commands.subprocess, "run", fake_run)
+    thread = docker_commands.DockerDirectCommandThread(
+        ["docker", "container", "inspect", "r1node"],
+        remote_ssh_command=["ssh", "ratio@192.0.2.10"],
+    )
+
+    thread.run()
+
+    assert calls == [
+        (
+            ["ssh", "ratio@192.0.2.10", "docker", "container", "inspect", "r1node"],
+            {
+                "capture_output": True,
+                "text": True,
+                "timeout": docker_commands.REMOTE_TIMEOUT,
+            },
+        )
+    ]
+    assert thread.result_data == ("started", "", 0)
+    assert thread.error_message is None
+
+
+def test_direct_command_thread_reports_timeout(monkeypatch):
+    def fake_run(command, **kwargs):
+        raise docker_commands.subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr(docker_commands.subprocess, "run", fake_run)
+    thread = docker_commands.DockerDirectCommandThread(["docker", "ps"])
+
+    thread.run()
+
+    assert thread.result_data is None
+    assert thread.error_message == f"Command timed out after {docker_commands.DEFAULT_TIMEOUT} seconds: docker ps"
 
 
 def test_remote_connection_preserves_quoted_ssh_args(monkeypatch):

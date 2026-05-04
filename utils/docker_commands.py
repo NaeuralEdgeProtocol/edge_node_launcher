@@ -26,6 +26,7 @@ DOCKER_TAG = "latest"
 DEFAULT_TIMEOUT = 90  # Default timeout for commands in seconds
 REMOTE_TIMEOUT = 120   # Extended timeout for remote commands in seconds 
 THREAD_JOIN_TIMEOUT = 2  # Timeout for thread joining in seconds
+DOCKER_STATUS_TIMEOUT = 10  # Short timeout for UI refresh/status checks
 
 @dataclass
 class ContainerInfo:
@@ -410,11 +411,12 @@ class DockerCommandHandler:
         """Set the container name."""
         self.container_name = container_name
 
-    def execute_command(self, command: list) -> tuple:
+    def execute_command(self, command: list, timeout: int = None) -> tuple:
         """Execute a docker command.
         
         Args:
             command: Command to execute as list of strings
+            timeout: Optional command timeout in seconds
             
         Returns:
             tuple: (stdout, stderr, return_code)
@@ -422,14 +424,30 @@ class DockerCommandHandler:
         try:
             if self._debug_mode:
                 print(f"Executing command: {' '.join(command)}")
-                
-            result = subprocess.run(command, capture_output=True, text=True)
+
+            command_timeout = timeout if timeout is not None else (
+                REMOTE_TIMEOUT if self.remote_ssh_command else DEFAULT_TIMEOUT
+            )
+            kwargs = {
+                "capture_output": True,
+                "text": True,
+                "timeout": command_timeout,
+            }
+            if os.name == 'nt':
+                kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+
+            result = subprocess.run(command, **kwargs)
             
             if self._debug_mode and result.returncode != 0:
                 print(f"Command failed with code {result.returncode}")
                 print(f"stderr: {result.stderr}")
                 
             return result.stdout, result.stderr, result.returncode
+        except subprocess.TimeoutExpired as e:
+            error_msg = f"Command timed out after {e.timeout} seconds: {' '.join(command)}"
+            if self._debug_mode:
+                print(error_msg)
+            return "", error_msg, 124
         except Exception as e:
             if self._debug_mode:
                 print(f"Command execution failed: {str(e)}")
@@ -443,7 +461,7 @@ class DockerCommandHandler:
         """
         # Check if image exists
         command = ['docker', 'images', '-q', DOCKER_IMAGE]
-        stdout, stderr, return_code = self.execute_command(command)
+        stdout, stderr, return_code = self.execute_command(command, timeout=DOCKER_STATUS_TIMEOUT)
         
         if stdout.strip():  # Image exists
             return True
@@ -801,7 +819,7 @@ class DockerCommandHandler:
         if all_containers:
             command.append('-a')
             
-        stdout, stderr, return_code = self.execute_command(command)
+        stdout, stderr, return_code = self.execute_command(command, timeout=DOCKER_STATUS_TIMEOUT)
         if return_code != 0:
             raise Exception(f"Failed to list containers: {stderr}")
             
@@ -860,7 +878,7 @@ class DockerCommandHandler:
         """
         name = container_name or self.container_name
         command = ['docker', 'inspect', name]
-        stdout, stderr, return_code = self.execute_command(command)
+        stdout, stderr, return_code = self.execute_command(command, timeout=DOCKER_STATUS_TIMEOUT)
         if return_code != 0:
             raise Exception(f"Failed to inspect container {name}: {stderr}")
             
