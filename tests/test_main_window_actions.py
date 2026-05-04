@@ -2469,6 +2469,7 @@ def test_main_window_graph_plots_stay_inside_styled_containers(qtbot, monkeypatc
         assert title_label.property("role") == "metricPlotTitle"
         assert empty_label is not None
         assert empty_label.text() == frm_main.METRIC_EMPTY_STATE_TEXT
+        assert empty_label.alignment() == Qt.AlignCenter
         assert layout.itemAtPosition(row, column).widget() is container
 
 

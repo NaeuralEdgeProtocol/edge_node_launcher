@@ -32,6 +32,7 @@ METRIC_PLOT_SPECS = (
     ),
 )
 METRIC_EMPTY_STATE_TEXT = "No metric history yet"
+METRIC_EMPTY_STATE_MIN_HEIGHT = 24
 METRIC_AXIS_COLOR = "#94a3b8"
 METRIC_GRID_ALPHA = 0.18
 
@@ -93,7 +94,8 @@ def create_plot_container(
     empty_label.setObjectName(empty_object_name)
     empty_label.setAccessibleName(f"{title} empty state")
     empty_label.setProperty("role", "metricPlotEmptyState")
-    empty_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+    empty_label.setAlignment(Qt.AlignCenter)
+    empty_label.setMinimumHeight(METRIC_EMPTY_STATE_MIN_HEIGHT)
     empty_label.setWordWrap(True)
     plot_widget.setObjectName(plot_object_name)
     plot_widget.setAccessibleName(f"{title} plot")

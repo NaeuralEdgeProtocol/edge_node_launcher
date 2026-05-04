@@ -29,6 +29,7 @@ from widgets.app_widgets.log_console import MAX_LOG_LINES, LogConsoleWidget
 from widgets.app_widgets.metric_plot_grid import (
     METRIC_AXIS_COLOR,
     METRIC_EMPTY_STATE_TEXT,
+    METRIC_EMPTY_STATE_MIN_HEIGHT,
     METRIC_GRID_ALPHA,
     MetricPlotWidget,
     create_metrics_graph_grid,
@@ -851,6 +852,8 @@ def test_metric_plot_grid_builder_preserves_dashboard_contract(qtbot):
         assert empty_label is plot._r1_empty_label
         assert empty_label.accessibleName() == f"{title_label.text()} empty state"
         assert empty_label.property("role") == "metricPlotEmptyState"
+        assert empty_label.alignment() == Qt.AlignCenter
+        assert empty_label.minimumHeight() == METRIC_EMPTY_STATE_MIN_HEIGHT
         assert empty_label.text() == METRIC_EMPTY_STATE_TEXT
         assert layout.itemAtPosition(row, column).widget() is container
 

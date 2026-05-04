@@ -518,10 +518,15 @@ COMMON_STYLESHEET_TEMPLATE = """
     padding: 0px;
   }}
   QLabel[role="metricPlotEmptyState"] {{
-    color: {graph_text};
-    background-color: transparent;
+    color: {section_label_text};
+    background-color: {secondary_action_bg};
+    border: 1px solid {graph_border};
+    border-radius: 6px;
     font-size: 12px;
-    padding: 0px 0px 4px 0px;
+    font-weight: 500;
+    padding: 4px 8px;
+    margin: 0px 0px 4px 0px;
+    min-height: 22px;
   }}
   QWidget[role="activityLogPanel"] {{
     background-color: transparent;
