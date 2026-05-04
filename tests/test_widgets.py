@@ -18,6 +18,7 @@ from models.NodeInfo import NodeInfo
 from widgets.DockerPullDialog import DockerPullDialog
 from widgets.LoadingDialog import LoadingDialog
 from widgets.CenteredComboBox import CenteredComboBox
+from widgets.app_widgets.activity_log import ActivityLogWidget
 from widgets.app_widgets.config_editor import ConfigEditorWidget
 from widgets.app_widgets.container_list import CONTAINER_LIST_EMPTY_TEXT, ContainerListWidget
 from widgets.app_widgets.log_console import MAX_LOG_LINES, LogConsoleWidget
@@ -168,6 +169,57 @@ def test_log_console_theme_styles_are_switchable(qtbot):
     widget.apply_theme(False)
     assert "#FFFFFF" in widget.styleSheet()
     assert "#1F2937" in widget.styleSheet()
+
+
+def test_activity_log_widget_appends_copies_and_clears(qtbot):
+    widget = ActivityLogWidget(max_blocks=42)
+    qtbot.addWidget(widget)
+
+    assert widget.objectName() == "activityLogPanel"
+    assert widget.property("role") == "activityLogPanel"
+    assert widget.accessibleName() == "Activity log"
+    assert widget.header.objectName() == "activityLogHeader"
+    assert widget.header.property("role") == "activityLogHeader"
+    assert widget.title_label.objectName() == "activityLogTitle"
+    assert widget.title_label.text() == "Activity Log"
+    assert widget.title_label.property("role") == "dashboardSectionTitle"
+    assert widget.title_label.accessibleName() == "Activity log section"
+    assert widget.copy_button.objectName() == "activityLogCopyButton"
+    assert widget.copy_button.property("role") == "activityLogToolButton"
+    assert widget.copy_button.accessibleName() == "Copy activity log"
+    assert widget.copy_button.toolTip() == "Copy activity log to clipboard"
+    assert widget.clear_button.objectName() == "activityLogClearButton"
+    assert widget.clear_button.property("role") == "activityLogToolButton"
+    assert widget.clear_button.accessibleName() == "Clear activity log"
+    assert widget.clear_button.toolTip() == "Clear activity log"
+    assert widget.log_view.objectName() == "logView"
+    assert widget.log_view.accessibleName() == "Activity log output"
+    assert widget.log_view.isReadOnly()
+    assert widget.log_view.lineWrapMode() == QTextEdit.NoWrap
+    assert widget.log_view.horizontalScrollBarPolicy() == Qt.ScrollBarAsNeeded
+    assert widget.log_view.document().maximumBlockCount() == 42
+    assert not widget.copy_button.isEnabled()
+    assert not widget.clear_button.isEnabled()
+
+    widget.append_log_line("first")
+    widget.append_log_line("long operational line " + ("x" * 500))
+    qtbot.wait(20)
+
+    assert "first" in widget.text()
+    assert widget.copy_button.isEnabled()
+    assert widget.clear_button.isEnabled()
+    assert widget.log_view.horizontalScrollBar().value() == widget.log_view.horizontalScrollBar().minimum()
+
+    QApplication.clipboard().clear()
+    qtbot.mouseClick(widget.copy_button, Qt.LeftButton)
+
+    assert "long operational line" in QApplication.clipboard().text()
+
+    qtbot.mouseClick(widget.clear_button, Qt.LeftButton)
+
+    assert widget.text() == ""
+    assert not widget.copy_button.isEnabled()
+    assert not widget.clear_button.isEnabled()
 
 
 def test_centered_combo_light_popup_uses_supported_qt_stylesheet(qtbot):

@@ -11,6 +11,7 @@ from models.NodeHistory import NodeHistory
 from models.NodeInfo import NodeInfo
 from utils.config_manager import ContainerConfig
 from widgets.ToastWidget import NotificationType
+from widgets.app_widgets.activity_log import ActivityLogWidget
 
 
 REAL_PLOT_DATA = frm_main.EdgeNodeLauncher.plot_data
@@ -1488,6 +1489,7 @@ def test_main_window_log_view_has_stable_identity_and_dimensions(qtbot, monkeypa
 
     assert dashboard_panel is not None
     assert dashboard_splitter is not None
+    assert isinstance(activity_log_panel, ActivityLogWidget)
     assert activity_log_panel is launcher.activityLogPanel
     assert launcher.activity_log_header.objectName() == "activityLogHeader"
     assert launcher.activity_log_header.property("role") == "activityLogHeader"

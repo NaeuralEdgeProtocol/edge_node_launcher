@@ -18,7 +18,6 @@ from PyQt5.QtWidgets import (
   QPushButton,
   QLabel,
   QFrame,
-  QTextEdit,
   QDialog,
   QHBoxLayout,
   QCheckBox,
@@ -39,7 +38,6 @@ from PyQt5.QtWidgets import (
   QDesktopWidget,
   QMainWindow,
   QScrollArea,
-  QToolButton,
   QTextBrowser,
   QListWidget,
   QStackedWidget,
@@ -52,7 +50,7 @@ from PyQt5.QtCore import (
     Qt, QTimer, QSize, QThread, QObject, pyqtSignal, QUrl, QSettings, QRect,
     QProcess, QPropertyAnimation, QModelIndex, QSortFilterProxyModel
 )
-from PyQt5.QtGui import QFont, QIcon, QPixmap, QPainter, QTextCursor
+from PyQt5.QtGui import QFont, QIcon, QPixmap, QPainter
 from PyQt5.QtSvg import QSvgRenderer
 
 from models.NodeInfo import NodeInfo
@@ -61,6 +59,7 @@ from widgets.ToastWidget import ToastWidget, NotificationType
 from widgets.ElidedLabel import ElidedLabel
 from widgets.dialogs.AddNodeDialog import AddNodeDialog
 from widgets.dialogs.RenameNodeDialog import RenameNodeDialog
+from widgets.app_widgets.activity_log import ActivityLogWidget
 from widgets.app_widgets.metric_plot_grid import METRIC_EMPTY_STATE_TEXT, create_metrics_graph_grid
 from utils.const import *
 from utils.docker import _DockerUtilsMixin
@@ -422,34 +421,14 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     return  
 
   def _append_log_line_to_view(self, line: str, schedule_scroll: bool = True) -> None:
-    if self.logView is None:
+    if self.activityLogPanel is None:
       return
-
-    document = self.logView.document()
-    cursor = QTextCursor(document)
-    cursor.movePosition(QTextCursor.End)
-    if not document.isEmpty():
-      cursor.insertBlock()
-    cursor.insertText(line)
-    visible_cursor = QTextCursor(document)
-    visible_cursor.movePosition(QTextCursor.End)
-    visible_cursor.movePosition(QTextCursor.StartOfLine)
-    self.logView.setTextCursor(visible_cursor)
-    self._update_activity_log_actions()
-    if schedule_scroll:
-      self._schedule_log_scroll()
+    self.activityLogPanel.append_log_line(line, schedule_scroll=schedule_scroll)
 
   def _schedule_log_scroll(self) -> None:
-    log_view = self.logView
-    if log_view is None:
+    if self.activityLogPanel is None:
       return
-
-    def scroll_to_latest() -> None:
-      if not sip.isdeleted(log_view):
-        log_view.ensureCursorVisible()
-        log_view.horizontalScrollBar().setValue(log_view.horizontalScrollBar().minimum())
-
-    QTimer.singleShot(0, scroll_to_latest)
+    self.activityLogPanel.schedule_scroll_to_latest()
 
   def _queue_ui_refresh(self, widget=None) -> None:
     target = widget or self
@@ -631,112 +610,31 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       setattr(self, plot_attr, plot_widget)
     return graph_view
 
-  def _create_activity_log_view(self) -> QTextEdit:
-    """Create the activity log view with a stable automation target."""
-    log_view = QTextEdit()
-    log_view.setObjectName("logView")
-    log_view.setAccessibleName("Activity log output")
-    log_view.setReadOnly(True)
-    log_view.setMinimumHeight(120)
-    log_view.setLineWrapMode(QTextEdit.NoWrap)
-    log_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-    log_view.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-    log_view.document().setMaximumBlockCount(MAIN_ACTIVITY_LOG_MAX_BLOCKS)
-    log_view.setFont(QFont("Courier New"))
-    return log_view
-
-  def _create_dashboard_section_title(self, text: str, object_name: str, accessible_name: str) -> QLabel:
-    label = QLabel(text)
-    label.setObjectName(object_name)
-    label.setProperty("role", "dashboardSectionTitle")
-    label.setAccessibleName(accessible_name)
-    label.setFont(QFont("Segoe UI", 10, QFont.DemiBold))
-    label.setMinimumHeight(24)
-    return label
-
-  def _create_activity_log_action_button(self, object_name: str, accessible_name: str, tooltip: str, icon) -> QToolButton:
-    button = QToolButton()
-    button.setObjectName(object_name)
-    button.setProperty("role", "activityLogToolButton")
-    button.setAccessibleName(accessible_name)
-    button.setToolTip(tooltip)
-    button.setIcon(self.style().standardIcon(icon))
-    button.setAutoRaise(False)
-    button.setFixedSize(30, 30)
-    button.setEnabled(False)
-    return button
-
   def _activity_log_text(self) -> str:
-    if self.logView is None:
+    if self.activityLogPanel is None:
       return ""
-    return self.logView.toPlainText()
+    return self.activityLogPanel.text()
 
   def _update_activity_log_actions(self) -> None:
-    has_log_text = bool(self._activity_log_text().strip())
-    for button in (self.activity_log_copy_button, self.activity_log_clear_button):
-      if button is not None:
-        button.setEnabled(has_log_text)
+    if self.activityLogPanel is not None:
+      self.activityLogPanel.update_actions()
 
   def copy_activity_log(self) -> None:
-    text = self._activity_log_text()
-    if not text:
-      return
-    QApplication.clipboard().setText(text)
+    if self.activityLogPanel is not None:
+      self.activityLogPanel.copy_to_clipboard()
 
   def clear_activity_log(self) -> None:
-    if self.logView is None:
-      return
-    self.logView.clear()
-    self._update_activity_log_actions()
+    if self.activityLogPanel is not None:
+      self.activityLogPanel.clear_log()
 
   def _create_activity_log_panel(self) -> QWidget:
     """Create the titled activity-log panel while preserving ``self.logView``."""
-    panel = QWidget()
-    panel.setObjectName("activityLogPanel")
-    panel.setProperty("role", "activityLogPanel")
-
-    layout = QVBoxLayout(panel)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(4)
-
-    self.activity_log_header = QWidget()
-    self.activity_log_header.setObjectName("activityLogHeader")
-    self.activity_log_header.setProperty("role", "activityLogHeader")
-    header_layout = QHBoxLayout(self.activity_log_header)
-    header_layout.setContentsMargins(0, 0, 0, 0)
-    header_layout.setSpacing(6)
-
-    self.activity_log_title = self._create_dashboard_section_title(
-      "Activity Log",
-      "activityLogTitle",
-      "Activity log section",
-    )
-    header_layout.addWidget(self.activity_log_title)
-    header_layout.addStretch()
-
-    self.activity_log_copy_button = self._create_activity_log_action_button(
-      "activityLogCopyButton",
-      "Copy activity log",
-      "Copy activity log to clipboard",
-      QStyle.SP_FileDialogDetailedView,
-    )
-    self.activity_log_copy_button.clicked.connect(self.copy_activity_log)
-    header_layout.addWidget(self.activity_log_copy_button)
-
-    self.activity_log_clear_button = self._create_activity_log_action_button(
-      "activityLogClearButton",
-      "Clear activity log",
-      "Clear activity log",
-      QStyle.SP_DialogDiscardButton,
-    )
-    self.activity_log_clear_button.clicked.connect(self.clear_activity_log)
-    header_layout.addWidget(self.activity_log_clear_button)
-
-    layout.addWidget(self.activity_log_header)
-
-    self.logView = self._create_activity_log_view()
-    layout.addWidget(self.logView)
-
+    panel = ActivityLogWidget(max_blocks=MAIN_ACTIVITY_LOG_MAX_BLOCKS, parent=self)
+    self.activity_log_header = panel.header
+    self.activity_log_title = panel.title_label
+    self.activity_log_copy_button = panel.copy_button
+    self.activity_log_clear_button = panel.clear_button
+    self.logView = panel.log_view
     return panel
 
   def _flush_log_buffer_to_view(self) -> None:
