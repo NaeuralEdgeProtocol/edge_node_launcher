@@ -926,6 +926,54 @@ def test_rename_restart_does_not_override_active_lifecycle(qtbot, monkeypatch):
     }
 
 
+def test_rename_restart_finishes_stop_phase_before_launch(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    launch_calls = []
+    active_operations_at_launch = []
+
+    def record_launch(volume_name=None):
+        active_operations_at_launch.append(launcher._active_lifecycle_operation())
+        launch_calls.append(volume_name)
+
+    launcher.launch_container = record_launch
+
+    launcher._restart_container_after_rename("r1node")
+
+    assert fake_handler.stopped_containers == ["r1node"]
+    assert launch_calls == ["r1vol"]
+    assert active_operations_at_launch == [None]
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+    log_text = "\n".join(launcher.log_buffer)
+    if launcher.logView is not None:
+        log_text += launcher.logView.toPlainText()
+    assert "Lifecycle operation finished: rename_restart on r1node" in log_text
+
+
+def test_rename_restart_stop_failure_finalizes_lifecycle(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+
+    def fail_stop(container_name, callback, error_callback):
+        fake_handler.stopped_containers.append(container_name)
+        callback(("", "permission denied", 1))
+
+    fake_handler.stop_container_threaded = fail_stop
+    launcher.launch_container = lambda volume_name=None: (_ for _ in ()).throw(
+        AssertionError("failed stop should not launch")
+    )
+
+    launcher._restart_container_after_rename("r1node")
+
+    assert fake_handler.stopped_containers == ["r1node"]
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+    assert not launcher.loading_indicator.timer.isActive()
+    assert launcher.toast.notifications == [
+        (
+            NotificationType.ERROR,
+            "Failed to stop renamed node before restart: permission denied",
+        )
+    ]
+
+
 def test_rename_dialog_copy_and_input_constraints(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
     observed = {}

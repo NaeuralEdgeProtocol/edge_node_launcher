@@ -2372,26 +2372,51 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.loading_indicator.start()
     self.add_log(f"Restarting renamed node container {container_name}...", color="blue")
 
+    on_stop_success, on_stop_error = self._create_rename_restart_stop_callbacks(
+        container_name,
+        volume_name,
+    )
+    self.docker_handler.stop_container_threaded(container_name, on_stop_success, on_stop_error)
+
+  def _create_rename_restart_stop_callbacks(self, container_name: str, volume_name: str):
+    """Create callbacks for stopping a renamed node before launching it again."""
     def on_stop_success(result):
-        stdout, stderr, return_code = result
-        if return_code != 0:
-            error_msg = f"Failed to stop renamed node before restart: {stderr}"
-            self.loading_indicator.stop()
-            self.add_log(error_msg, color="red")
-            self.toast.show_notification(NotificationType.ERROR, error_msg)
-            self._end_lifecycle_operation(container_name)
+        if self._skip_lifecycle_callback_if_shutting_down("rename restart stop success", container_name):
             return
 
-        self.add_log(f"Renamed node container {container_name} stopped; launching again...", color="blue")
-        self.launch_container(volume_name)
+        _stdout, stderr, return_code = result
+        if return_code != 0:
+            self._finalize_rename_restart_failure(
+                container_name,
+                f"Failed to stop renamed node before restart: {stderr}",
+            )
+            return
+
+        self._continue_rename_restart_after_stop(container_name, volume_name)
 
     def on_stop_error(error_msg):
-        self.loading_indicator.stop()
-        self.add_log(f"Error restarting renamed node: {error_msg}", color="red")
-        self.toast.show_notification(NotificationType.ERROR, f"Error restarting renamed node: {error_msg}")
-        self._end_lifecycle_operation(container_name)
+        if self._skip_lifecycle_callback_if_shutting_down("rename restart stop error", container_name):
+            return
 
-    self.docker_handler.stop_container_threaded(container_name, on_stop_success, on_stop_error)
+        self._finalize_rename_restart_failure(
+            container_name,
+            f"Error restarting renamed node: {error_msg}",
+        )
+
+    return on_stop_success, on_stop_error
+
+  def _continue_rename_restart_after_stop(self, container_name: str, volume_name: str) -> None:
+    """Finish the rename-restart stop phase and hand off to normal launch."""
+    self.add_log(f"Renamed node container {container_name} stopped; launching again...", color="blue")
+    self._end_lifecycle_operation(container_name)
+    self.launch_container(volume_name)
+
+  def _finalize_rename_restart_failure(self, container_name: str, error_msg: str) -> None:
+    """Clear rename-restart UI state and report a terminal failure."""
+    self.loading_indicator.stop()
+    self.add_log(error_msg, color="red")
+    self.toast.show_notification(NotificationType.ERROR, error_msg)
+    self._end_lifecycle_operation(container_name)
 
   def _validate_node_alias(self, alias: str) -> str:
     """Validate a node alias according to the rules.
