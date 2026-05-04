@@ -2897,39 +2897,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             self.loading_indicator.stop()
             return
         
-        # Always pull the latest Docker image before launching
-        self._start_docker_pull(container_name, volume_name)
-        
-        # Stop the loading indicator since we're switching to pull dialog
-        self.loading_indicator.stop()
-        
-        # Close the existing launcher dialog if it's open
-        self._lifecycle_dialogs.schedule_safe_close_reference(
-            "launcher_dialog",
-            close_delay_ms=0,
-            clear_delay_ms=500,
-        )
-        
-        # Show Docker pull dialog
-        from widgets.DockerPullDialog import DockerPullDialog
-        self.docker_pull_dialog = DockerPullDialog(self)
-        
-        # Connect the pull_complete signal to handle completion
-        self.docker_pull_dialog.pull_complete.connect(self._on_docker_pull_complete)
-        
-        # The container launch will continue automatically after pull completes
-        
-        # Show the dialog
-        self.docker_pull_dialog.show()
-        
-        on_pull_success, on_pull_error, on_pull_output = self._create_docker_pull_callbacks(
-            container_name,
-        )
-        
-        # Always pull the latest image to ensure we have the most recent version
-        self.add_log("Pulling latest Docker image before container launch...", color="blue")
-        self.docker_handler.pull_image(on_pull_success, on_pull_error, on_pull_output)
-        
+        self._start_docker_pull_for_launch(container_name, volume_name)
         # The live launch path resumes from _on_docker_pull_complete.
         return
         
@@ -2943,6 +2911,28 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.add_log(error_msg, color="red")
         self.toast.show_notification(NotificationType.ERROR, error_msg)
         self._end_lifecycle_operation(container_name)
+
+  def _start_docker_pull_for_launch(self, container_name: str, volume_name: str) -> None:
+    """Start Docker image pull and wire it to the launch continuation."""
+    self._start_docker_pull(container_name, volume_name)
+    self.loading_indicator.stop()
+    self._lifecycle_dialogs.schedule_safe_close_reference(
+        "launcher_dialog",
+        close_delay_ms=0,
+        clear_delay_ms=500,
+    )
+
+    from widgets.DockerPullDialog import DockerPullDialog
+    self.docker_pull_dialog = DockerPullDialog(self)
+    self.docker_pull_dialog.pull_complete.connect(self._on_docker_pull_complete)
+    self.docker_pull_dialog.show()
+
+    on_pull_success, on_pull_error, on_pull_output = self._create_docker_pull_callbacks(
+        container_name,
+    )
+
+    self.add_log("Pulling latest Docker image before container launch...", color="blue")
+    self.docker_handler.pull_image(on_pull_success, on_pull_error, on_pull_output)
 
   def _create_docker_pull_callbacks(self, container_name: str):
     """Create callbacks for Docker image pull progress and completion."""

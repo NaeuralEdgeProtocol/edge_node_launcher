@@ -1062,6 +1062,39 @@ def test_docker_pull_callbacks_route_completion_and_output(qtbot, monkeypatch):
     assert "Error pulling Docker image: network down" in log_text
 
 
+def test_start_docker_pull_for_launch_wires_dialog_and_worker(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    monkeypatch.setattr(frm_main.QTimer, "singleShot", lambda _delay, callback: callback())
+    launcher.launcher_dialog = frm_main.LoadingDialog(
+        launcher,
+        title="Launching Node",
+        message="Please wait",
+    )
+    launcher.loading_indicator.start()
+    launcher._begin_lifecycle_operation("launch", "r1node")
+
+    launcher._start_docker_pull_for_launch("r1node", "r1vol")
+
+    assert fake_handler.pull_requests == 1
+    assert launcher._pending_launch_context() == {
+        "container_name": "r1node",
+        "volume_name": "r1vol",
+    }
+    assert getattr(launcher, "_EdgeNodeLauncher__docker_pull_in_progress") is True
+    assert launcher.launcher_dialog is None
+    assert launcher.docker_pull_dialog is not None
+    assert launcher.docker_pull_dialog.isVisible()
+    assert not launcher.loading_indicator.timer.isActive()
+
+    launcher.docker_pull_dialog.pull_complete.emit(False, "network error")
+
+    assert launcher.docker_pull_dialog is None
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+    assert launcher.toast.notifications == [
+        (NotificationType.ERROR, "Failed to pull Docker image: network error")
+    ]
+
+
 def test_docker_pull_completion_without_launch_target_clears_lifecycle(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
     launcher._begin_lifecycle_operation("launch", "r1node")
