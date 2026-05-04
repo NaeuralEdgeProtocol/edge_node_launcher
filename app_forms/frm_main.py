@@ -952,6 +952,39 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         clear_delay_ms=clear_delay_ms,
       )
 
+  def _set_docker_pull_complete(self, success: bool, message: str) -> bool:
+    dialog = self._dialog_reference("docker_pull_dialog")
+    if dialog is None:
+      return False
+
+    try:
+      dialog.set_pull_complete(success, message)
+      return True
+    except RuntimeError:
+      self._clear_dialog_reference("docker_pull_dialog", dialog)
+      return False
+
+  def _update_docker_pull_progress(self, line: str) -> bool:
+    dialog = self._dialog_reference("docker_pull_dialog")
+    if dialog is None:
+      return False
+
+    try:
+      dialog.update_pull_progress(line)
+      return True
+    except RuntimeError:
+      self._clear_dialog_reference("docker_pull_dialog", dialog)
+      return False
+
+  def _close_docker_pull_dialog_reference(self) -> bool:
+    dialog = self._dialog_reference("docker_pull_dialog")
+    if dialog is None:
+      return False
+
+    closed = self._safe_close_dialog_reference("docker_pull_dialog", dialog)
+    self._clear_dialog_reference("docker_pull_dialog", dialog)
+    return closed
+
   def _close_dialog_reference(self, dialog_attr: str) -> bool:
     """Close a stored dialog reference, tolerating already-deleted Qt wrappers."""
     if not hasattr(self, dialog_attr):
@@ -3137,29 +3170,25 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             
             # If pull completed successfully
             if return_code == 0:
-                if hasattr(self, 'docker_pull_dialog') and self.docker_pull_dialog is not None :
-                    self.docker_pull_dialog.set_pull_complete(True, "Docker image pulled successfully")
+                self._set_docker_pull_complete(True, "Docker image pulled successfully")
             else:
                 error_msg = f"Failed to pull Docker image: {stderr}"
                 self.add_log(error_msg, color="red")
-                if hasattr(self, 'docker_pull_dialog') and self.docker_pull_dialog is not None :
-                    self.docker_pull_dialog.set_pull_complete(False, error_msg)
+                self._set_docker_pull_complete(False, error_msg)
         
         def on_pull_error(error_msg):
             if self._skip_lifecycle_callback_if_shutting_down("Docker pull error", container_name):
                 return
 
             self.add_log(f"Error pulling Docker image: {error_msg}", color="red")
-            if hasattr(self, 'docker_pull_dialog') and self.docker_pull_dialog is not None :
-                self.docker_pull_dialog.set_pull_complete(False, error_msg)
+            self._set_docker_pull_complete(False, error_msg)
         
         def on_pull_output(line):
             if self._is_shutting_down():
                 return
 
             # Process each line of output in real-time to update the dialog
-            if hasattr(self, 'docker_pull_dialog') and self.docker_pull_dialog is not None :
-                self.docker_pull_dialog.update_pull_progress(line)
+            self._update_docker_pull_progress(line)
         
         # Always pull the latest image to ensure we have the most recent version
         self.add_log("Pulling latest Docker image before container launch...", color="blue")
@@ -3204,12 +3233,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.add_log(f"Docker image pull failed: {message}", color="red")
         logging.error(f"Docker pull failed: {message}")
         
-    # Ensure the Docker pull dialog is closed
-    # The dialog should already be closing itself via set_pull_complete, but we'll make sure
-    if hasattr(self, 'docker_pull_dialog') and self.docker_pull_dialog is not None:
-        self.docker_pull_dialog.safe_close()
-        # Remove the reference immediately
-        self.docker_pull_dialog = None
+    # The dialog should already be closing itself via set_pull_complete, but make sure
+    # the launcher reference is cleared immediately.
+    self._close_docker_pull_dialog_reference()
     
     self._queue_ui_refresh()
     

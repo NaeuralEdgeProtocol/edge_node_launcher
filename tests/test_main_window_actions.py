@@ -10,6 +10,7 @@ import app_forms.frm_main as frm_main
 from models.NodeHistory import NodeHistory
 from models.NodeInfo import NodeInfo
 from utils.config_manager import ContainerConfig
+from widgets.DockerPullDialog import DockerPullDialog
 from widgets.ToastWidget import NotificationType
 import widgets.app_widgets.dashboard_panel as dashboard_panel_module
 from widgets.app_widgets.activity_log import ActivityLogWidget
@@ -848,6 +849,56 @@ def test_docker_pull_completion_uses_captured_launch_target(qtbot, monkeypatch):
     assert fake_handler.launched_containers == [("r1node", "r1vol")]
     assert launcher._selected_container_name() == "r1node"
     assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+
+
+def test_docker_pull_completion_closes_dialog_reference(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launcher.docker_pull_dialog = DockerPullDialog(launcher)
+    launcher._start_docker_pull("r1node", "r1vol")
+    launcher._begin_lifecycle_operation("launch", "r1node")
+
+    launcher._on_docker_pull_complete(False, "network error")
+
+    assert launcher.docker_pull_dialog is None
+    assert getattr(launcher, "_EdgeNodeLauncher__docker_pull_in_progress") is False
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+    assert launcher.toast.notifications == [
+        (NotificationType.ERROR, "Failed to pull Docker image: network error")
+    ]
+
+
+def test_docker_pull_close_does_not_clear_replaced_dialog(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    original_dialog = DockerPullDialog(launcher)
+    replacement_dialog = DockerPullDialog(launcher)
+    launcher.docker_pull_dialog = original_dialog
+
+    def replace_during_close():
+        launcher.docker_pull_dialog = replacement_dialog
+
+    original_dialog.safe_close = replace_during_close
+
+    assert launcher._close_docker_pull_dialog_reference() is True
+    assert launcher.docker_pull_dialog is replacement_dialog
+
+
+def test_docker_pull_output_clears_deleted_dialog_reference(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    callbacks = {}
+
+    def defer_pull(callback, error_callback, output_callback=None):
+        callbacks["output"] = output_callback
+
+    fake_handler.pull_image = defer_pull
+    launcher._begin_lifecycle_operation("launch", "r1node")
+
+    launcher._perform_container_launch("r1node", "r1vol")
+    assert launcher.docker_pull_dialog is not None
+    sip.delete(launcher.docker_pull_dialog)
+
+    callbacks["output"]("abcdef123456: Downloading 50%")
+
+    assert launcher.docker_pull_dialog is None
 
 
 def test_docker_pull_completion_without_launch_target_clears_lifecycle(qtbot, monkeypatch):
