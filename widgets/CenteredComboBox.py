@@ -343,7 +343,7 @@ class CenteredComboBox(QComboBox):
         new_x = combobox_center_x - popup_width // 2
         
         # Make sure the popup doesn't go off-screen
-        screen = QApplication.desktop().screenGeometry(self)
+        screen = self._popup_screen_geometry()
         if new_x < screen.left():
             new_x = screen.left()
         elif (new_x + popup_width) > screen.right():
@@ -351,3 +351,11 @@ class CenteredComboBox(QComboBox):
         
         # Reposition the popup
         popup.move(new_x, popup.y())
+
+    def _popup_screen_geometry(self):
+        screen = self.screen() or QApplication.primaryScreen()
+        if screen is not None:
+            return screen.geometry()
+
+        desktop = QApplication.desktop()
+        return desktop.screenGeometry(self)

@@ -1,4 +1,4 @@
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QRect, Qt
 from PyQt5.QtGui import QShowEvent
 from PyQt5.QtWidgets import (
     QApplication,
@@ -442,6 +442,25 @@ def test_centered_combo_light_popup_uses_supported_qt_stylesheet(qtbot):
     assert "background-color: #151A23" in combo.styleSheet()
     assert "border: 1px solid #445164" in combo.styleSheet()
     assert "color: transparent" in combo.lineEdit().styleSheet()
+
+
+def test_centered_combo_popup_uses_widget_screen_geometry(qtbot, monkeypatch):
+    combo = CenteredComboBox()
+    qtbot.addWidget(combo)
+    expected_geometry = QRect(10, 20, 300, 240)
+
+    class FakeScreen:
+        def geometry(self):
+            return expected_geometry
+
+    class FailingDesktop:
+        def screenGeometry(self, *_args):
+            raise AssertionError("deprecated desktop geometry fallback should not be used")
+
+    monkeypatch.setattr(combo, "screen", lambda: FakeScreen())
+    monkeypatch.setattr(QApplication, "desktop", lambda: FailingDesktop())
+
+    assert combo._popup_screen_geometry() == expected_geometry
 
 
 def test_loading_dialog_progress_does_not_process_events_synchronously(qtbot, monkeypatch):
