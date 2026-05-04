@@ -1,9 +1,9 @@
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QLabel, QLineEdit, QPushButton, QScrollArea
+from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QLineEdit, QPushButton, QScrollArea
 
 import widgets.dialogs.DockerCheckDialog as docker_check_module
 from ui.ProgressDialog import ImagePullProgressDialog
-from utils.const import INSUFFICIENT_RAM_MESSAGE
+from utils.const import DARK_STYLESHEET, INSUFFICIENT_RAM_MESSAGE
 from widgets.dialogs.AddNodeDialog import AddNodeDialog
 from widgets.dialogs.AuthorizedAddressedDialog import AddressRow, AuthorizedAddressesDialog
 from widgets.dialogs.RenameNodeDialog import RenameNodeDialog
@@ -203,22 +203,33 @@ def test_authorized_address_row_buttons_copy_and_delete(qtbot):
     assert row.accessibleName() == "Authorized address row"
     assert row.address_input.objectName() == "authorizedAddressInput"
     assert row.address_input.accessibleName() == "Authorized address"
-    assert row.address_input.styleSheet() == ""
+    assert row.address_input.property("role") == "dialogTextInput"
+    assert row.address_input.minimumHeight() == 38
+    assert row.address_input.cursorPosition() == 0
+    assert "color: black" in row.address_input.styleSheet()
     assert row.alias_input.objectName() == "authorizedAliasInput"
     assert row.alias_input.accessibleName() == "Authorized address alias"
-    assert row.alias_input.styleSheet() == ""
+    assert row.alias_input.property("role") == "dialogTextInput"
+    assert row.alias_input.minimumHeight() == 38
+    assert "color: black" in row.alias_input.styleSheet()
     assert row.copy_addr_btn.objectName() == "authorizedAddressCopyAddressButton"
     assert row.copy_addr_btn.text() == "Copy"
     assert row.copy_addr_btn.accessibleName() == "Copy authorized address"
     assert row.copy_addr_btn.toolTip() == "Copy authorized address"
+    assert row.copy_addr_btn.width() == 96
+    assert row.copy_addr_btn.height() == 50
     assert row.copy_alias_btn.objectName() == "authorizedAddressCopyAliasButton"
     assert row.copy_alias_btn.text() == "Copy"
     assert row.copy_alias_btn.accessibleName() == "Copy authorized address alias"
     assert row.copy_alias_btn.toolTip() == "Copy authorized address alias"
+    assert row.copy_alias_btn.width() == 96
+    assert row.copy_alias_btn.height() == 50
     assert row.delete_btn.objectName() == "authorizedAddressDeleteButton"
     assert row.delete_btn.text() == "Remove"
     assert row.delete_btn.accessibleName() == "Remove authorized address"
     assert row.delete_btn.toolTip() == "Remove authorized address"
+    assert row.delete_btn.width() == 112
+    assert row.delete_btn.height() == 50
 
     qtbot.mouseClick(row.copy_addr_btn, Qt.LeftButton)
     assert QApplication.clipboard().text() == "0xabc123"
@@ -275,3 +286,16 @@ def test_authorized_addresses_dialog_add_save_and_close_actions(qtbot):
 
     with qtbot.waitSignal(close_dialog.rejected):
         qtbot.mouseClick(close_button, Qt.LeftButton)
+
+
+def test_authorized_addresses_dialog_uses_theme_text_color(qtbot):
+    parent = QDialog()
+    parent._current_stylesheet = DARK_STYLESHEET
+    dialog = AuthorizedAddressesDialog(parent)
+    qtbot.addWidget(parent)
+
+    dialog.load_data([{"address": "0xabc123", "alias": "alpha"}])
+
+    row = dialog.rows[0]
+    assert "color: white" in row.address_input.styleSheet()
+    assert "color: white" in row.alias_input.styleSheet()

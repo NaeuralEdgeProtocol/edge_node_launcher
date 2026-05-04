@@ -3,10 +3,11 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
 from PyQt5.QtCore import Qt
 
 from widgets.ToastWidget import ToastWidget, NotificationType
+from utils.const import DARK_STYLESHEET
 
 
 class AddressRow(QWidget):
-    def __init__(self, parent=None, address="", alias="", on_delete=None):
+    def __init__(self, parent=None, address="", alias="", on_delete=None, input_text_color="black"):
         super().__init__(parent)
         self.parent_dialog = parent
         self.setObjectName("authorizedAddressRow")
@@ -24,17 +25,22 @@ class AddressRow(QWidget):
 
         self.address_input = QLineEdit(parent=self)
         self.address_input.setObjectName("authorizedAddressInput")
+        self.address_input.setProperty("role", "dialogTextInput")
         self.address_input.setAccessibleName("Authorized address")
         self.address_input.setText(str(address) if address else "")
+        self.address_input.setCursorPosition(0)
         self.address_input.setPlaceholderText("Enter address")
         self.address_input.setMinimumWidth(300)
-        self.address_input.setMinimumHeight(35)
+        self.address_input.setMinimumHeight(38)
+        self.address_input.setStyleSheet(
+            f"QLineEdit#authorizedAddressInput {{ color: {input_text_color}; }}"
+        )
 
         self.copy_addr_btn = QPushButton("Copy", parent=self)
         self.copy_addr_btn.setObjectName("authorizedAddressCopyAddressButton")
         self.copy_addr_btn.setAccessibleName("Copy authorized address")
         self.copy_addr_btn.setToolTip("Copy authorized address")
-        self.copy_addr_btn.setFixedSize(64, 50)
+        self.copy_addr_btn.setFixedSize(96, 50)
         self.copy_addr_btn.clicked.connect(self.copy_address)
 
         address_layout.addWidget(self.address_input)
@@ -49,17 +55,21 @@ class AddressRow(QWidget):
 
         self.alias_input = QLineEdit(parent=self)
         self.alias_input.setObjectName("authorizedAliasInput")
+        self.alias_input.setProperty("role", "dialogTextInput")
         self.alias_input.setAccessibleName("Authorized address alias")
         self.alias_input.setText(str(alias) if alias else "")
         self.alias_input.setPlaceholderText("Enter alias")
         self.alias_input.setMinimumWidth(200)
-        self.alias_input.setMinimumHeight(50)
+        self.alias_input.setMinimumHeight(38)
+        self.alias_input.setStyleSheet(
+            f"QLineEdit#authorizedAliasInput {{ color: {input_text_color}; }}"
+        )
 
         self.copy_alias_btn = QPushButton("Copy", parent=self)
         self.copy_alias_btn.setObjectName("authorizedAddressCopyAliasButton")
         self.copy_alias_btn.setAccessibleName("Copy authorized address alias")
         self.copy_alias_btn.setToolTip("Copy authorized address alias")
-        self.copy_alias_btn.setFixedSize(64, 50)
+        self.copy_alias_btn.setFixedSize(96, 50)
         self.copy_alias_btn.clicked.connect(self.copy_alias)
 
         alias_layout.addWidget(self.alias_input)
@@ -70,7 +80,7 @@ class AddressRow(QWidget):
         self.delete_btn.setObjectName("authorizedAddressDeleteButton")
         self.delete_btn.setAccessibleName("Remove authorized address")
         self.delete_btn.setToolTip("Remove authorized address")
-        self.delete_btn.setFixedSize(86, 50)
+        self.delete_btn.setFixedSize(112, 50)
         self.delete_btn.clicked.connect(lambda: on_delete(self) if on_delete else None)
 
         self.layout.addWidget(address_container)
@@ -116,6 +126,11 @@ class AuthorizedAddressesDialog(QDialog):
         self.setMinimumWidth(800)
         self.setMinimumHeight(600)
         self.setStyleSheet(parent._current_stylesheet if parent else "")
+        self._input_text_color = (
+            "white"
+            if parent and getattr(parent, "_current_stylesheet", None) == DARK_STYLESHEET
+            else "black"
+        )
 
         layout = QVBoxLayout()
 
@@ -238,7 +253,13 @@ class AuthorizedAddressesDialog(QDialog):
         dialog.exec_()
 
     def add_row(self, address="", alias=""):
-        row = AddressRow(parent=self, address=address, alias=alias, on_delete=self.delete_row)
+        row = AddressRow(
+            parent=self,
+            address=address,
+            alias=alias,
+            on_delete=self.delete_row,
+            input_text_color=self._input_text_color,
+        )
         self.rows.append(row)
         self.rows_layout.addWidget(row)
 
