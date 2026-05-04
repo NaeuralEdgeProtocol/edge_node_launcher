@@ -33,11 +33,11 @@ object name near construction.
 
 | Area | Object name | Control | Action | Current coverage |
 | --- | --- | --- | --- | --- |
-| Authorized address row | `authorizedAddressCopyAddressButton` | button | Copies an authorized address. | Static inventory, dialog click |
-| Authorized address row | `authorizedAddressCopyAliasButton` | button | Copies an authorized address alias. | Static inventory, dialog click |
-| Authorized address row | `authorizedAddressDeleteButton` | button | Removes the address row. | Static inventory, dialog click |
-| Authorized addresses | `authorizedAddressAddButton` | button | Adds a blank authorized address row. | Static inventory, dialog click |
-| Authorized addresses | `authorizedAddressSaveButton` | button | Validates and saves authorized addresses. | Static inventory, dialog click |
+| Authorized address row | `authorizedAddressCopyAddressButton` | button | Copies an authorized address. | Static inventory, dialog click, smoke E2E |
+| Authorized address row | `authorizedAddressCopyAliasButton` | button | Copies an authorized address alias. | Static inventory, dialog click, smoke E2E |
+| Authorized address row | `authorizedAddressDeleteButton` | button | Removes the address row. | Static inventory, dialog click, smoke E2E |
+| Authorized addresses | `authorizedAddressAddButton` | button | Adds a blank authorized address row. | Static inventory, dialog click, smoke E2E |
+| Authorized addresses | `authorizedAddressSaveButton` | button | Validates and saves authorized addresses. | Static inventory, dialog click, smoke E2E |
 | Authorized addresses | `authorizedAddressCloseButton` | button | Closes without saving. | Static inventory, dialog click |
 | Docker check | `dockerCheckDownloadButton` | button | Opens Docker download page. | Static inventory, dialog click with browser mocked |
 | Docker check | `dockerCheckRetryButton` | button | Retries Docker availability check. | Static inventory, dialog click |

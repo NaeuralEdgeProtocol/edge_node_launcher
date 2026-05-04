@@ -539,6 +539,7 @@ def run_scenarios(args):
 
     import app_forms.frm_main as frm_main
     from utils.config_manager import ConfigManager, ContainerConfig
+    from widgets.dialogs.AuthorizedAddressedDialog import AuthorizedAddressesDialog
     from widgets.dialogs.DockerCheckDialog import DockerCheckDialog
     from widgets.DockerPullDialog import DockerPullDialog
     from widgets.LoadingDialog import LoadingDialog
@@ -688,6 +689,130 @@ def run_scenarios(args):
             args.screenshot_dir,
             "docker_pull_progress",
         )
+
+        saved_authorized_payloads = []
+        authorized_dialog = AuthorizedAddressesDialog(launcher, on_save_callback=saved_authorized_payloads.append)
+        authorized_dialog.load_data(
+            [
+                {
+                    "address": "0x1234567890abcdef1234567890abcdef12345678",
+                    "alias": "smoke-admin",
+                }
+            ]
+        )
+        authorized_dialog.show()
+        app.processEvents()
+        authorized_visual = capture_dialog_visual_evidence(
+            authorized_dialog,
+            args.screenshot_dir,
+            "authorized_addresses",
+        )
+        authorized_dialog_rect = authorized_visual["dialog"]["rect"]
+        authorized_button_heights = {
+            button["object_name"]: button["rect"]["h"]
+            for button in authorized_visual["dialog"]["buttons"]
+        }
+        expected_authorized_heights = {
+            "authorizedAddressCopyAddressButton": 44,
+            "authorizedAddressCopyAliasButton": 44,
+            "authorizedAddressDeleteButton": 44,
+            "authorizedAddressAddButton": 52,
+            "authorizedAddressSaveButton": 52,
+            "authorizedAddressCloseButton": 52,
+        }
+        for object_name, expected_height in expected_authorized_heights.items():
+            actual_height = authorized_button_heights.get(object_name)
+            if actual_height != expected_height:
+                raise AssertionError(
+                    f"{object_name} rendered at {actual_height}px, expected {expected_height}px"
+                )
+        for button in authorized_visual["dialog"]["buttons"]:
+            if button["visible"] and button["rect"]["right"] > authorized_dialog_rect["right"]:
+                raise AssertionError(f"{button['object_name']} exceeds authorized dialog right edge")
+        record_step(
+            log,
+            args.output,
+            {
+                "step": "captured authorized addresses dialog visual evidence",
+                "visual": authorized_visual,
+            },
+        )
+        expected_authorized_address = "0x1234567890abcdef1234567890abcdef12345678"
+        expected_authorized_alias = "smoke-admin"
+        record_step(
+            log,
+            args.output,
+            {
+                "step": click_visible_button(
+                    app,
+                    authorized_dialog.rows[0].copy_addr_btn,
+                    "copy authorized address",
+                ),
+                "clipboard": app.clipboard().text(),
+            },
+        )
+        if app.clipboard().text() != expected_authorized_address:
+            raise AssertionError("authorized address copy did not preserve the raw address")
+        record_step(
+            log,
+            args.output,
+            {
+                "step": click_visible_button(
+                    app,
+                    authorized_dialog.rows[0].copy_alias_btn,
+                    "copy authorized alias",
+                ),
+                "clipboard": app.clipboard().text(),
+            },
+        )
+        if app.clipboard().text() != expected_authorized_alias:
+            raise AssertionError("authorized alias copy did not preserve the raw alias")
+        record_step(
+            log,
+            args.output,
+            {
+                "step": click_visible_button(
+                    app,
+                    authorized_dialog.add_btn,
+                    "add authorized address row",
+                ),
+                "row_count": len(authorized_dialog.rows),
+            },
+        )
+        if len(authorized_dialog.rows) != 2:
+            raise AssertionError("authorized add action did not create a second row")
+        record_step(
+            log,
+            args.output,
+            {
+                "step": click_visible_button(
+                    app,
+                    authorized_dialog.rows[-1].delete_btn,
+                    "remove blank authorized address row",
+                ),
+                "row_count": len(authorized_dialog.rows),
+            },
+        )
+        if len(authorized_dialog.rows) != 1:
+            raise AssertionError("authorized remove action did not remove the blank row")
+        record_step(
+            log,
+            args.output,
+            {
+                "step": click_visible_button(
+                    app,
+                    authorized_dialog.save_btn,
+                    "save authorized addresses",
+                ),
+                "saved_payloads": saved_authorized_payloads,
+                "dialog_visible": authorized_dialog.isVisible(),
+            },
+        )
+        expected_payload = f"{expected_authorized_address} {expected_authorized_alias}"
+        if saved_authorized_payloads != [expected_payload]:
+            raise AssertionError("authorized save action produced an unexpected payload")
+        if authorized_dialog.isVisible():
+            raise AssertionError("authorized save action did not close the dialog")
 
         def open_and_cancel_rename_dialog(label, click_step):
             original_running_check = launcher.is_container_running
