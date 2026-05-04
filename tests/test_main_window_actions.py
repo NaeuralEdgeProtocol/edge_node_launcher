@@ -623,6 +623,44 @@ def test_stop_loading_dialog_helper_sets_progress_message(qtbot, monkeypatch):
     assert dialog.message_label.text() == "Preparing to stop Docker container..."
 
 
+def test_stop_success_callback_updates_ui_and_clears_lifecycle(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    ui_calls = []
+    progress_messages = []
+    real_update_progress = launcher._lifecycle_dialogs.update_progress
+
+    launcher._show_stop_loading_dialog("alpha")
+    launcher._begin_lifecycle_operation("stop", "r1node")
+    launcher.loading_indicator.start()
+    launcher.update_toggle_button_text = lambda: ui_calls.append("toggle")
+    launcher.refresh_node_info = lambda: ui_calls.append("node_info")
+    launcher.maybe_refresh_uptime = lambda: ui_calls.append("uptime")
+    launcher.plot_data = lambda: ui_calls.append("plot")
+    launcher._queue_ui_refresh = lambda *args, **_kwargs: ui_calls.append("queue")
+    launcher._lifecycle_dialogs.update_progress = (
+        lambda dialog_attr, message, **kwargs: progress_messages.append(message)
+        or real_update_progress(dialog_attr, message, **kwargs)
+    )
+    monkeypatch.setattr(frm_main.QTimer, "singleShot", lambda _delay, callback: callback())
+
+    on_success, _on_error = launcher._create_stop_container_callbacks("r1node")
+
+    on_success(("", "", 0))
+
+    assert progress_messages == [
+        "Container stopped, updating UI...",
+        "Container stopped successfully!",
+    ]
+    assert ui_calls == ["toggle", "node_info", "uptime", "plot", "queue"]
+    assert launcher.user_stopped_container is True
+    assert launcher.toggle_dialog is None
+    assert not launcher.loading_indicator.timer.isActive()
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+    assert launcher.toast.notifications == [
+        (NotificationType.SUCCESS, "Node 'alpha' stopped successfully")
+    ]
+
+
 def test_stop_return_code_failure_closes_dialog_and_clears_lifecycle(qtbot, monkeypatch):
     launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
 
@@ -641,6 +679,25 @@ def test_stop_return_code_failure_closes_dialog_and_clears_lifecycle(qtbot, monk
     assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
     assert launcher.toast.notifications == [
         (NotificationType.ERROR, "Failed to stop container: permission denied")
+    ]
+
+
+def test_stop_error_callback_reports_and_clears_lifecycle(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    launcher._show_stop_loading_dialog("alpha")
+    launcher._begin_lifecycle_operation("stop", "r1node")
+    launcher.loading_indicator.start()
+    monkeypatch.setattr(frm_main.QTimer, "singleShot", lambda _delay, callback: callback())
+
+    _on_success, on_error = launcher._create_stop_container_callbacks("r1node")
+
+    on_error("daemon unavailable")
+
+    assert launcher.toggle_dialog is None
+    assert not launcher.loading_indicator.timer.isActive()
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+    assert launcher.toast.notifications == [
+        (NotificationType.ERROR, "Error stopping container: daemon unavailable")
     ]
 
 

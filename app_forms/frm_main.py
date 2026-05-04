@@ -1145,6 +1145,84 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.add_log(f"Error toggling container: {str(e)}", color="red")
         self.toast.show_notification(NotificationType.ERROR, f"Error toggling container: {str(e)}")
 
+  def _schedule_stop_dialog_close(self, *, success: bool) -> None:
+    self._lifecycle_dialogs.schedule_safe_close_reference(
+      "toggle_dialog",
+      close_delay_ms=500 if success else 1500,
+      clear_delay_ms=1000 if success else 2000,
+    )
+
+  def _finalize_stop_failure(
+    self,
+    container_name: str,
+    *,
+    progress_message: str,
+    log_message: str,
+    notification_message: str,
+  ) -> None:
+    self.loading_indicator.stop()
+    self._lifecycle_dialogs.update_progress(
+      "toggle_dialog",
+      f"Error: {progress_message}",
+      require_visible=True,
+    )
+    self._schedule_stop_dialog_close(success=False)
+    self.add_log(log_message, color="red")
+    self.toast.show_notification(NotificationType.ERROR, notification_message)
+    self._end_lifecycle_operation(container_name)
+
+  def _finalize_stop_error(self, container_name: str, error_msg: str) -> None:
+    self._finalize_stop_failure(
+      container_name,
+      progress_message=error_msg,
+      log_message=f"Error stopping container: {error_msg}",
+      notification_message=f"Error stopping container: {error_msg}",
+    )
+
+  def _finalize_stop_success(self, container_name: str, result) -> None:
+    _stdout, stderr, return_code = result
+    if return_code != 0:
+      error_msg = f"Failed to stop container: {stderr}"
+      self._finalize_stop_failure(
+        container_name,
+        progress_message=error_msg,
+        log_message=error_msg,
+        notification_message=error_msg,
+      )
+      return
+
+    self.user_stopped_container = True
+    self._lifecycle_dialogs.update_progress(
+      "toggle_dialog",
+      "Container stopped, updating UI...",
+      require_visible=True,
+    )
+
+    self.update_toggle_button_text()
+    self.refresh_node_info()
+    self.maybe_refresh_uptime()
+    self.plot_data()
+
+    self.loading_indicator.stop()
+    self._lifecycle_dialogs.update_progress(
+      "toggle_dialog",
+      "Container stopped successfully!",
+      require_visible=True,
+    )
+    self._schedule_stop_dialog_close(success=True)
+    self._queue_ui_refresh()
+
+    container_config = self.config_manager.get_container(container_name)
+    node_alias = container_config.node_alias if container_config and container_config.node_alias else None
+    self.toast.show_notification(NotificationType.SUCCESS, stop_success_notification(node_alias))
+    self._end_lifecycle_operation(container_name)
+
+  def _create_stop_container_callbacks(self, container_name: str):
+    return (
+      lambda result: self._finalize_stop_success(container_name, result),
+      lambda error_msg: self._finalize_stop_error(container_name, error_msg),
+    )
+
   def _stop_container(self):
     """Stop the Docker container."""
     try:
@@ -1161,99 +1239,24 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self._clear_info_display()
         self.loading_indicator.start()
         
-        # Update loading dialog with progress
-        self._update_dialog_progress("toggle_dialog", "Stopping Docker container...", require_visible=True)
-        
-        # Define success callback for threaded operation
-        def on_stop_success(result):
-            stdout, stderr, return_code = result
-            if return_code != 0:
-                # Handle error case
-                error_msg = f"Failed to stop container: {stderr}"
-                self.loading_indicator.stop()
-                self._update_dialog_progress("toggle_dialog", f"Error: {error_msg}", require_visible=True)
-                self._schedule_safe_close_dialog_reference(
-                    "toggle_dialog",
-                    close_delay_ms=1500,
-                    clear_delay_ms=2000,
-                )
-                self._end_lifecycle_operation(container_name)
-                self.add_log(error_msg, color="red")
-                self.toast.show_notification(NotificationType.ERROR, error_msg)
-                return
-            
-            # Mark that user intentionally stopped the container to prevent auto-restart
-            self.user_stopped_container = True
-            
-            # Update loading dialog with progress    
-            self._update_dialog_progress("toggle_dialog", "Container stopped, updating UI...", require_visible=True)
-                
-            # Clear and update all UI elements
-            self.update_toggle_button_text()
-            self.refresh_node_info()  # Updates address displays with cached data
-            self.maybe_refresh_uptime()   # Updates uptime displays
-            self.plot_data()              # Clears plots
-            
-            # Stop loading indicator
-            self.loading_indicator.stop()
-            
-            # Update loading dialog with completion message
-            self._update_dialog_progress("toggle_dialog", "Container stopped successfully!", require_visible=True)
-                
-            # Close the loading dialog after a short delay to show success message
-            self._schedule_safe_close_dialog_reference(
-                "toggle_dialog",
-                close_delay_ms=500,
-                clear_delay_ms=1000,
-            )
-            
-            self._queue_ui_refresh()
-            
-            container_config = self.config_manager.get_container(container_name)
-            node_alias = container_config.node_alias if container_config and container_config.node_alias else None
-            self.toast.show_notification(NotificationType.SUCCESS, stop_success_notification(node_alias))
-            self._end_lifecycle_operation(container_name)
-        
-        # Define error callback for threaded operation
-        def on_stop_error(error_msg):
-            # Stop loading indicator in case of error
-            self.loading_indicator.stop()
-            
-            # Update loading dialog with error message
-            self._update_dialog_progress("toggle_dialog", f"Error: {error_msg}", require_visible=True)
-                
-            # Close the loading dialog after a short delay to show error message
-            self._schedule_safe_close_dialog_reference(
-                "toggle_dialog",
-                close_delay_ms=1500,
-                clear_delay_ms=2000,
-            )
-                
-            self.add_log(f"Error stopping container: {error_msg}", color="red")
-            self.toast.show_notification(NotificationType.ERROR, f"Error stopping container: {error_msg}")
-            self._end_lifecycle_operation(container_name)
+        self._lifecycle_dialogs.update_progress(
+            "toggle_dialog",
+            "Stopping Docker container...",
+            require_visible=True,
+        )
+        on_stop_success, on_stop_error = self._create_stop_container_callbacks(container_name)
         
         # Pass the container name explicitly to ensure we're stopping the right one
         self.docker_handler.stop_container_threaded(container_name, on_stop_success, on_stop_error)
         
     except Exception as e:
-        # Stop loading indicator in case of error
-        self.loading_indicator.stop()
-        
-        # Update loading dialog with error message
-        self._update_dialog_progress("toggle_dialog", f"Error: {str(e)}", require_visible=True)
-            
-        # Close the loading dialog after a short delay to show error message
-        self._schedule_safe_close_dialog_reference(
-            "toggle_dialog",
-            close_delay_ms=1500,
-            clear_delay_ms=2000,
-        )
-            
-        self.add_log(f"Error stopping container: {str(e)}", color="red")
-        self.toast.show_notification(NotificationType.ERROR, f"Error stopping container: {str(e)}")
+        error_message = str(e)
         if 'container_name' in locals():
-            self._end_lifecycle_operation(container_name)
+            self._finalize_stop_error(container_name, error_message)
+        else:
+            self.loading_indicator.stop()
+            self.add_log(f"Error stopping container: {error_message}", color="red")
+            self.toast.show_notification(NotificationType.ERROR, f"Error stopping container: {error_message}")
 
   def _start_container(self):
     """Start the Docker container."""
