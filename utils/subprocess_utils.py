@@ -10,6 +10,8 @@ import sys
 import subprocess
 from typing import List, Dict, Any, Optional, Union, Tuple
 
+FORCE_EXIT_TIMEOUT_SECONDS = 5
+
 
 def run_process_no_window(
     cmd: Union[str, List[str]],
@@ -72,4 +74,21 @@ def run_process_no_window(
             result.returncode, cmd, output=result.stdout, stderr=result.stderr
         )
     
-    return result 
+    return result
+
+
+def terminate_process_by_pid(pid: int, timeout: int = FORCE_EXIT_TIMEOUT_SECONDS) -> bool:
+    """Request OS-level termination for a process without opening a console window."""
+    try:
+        if os.name == 'nt':
+            run_process_no_window(
+                ['taskkill', '/F', '/PID', str(pid)],
+                capture_output=True,
+                timeout=timeout,
+            )
+        else:
+            import signal
+            os.kill(pid, signal.SIGTERM)
+        return True
+    except (OSError, subprocess.SubprocessError):
+        return False

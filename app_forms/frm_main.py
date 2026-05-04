@@ -4,7 +4,6 @@ import platform
 import os
 import json
 import dataclasses
-import subprocess
 
 from datetime import datetime, timedelta
 from time import time
@@ -78,6 +77,7 @@ from utils.lifecycle_copy import (
 from utils.lifecycle_state import LaunchContext, LifecycleState
 from utils.screen_geometry import available_screen_geometry, screen_geometry
 from utils.window_geometry import calculate_initial_window_geometry, calculate_restored_window_geometry, calculate_visible_frame_client_geometry, format_rect
+from utils.subprocess_utils import terminate_process_by_pid
 from widgets.app_widgets.lifecycle_dialog_presenter import LifecycleDialogPresenter
 
 from utils.icon import ICON_BASE64
@@ -918,28 +918,11 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             app.closeAllWindows()
         
         # Force exit at OS level (only this GUI process)
-        import os
-        import signal
-        
-        if os.name == 'nt':  # Windows
-            try:
-                import subprocess
-                current_pid = os.getpid()
-                # Kill only our GUI process
-                subprocess.run(['taskkill', '/F', '/PID', str(current_pid)], 
-                             capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
-            except:
-                os._exit(0)
-        else:
-            # Unix systems
-            try:
-                os.kill(os.getpid(), signal.SIGTERM)
-            except:
-                os._exit(0)
+        if not terminate_process_by_pid(os.getpid()):
+            os._exit(0)
                 
     except:
         # Absolute last resort
-        import os
         os._exit(0)
 
   def update_copy_button_icons(self):

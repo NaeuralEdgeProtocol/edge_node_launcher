@@ -9,6 +9,7 @@ from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtWidgets import QMessageBox, QApplication
 
 from utils.const import GITHUB_API_URL
+from utils.subprocess_utils import terminate_process_by_pid
 from ver import __VER__ as CURRENT_VERSION
 
 DOWNLOAD_DIR = 'downloads'
@@ -394,14 +395,7 @@ echo Done.
         try:
             import os
             self.add_log("Using OS-level force exit for GUI application", debug=True)
-            if os.name == 'nt':
-                import subprocess
-                current_pid = os.getpid()
-                try:
-                    subprocess.run(['taskkill', '/F', '/PID', str(current_pid)],
-                                 capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
-                except:
-                    pass
+            terminate_process_by_pid(os.getpid())
             os._exit(0)
         except:
             import signal
