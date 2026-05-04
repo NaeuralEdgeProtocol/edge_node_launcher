@@ -1468,11 +1468,19 @@ def test_main_window_log_view_has_stable_identity_and_dimensions(qtbot, monkeypa
     assert launcher.logView.isReadOnly()
     assert launcher.logView.minimumHeight() == 120
     assert launcher.logView.maximumHeight() > 150
+    assert launcher.logView.lineWrapMode() == QTextEdit.NoWrap
+    assert launcher.logView.horizontalScrollBarPolicy() == Qt.ScrollBarAsNeeded
+    assert launcher.logView.document().maximumBlockCount() == frm_main.MAIN_ACTIVITY_LOG_MAX_BLOCKS
     assert launcher.logView.font().family() == "Courier New"
 
     launcher.add_log("log view identity smoke", debug=True)
 
     assert "log view identity smoke" in launcher.logView.toPlainText()
+
+    launcher.add_log("long operational line " + ("x" * 500), debug=True)
+    qtbot.wait(20)
+
+    assert launcher.logView.horizontalScrollBar().value() == launcher.logView.horizontalScrollBar().minimum()
 
 
 def test_dashboard_splitter_restores_saved_sizes(qtbot, monkeypatch):

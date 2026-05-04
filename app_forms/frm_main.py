@@ -52,7 +52,7 @@ from PyQt5.QtCore import (
     Qt, QTimer, QSize, QThread, QObject, pyqtSignal, QUrl, QSettings, QRect,
     QProcess, QPropertyAnimation, QModelIndex, QSortFilterProxyModel
 )
-from PyQt5.QtGui import QFont, QIcon, QPixmap, QPainter
+from PyQt5.QtGui import QFont, QIcon, QPixmap, QPainter, QTextCursor
 from PyQt5.QtSvg import QSvgRenderer
 
 from models.NodeInfo import NodeInfo
@@ -94,6 +94,7 @@ from ver import __VER__ as CURRENT_VERSION
 
 
 DASHBOARD_SPLITTER_DEFAULT_SIZES = [700, 180]
+MAIN_ACTIVITY_LOG_MAX_BLOCKS = 1000
 
 def get_platform_and_os_info():
   platform_info = platform.platform()
@@ -408,13 +409,29 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       timestamp = datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
       line = f'{timestamp} {line}'
       if self.logView is not None:
-        self.logView.append(line)
-        self._schedule_log_scroll()
+        self._append_log_line_to_view(line)
       else:
         self.log_buffer.append(line)
       if debug or self.__force_debug:
         log_with_color(line, color=color)
     return  
+
+  def _append_log_line_to_view(self, line: str, schedule_scroll: bool = True) -> None:
+    if self.logView is None:
+      return
+
+    document = self.logView.document()
+    cursor = QTextCursor(document)
+    cursor.movePosition(QTextCursor.End)
+    if not document.isEmpty():
+      cursor.insertBlock()
+    cursor.insertText(line)
+    visible_cursor = QTextCursor(document)
+    visible_cursor.movePosition(QTextCursor.End)
+    visible_cursor.movePosition(QTextCursor.StartOfLine)
+    self.logView.setTextCursor(visible_cursor)
+    if schedule_scroll:
+      self._schedule_log_scroll()
 
   def _schedule_log_scroll(self) -> None:
     log_view = self.logView
@@ -424,6 +441,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     def scroll_to_latest() -> None:
       if not sip.isdeleted(log_view):
         log_view.ensureCursorVisible()
+        log_view.horizontalScrollBar().setValue(log_view.horizontalScrollBar().minimum())
 
     QTimer.singleShot(0, scroll_to_latest)
 
@@ -614,6 +632,10 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     log_view.setAccessibleName("Activity log output")
     log_view.setReadOnly(True)
     log_view.setMinimumHeight(120)
+    log_view.setLineWrapMode(QTextEdit.NoWrap)
+    log_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+    log_view.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+    log_view.document().setMaximumBlockCount(MAIN_ACTIVITY_LOG_MAX_BLOCKS)
     log_view.setFont(QFont("Courier New"))
     return log_view
 
@@ -653,8 +675,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       return
 
     for line in self.log_buffer:
-      self.logView.append(line)
+      self._append_log_line_to_view(line, schedule_scroll=False)
     self.log_buffer = []
+    self._schedule_log_scroll()
 
   def _dashboard_splitter_initial_sizes(self) -> list:
     saved_sizes = self.config_manager.get_dashboard_splitter_sizes()
