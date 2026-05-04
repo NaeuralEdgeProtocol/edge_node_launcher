@@ -2016,6 +2016,39 @@ def test_launch_container_exception_closes_existing_launch_dialogs(qtbot, monkey
     assert launcher.toast.notifications == [
         (NotificationType.ERROR, "Failed to launch container: boom")
     ]
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+
+
+def test_launch_preparation_exception_uses_failure_finalizer(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launcher._begin_lifecycle_operation("launch", "r1node")
+    launcher._start_docker_pull_for_launch = lambda container_name, volume_name: (
+        (_ for _ in ()).throw(RuntimeError("pull setup failed"))
+    )
+
+    launcher._perform_container_launch("r1node", "r1vol")
+
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+    assert not launcher.loading_indicator.timer.isActive()
+    assert launcher.toast.notifications == [
+        (NotificationType.ERROR, "Failed to launch container: pull setup failed")
+    ]
+
+
+def test_post_pull_launch_exception_uses_failure_finalizer(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launcher._begin_lifecycle_operation("launch", "r1node")
+    fake_handler.set_container_name = lambda _container_name: (
+        (_ for _ in ()).throw(RuntimeError("target switch failed"))
+    )
+
+    launcher._perform_container_launch_after_pull("r1node", "r1vol")
+
+    assert getattr(launcher, "_EdgeNodeLauncher__active_lifecycle_operation") is None
+    assert not launcher.loading_indicator.timer.isActive()
+    assert launcher.toast.notifications == [
+        (NotificationType.ERROR, "Failed to launch container: target switch failed")
+    ]
 
 
 def test_refresh_all_auto_start_does_not_sleep_on_ui_thread(qtbot, monkeypatch):

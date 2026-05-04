@@ -2844,14 +2844,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self._launch_with_dialog_handoff(container_name, volume_name)
             
     except Exception as e:
-        # Stop loading indicator on error
-        self.loading_indicator.stop()
-        
-        self._lifecycle_dialogs.schedule_safe_close_launch_references()
-            
-        error_msg = f"Failed to launch container: {str(e)}"
-        self.add_log(error_msg, color="red")
-        self.toast.show_notification(NotificationType.ERROR, error_msg)
+        self._finalize_launch_exception(container_name, e)
 
   def _resolve_launch_volume_name(self, container_name: str, volume_name: str = None) -> str:
     """Resolve and log the Docker volume used for a launch request."""
@@ -2922,15 +2915,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         return
         
     except Exception as e:
-        # Stop loading indicator on error
-        self.loading_indicator.stop()
-        
-        self._lifecycle_dialogs.schedule_safe_close_launch_references()
-            
-        error_msg = f"Failed to launch container: {str(e)}"
-        self.add_log(error_msg, color="red")
-        self.toast.show_notification(NotificationType.ERROR, error_msg)
-        self._end_lifecycle_operation(container_name)
+        self._finalize_launch_exception(container_name, e)
 
   def _start_docker_pull_for_launch(self, container_name: str, volume_name: str) -> None:
     """Start Docker image pull and wire it to the launch continuation."""
@@ -3054,6 +3039,10 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.add_log(error_msg, color="red")
     self.toast.show_notification(NotificationType.ERROR, error_msg)
     self._end_lifecycle_operation(container_name)
+
+  def _finalize_launch_exception(self, container_name: str, error: Exception) -> None:
+    """Report an unexpected launch exception through the normal failure finalizer."""
+    self._finalize_launch_failure(container_name, f"Failed to launch container: {str(error)}")
 
   def _finalize_launch_success(self, container_name: str, volume_name: str) -> None:
     """Persist launch state, refresh visible UI, and close launch dialogs."""
@@ -3201,15 +3190,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.docker_handler.launch_container_threaded(volume_name, on_launch_success, on_launch_error)
         
     except Exception as e:
-        # Stop loading indicator on error
-        self.loading_indicator.stop()
-        
-        self._lifecycle_dialogs.schedule_safe_close_launch_references()
-            
-        error_msg = f"Failed to launch container: {str(e)}"
-        self.add_log(error_msg, color="red")
-        self.toast.show_notification(NotificationType.ERROR, error_msg)
-        self._end_lifecycle_operation(container_name)
+        self._finalize_launch_exception(container_name, e)
   
   def refresh_container_list(self):
     """Refresh the container list in the combo box."""
