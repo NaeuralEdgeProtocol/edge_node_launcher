@@ -27,6 +27,7 @@ DEFAULT_TIMEOUT = 90  # Default timeout for commands in seconds
 REMOTE_TIMEOUT = 120   # Extended timeout for remote commands in seconds 
 THREAD_JOIN_TIMEOUT = 2  # Timeout for thread joining in seconds
 DOCKER_STATUS_TIMEOUT = 10  # Short timeout for UI refresh/status checks
+GPU_CHECK_TIMEOUT = 5  # Short timeout for nvidia-smi availability probes
 
 @dataclass
 class ContainerInfo:
@@ -711,21 +712,16 @@ class DockerCommandHandler:
                 if self.remote_ssh_command:
                     full_command = self.remote_ssh_command + full_command
 
-                if os.name == 'nt':
-                    result = subprocess.run(
-                        full_command,
-                        capture_output=True,
-                        text=True,
-                        creationflags=subprocess.CREATE_NO_WINDOW
-                    )
-                else:
-                    result = subprocess.run(full_command, capture_output=True, text=True)
+                stdout, stderr, return_code = self.execute_command(
+                    full_command,
+                    timeout=DEFAULT_TIMEOUT,
+                )
 
-                if result.returncode != 0:
-                    error_callback(f"Command failed: {result.stderr}")
+                if return_code != 0:
+                    error_callback(f"Command failed: {stderr}")
                     return
 
-                process_allowed_addresses(result.stdout)
+                process_allowed_addresses(stdout)
             except Exception as e:
                 error_callback(str(e))
         except Exception as e:
@@ -1066,38 +1062,32 @@ class DockerCommandHandler:
         Returns:
             bool: True if NVIDIA GPU is available
         """
-        # Simple check first - if nvidia-smi doesn't exist, don't even try to run it
-        try:
-            # Use 'which' on Unix or 'where' on Windows to check if nvidia-smi exists
-            with open(os.devnull, 'w') as devnull:
-                if platform.system() == 'Windows':
-                    subprocess.check_call(['where', 'nvidia-smi'], stdout=devnull, stderr=devnull)
-                else:  # Unix-like systems (Linux, macOS)
-                    subprocess.check_call(['which', 'nvidia-smi'], stdout=devnull, stderr=devnull)
-        except subprocess.CalledProcessError:
-            # Command exists but failed for other reasons
+        lookup_command = (
+            ['where', 'nvidia-smi']
+            if platform.system() == 'Windows'
+            else ['which', 'nvidia-smi']
+        )
+        _, _, return_code = self.execute_command(
+            lookup_command,
+            timeout=GPU_CHECK_TIMEOUT,
+        )
+        if return_code != 0:
             return False
-        except Exception:
-            # Command doesn't exist or other error
+
+        output, _, return_code = self.execute_command(
+            ['nvidia-smi', '-L'],
+            timeout=GPU_CHECK_TIMEOUT,
+        )
+        if return_code != 0:
             return False
-            
-        # If we got here, nvidia-smi exists, so try to run it
-        try:
-            if platform.system() == 'Windows':
-                output = subprocess.check_output(['nvidia-smi', '-L'], stderr=subprocess.STDOUT, universal_newlines=True, creationflags=subprocess.CREATE_NO_WINDOW)
-            else:
-                output = subprocess.check_output(['nvidia-smi', '-L'], stderr=subprocess.STDOUT, universal_newlines=True)
-            
-            result = 'GPU' in output
-            
-            if self._debug_mode:
-                clean_output = output.strip().replace('\n', ' ')
-                print(f'NVIDIA GPU available: {result} ({clean_output})')
-                
-            return result
-        except Exception:
-            # Any error during execution means no GPU
-            return False
+
+        result = 'GPU' in output
+
+        if self._debug_mode:
+            clean_output = output.strip().replace('\n', ' ')
+            print(f'NVIDIA GPU available: {result} ({clean_output})')
+
+        return result
 
     def terminate_monitoring_operations(self):
         """Terminate only monitoring/API operations, not actual Docker containers"""

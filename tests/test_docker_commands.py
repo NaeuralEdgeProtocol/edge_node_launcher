@@ -141,6 +141,80 @@ def test_execute_command_returns_timeout_error(monkeypatch):
     assert return_code == 124
 
 
+def test_active_gpu_probe_uses_bounded_executor(monkeypatch):
+    handler = make_handler(monkeypatch)
+    calls = []
+
+    def fake_execute(command, timeout=None):
+        calls.append((command, timeout))
+        if command == ["where", "nvidia-smi"]:
+            return "C:\\Program Files\\NVIDIA\\nvidia-smi.exe", "", 0
+        return "GPU 0: Test GPU", "", 0
+
+    monkeypatch.setattr(docker_commands.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(handler, "execute_command", fake_execute)
+
+    assert handler.check_nvidia_gpu_available() is True
+    assert calls == [
+        (["where", "nvidia-smi"], docker_commands.GPU_CHECK_TIMEOUT),
+        (["nvidia-smi", "-L"], docker_commands.GPU_CHECK_TIMEOUT),
+    ]
+
+
+def test_active_gpu_probe_returns_false_after_lookup_timeout(monkeypatch):
+    handler = make_handler(monkeypatch)
+    calls = []
+
+    def fake_execute(command, timeout=None):
+        calls.append((command, timeout))
+        return "", "Command timed out", 124
+
+    monkeypatch.setattr(docker_commands.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(handler, "execute_command", fake_execute)
+
+    assert handler.check_nvidia_gpu_available() is False
+    assert calls == [(["which", "nvidia-smi"], docker_commands.GPU_CHECK_TIMEOUT)]
+
+
+def test_allowed_addresses_uses_bounded_executor_with_remote_prefix(monkeypatch):
+    handler = make_handler(monkeypatch)
+    handler.remote_ssh_command = ["ssh", "ratio@192.0.2.10"]
+    calls = []
+    results = []
+
+    def fake_execute(command, timeout=None):
+        calls.append((command, timeout))
+        return "0xabc Alice\n0xdef Bob\n", "", 0
+
+    monkeypatch.setattr(handler, "execute_command", fake_execute)
+
+    handler.get_allowed_addresses(results.append, lambda error: results.append({"error": error}))
+
+    assert calls == [
+        (
+            ["ssh", "ratio@192.0.2.10", "docker", "exec", "r1node", "get_allowed"],
+            docker_commands.DEFAULT_TIMEOUT,
+        )
+    ]
+    assert results == [{"0xabc": "Alice", "0xdef": "Bob"}]
+
+
+def test_allowed_addresses_reports_executor_timeout(monkeypatch):
+    handler = make_handler(monkeypatch)
+    errors = []
+
+    def fake_execute(command, timeout=None):
+        return "", "Command timed out after 90 seconds: docker exec r1node get_allowed", 124
+
+    monkeypatch.setattr(handler, "execute_command", fake_execute)
+
+    handler.get_allowed_addresses(lambda result: None, errors.append)
+
+    assert errors == [
+        "Command failed: Command timed out after 90 seconds: docker exec r1node get_allowed"
+    ]
+
+
 def test_inspect_container_uses_short_status_timeout(monkeypatch):
     handler = make_handler(monkeypatch)
     calls = []
