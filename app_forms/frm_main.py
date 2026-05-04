@@ -87,6 +87,7 @@ from utils.lifecycle_state import LaunchContext, LifecycleState
 from utils.screen_geometry import available_screen_geometry, screen_geometry
 from utils.window_geometry import calculate_initial_window_geometry, calculate_restored_window_geometry, calculate_visible_frame_client_geometry, format_rect
 from utils.subprocess_utils import terminate_process_by_pid
+from services.docker_runtime_service import DockerRuntimeService
 from services.node_telemetry_service import NodeTelemetryMetadata, NodeTelemetryService
 from widgets.app_widgets.lifecycle_dialog_presenter import LifecycleDialogPresenter
 from widgets.app_widgets.lifecycle_controls import (
@@ -250,7 +251,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     self.docker_container_name = self.default_container_name
     self.docker_initialize()
-    self.docker_handler = DockerCommandHandler(self.default_container_name)
+    self.docker_handler = DockerRuntimeService(DockerCommandHandler(self.default_container_name))
 
     # Initialize container list
     self.refresh_container_list()
