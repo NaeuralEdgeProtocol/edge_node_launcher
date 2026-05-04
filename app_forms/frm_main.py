@@ -933,8 +933,12 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       else:
         dialog.close()
       return True
-    except RuntimeError:
-      self._clear_dialog_reference(dialog_attr, dialog)
+    except RuntimeError as e:
+      if "wrapped C/C++ object" in str(e):
+        self._clear_dialog_reference(dialog_attr, dialog)
+        self.add_log(f"Cleared deleted {dialog_attr}", debug=True)
+        return False
+      self.add_log(f"Error closing {dialog_attr}: {str(e)}", debug=True)
       return False
 
   def _schedule_safe_close_dialog_reference(
@@ -1007,36 +1011,15 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
   def _close_dialog_reference(self, dialog_attr: str) -> bool:
     """Close a stored dialog reference, tolerating already-deleted Qt wrappers."""
-    if not hasattr(self, dialog_attr):
-      return False
-
-    try:
-      dialog = getattr(self, dialog_attr)
-    except RuntimeError:
-      setattr(self, dialog_attr, None)
-      self.add_log(f"Cleared deleted {dialog_attr}", debug=True)
-      return False
-
+    dialog = self._dialog_reference(dialog_attr)
     if dialog is None:
       return False
 
-    if self._qt_object_deleted(dialog):
-      setattr(self, dialog_attr, None)
-      self.add_log(f"Cleared deleted {dialog_attr}", debug=True)
-      return False
-
-    try:
-      dialog.close()
+    closed = self._safe_close_dialog_reference(dialog_attr, dialog)
+    if closed:
       self._clear_dialog_reference(dialog_attr, dialog)
       self.add_log(f"Closed {dialog_attr}", debug=True)
-      return True
-    except RuntimeError as e:
-      if "wrapped C/C++ object" in str(e):
-        setattr(self, dialog_attr, None)
-        self.add_log(f"Cleared deleted {dialog_attr}", debug=True)
-        return False
-      self.add_log(f"Error closing {dialog_attr}: {str(e)}", debug=True)
-      return False
+    return closed
 
   def _is_shutting_down(self) -> bool:
     return getattr(self, "_EdgeNodeLauncher__shutting_down", False)
@@ -3308,8 +3291,6 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   def _close_launch_dialog_references(self) -> None:
     for dialog_attr in ("launcher_dialog", "startup_dialog"):
       self._close_dialog_reference(dialog_attr)
-      if hasattr(self, dialog_attr):
-        setattr(self, dialog_attr, None)
 
   def _perform_container_launch_after_pull(self, container_name, volume_name):
     """Perform the container launch operation after Docker pull is complete."""

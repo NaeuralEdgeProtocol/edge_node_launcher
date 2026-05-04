@@ -553,6 +553,21 @@ def test_scheduled_dialog_close_does_not_clear_replaced_dialog(qtbot, monkeypatc
     assert launcher.launcher_dialog is replacement_dialog
 
 
+def test_immediate_dialog_close_does_not_clear_replaced_dialog(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    first_dialog = frm_main.LoadingDialog(launcher, title="Launching Node", message="First")
+    replacement_dialog = frm_main.LoadingDialog(launcher, title="Launching Node", message="Replacement")
+    launcher.launcher_dialog = first_dialog
+
+    def replace_during_close():
+        launcher.launcher_dialog = replacement_dialog
+
+    first_dialog.safe_close = replace_during_close
+
+    assert launcher._close_dialog_reference("launcher_dialog") is True
+    assert launcher.launcher_dialog is replacement_dialog
+
+
 def test_stop_return_code_failure_closes_dialog_and_clears_lifecycle(qtbot, monkeypatch):
     launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
 
