@@ -2,6 +2,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QPushButton, QGridLayout, QGroupBox, QSizePolicy)
 from PyQt5.QtCore import pyqtSignal, Qt
 from models.NodeInfo import NodeInfo
+from widgets.ElidedLabel import ElidedLabel
 
 
 _NODE_INFO_STYLE_COLORS = {
@@ -127,30 +128,11 @@ def _repolish(widget):
     widget.update()
 
 
-class ElidedAddressLabel(QLabel):
+class ElidedAddressLabel(ElidedLabel):
     """QLabel that stores full text while rendering a middle-elided address."""
 
     def __init__(self, text="", parent=None):
-        super().__init__(parent)
-        self._full_text = ""
-        self.setText(text)
-
-    def setText(self, text):
-        self._full_text = str(text)
-        self.setToolTip(self._full_text)
-        self._update_display_text()
-
-    def text(self):
-        return self._full_text
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._update_display_text()
-
-    def _update_display_text(self):
-        available_width = max(24, self.contentsRect().width() - 8)
-        display_text = self.fontMetrics().elidedText(self._full_text, Qt.ElideMiddle, available_width)
-        QLabel.setText(self, display_text)
+        super().__init__(text, elide_mode=Qt.ElideMiddle, parent=parent)
 
 
 class NodeInfoWidget(QWidget):

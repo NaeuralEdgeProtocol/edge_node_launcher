@@ -58,6 +58,7 @@ from PyQt5.QtSvg import QSvgRenderer
 from models.NodeInfo import NodeInfo
 from models.NodeHistory import NodeHistory
 from widgets.ToastWidget import ToastWidget, NotificationType
+from widgets.ElidedLabel import ElidedLabel
 from widgets.dialogs.AddNodeDialog import AddNodeDialog
 from widgets.dialogs.RenameNodeDialog import RenameNodeDialog
 from widgets.app_widgets.metric_plot_grid import METRIC_EMPTY_STATE_TEXT, create_metrics_graph_grid
@@ -101,6 +102,7 @@ def get_platform_and_os_info():
   os_name = platform.system()
   os_version = platform.version()
   return platform_info, os_name, os_version
+
 
 def log_with_color(message, color="gray"):
   """
@@ -752,9 +754,10 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     return button
 
   def _configure_sidebar_status_label(self, label: QLabel) -> QLabel:
-    label.setWordWrap(True)
+    label.setWordWrap(False)
     label.setMinimumWidth(0)
-    label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+    label.setMinimumHeight(20)
+    label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
     return label
 
   def _configure_sidebar_status_value(self, label: QLabel) -> QLabel:
@@ -771,7 +774,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   ) -> QLabel:
     label.setProperty("statusField", field_role)
     label.setAccessibleName(accessible_name)
-    label.setFont(QFont("Courier New" if is_address else "Segoe UI", 10))
+    label.setFont(QFont("Courier New" if is_address else "Segoe UI", 9))
     if is_row_value:
       return self._configure_sidebar_status_value(label)
     return self._configure_sidebar_status_label(label)
@@ -784,8 +787,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   ) -> QLabel:
     label.setProperty("resourceField", field_role)
     label.setAccessibleName(accessible_name)
-    label.setFont(QFont("Segoe UI", 10))
-    label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+    label.setFont(QFont("Segoe UI", 9))
+    label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
     return self._configure_sidebar_status_label(label)
 
   def _create_sidebar_card_title(self, text: str, object_name: str, accessible_name: str) -> QLabel:
@@ -919,7 +922,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     info_box.setContentsMargins(5, 0, 5, 0)
 
     info_box_layout = QVBoxLayout()
-    info_box_layout.setContentsMargins(5, 6, 5, 8)
+    info_box_layout.setContentsMargins(5, 6, 5, 6)
+    info_box_layout.setSpacing(3)
 
     self.node_status_title = self._create_sidebar_card_title(
       "Node Details",
@@ -931,13 +935,17 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.loading_indicator = LoadingIndicator(size=30)
     self.loading_indicator.hide()
     loading_layout = QHBoxLayout()
+    loading_layout.setContentsMargins(0, 0, 0, 0)
+    loading_layout.setSpacing(0)
     loading_layout.addStretch()
     loading_layout.addWidget(self.loading_indicator)
     loading_layout.addStretch()
     info_box_layout.addLayout(loading_layout)
 
     addr_layout = QHBoxLayout()
-    self.addressDisplay = QLabel('')
+    addr_layout.setContentsMargins(0, 0, 0, 0)
+    addr_layout.setSpacing(4)
+    self.addressDisplay = ElidedLabel('', elide_mode=Qt.ElideMiddle, compact_prefix=("Address: ", "Addr: "))
     self.addressDisplay.setObjectName("nodeAddressDisplay")
     self._configure_sidebar_status_field(
       self.addressDisplay,
@@ -956,11 +964,12 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.copyAddrButton.setObjectName("copyAddrButton")
     self.copyAddrButton.hide()
     addr_layout.addWidget(self.copyAddrButton)
-    addr_layout.addStretch()
     info_box_layout.addLayout(addr_layout)
 
     eth_addr_layout = QHBoxLayout()
-    self.ethAddressDisplay = QLabel('')
+    eth_addr_layout.setContentsMargins(0, 0, 0, 0)
+    eth_addr_layout.setSpacing(4)
+    self.ethAddressDisplay = ElidedLabel('', elide_mode=Qt.ElideMiddle, compact_prefix=("ETH Address: ", "ETH: "))
     self.ethAddressDisplay.setObjectName("nodeEthAddressDisplay")
     self._configure_sidebar_status_field(
       self.ethAddressDisplay,
@@ -979,30 +988,32 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.copyEthButton.setObjectName("copyEthButton")
     self.copyEthButton.hide()
     eth_addr_layout.addWidget(self.copyEthButton)
-    eth_addr_layout.addStretch()
     info_box_layout.addLayout(eth_addr_layout)
 
-    self.nameDisplay = QLabel('')
+    self.nameDisplay = ElidedLabel('')
     self.nameDisplay.setObjectName("nodeNameDisplay")
     self._configure_sidebar_status_field(self.nameDisplay, "metadata", "Node name")
     info_box_layout.addWidget(self.nameDisplay)
 
-    self.node_uptime = QLabel(f"{UPTIME_LABEL} {EMPTY_DASH_TEXT}")
+    self.node_uptime = ElidedLabel(f"{UPTIME_LABEL} {EMPTY_DASH_TEXT}")
     self.node_uptime.setObjectName("nodeUptimeDisplay")
     self._configure_sidebar_status_field(self.node_uptime, "metadata", "Node uptime")
     info_box_layout.addWidget(self.node_uptime)
 
-    self.node_epoch = QLabel(f"{EPOCH_LABEL} {EMPTY_DASH_TEXT}")
+    self.node_epoch = ElidedLabel(f"{EPOCH_LABEL} {EMPTY_DASH_TEXT}")
     self.node_epoch.setObjectName("nodeEpochDisplay")
     self._configure_sidebar_status_field(self.node_epoch, "metadata", "Node epoch")
     info_box_layout.addWidget(self.node_epoch)
 
-    self.node_epoch_avail = QLabel(f"{EPOCH_AVAIL_LABEL} {EMPTY_DASH_TEXT}")
+    self.node_epoch_avail = ElidedLabel(
+      f"{EPOCH_AVAIL_LABEL} {EMPTY_DASH_TEXT}",
+      compact_prefix=(f"{EPOCH_AVAIL_LABEL} ", "Epoch avail: "),
+    )
     self.node_epoch_avail.setObjectName("nodeEpochAvailabilityDisplay")
     self._configure_sidebar_status_field(self.node_epoch_avail, "metadata", "Node epoch availability")
     info_box_layout.addWidget(self.node_epoch_avail)
 
-    self.node_version = QLabel(f"{NODE_VERSION_LABEL} {EMPTY_DASH_TEXT}")
+    self.node_version = ElidedLabel(f"{NODE_VERSION_LABEL} {EMPTY_DASH_TEXT}")
     self.node_version.setObjectName("nodeVersionDisplay")
     self._configure_sidebar_status_field(self.node_version, "metadata", "Node version")
     info_box_layout.addWidget(self.node_version)
@@ -1017,7 +1028,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     resources_box.setContentsMargins(5, 0, 5, 0)
 
     resources_box_layout = QVBoxLayout()
-    resources_box_layout.setContentsMargins(5, 6, 5, 8)
+    resources_box_layout.setContentsMargins(5, 6, 5, 6)
+    resources_box_layout.setSpacing(3)
 
     self.resource_status_title = self._create_sidebar_card_title(
       "Host Resources",
@@ -1026,17 +1038,26 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     )
     resources_box_layout.addWidget(self.resource_status_title)
 
-    self.memoryDisplay = QLabel(f"{MEMORY_LABEL} {MEMORY_NOT_AVAILABLE}")
+    self.memoryDisplay = ElidedLabel(
+      f"{MEMORY_LABEL} {MEMORY_NOT_AVAILABLE}",
+      compact_prefix=(f"{MEMORY_LABEL} ", "Mem: "),
+    )
     self.memoryDisplay.setObjectName("memoryResourceDisplay")
     self._configure_sidebar_resource_field(self.memoryDisplay, "memory", "Memory usage")
     resources_box_layout.addWidget(self.memoryDisplay)
 
-    self.vcpusDisplay = QLabel(f"{VCPUS_LABEL} {VCPUS_NOT_AVAILABLE}")
+    self.vcpusDisplay = ElidedLabel(
+      f"{VCPUS_LABEL} {VCPUS_NOT_AVAILABLE}",
+      compact_prefix=(f"{VCPUS_LABEL} ", "CPU: "),
+    )
     self.vcpusDisplay.setObjectName("cpuResourceDisplay")
     self._configure_sidebar_resource_field(self.vcpusDisplay, "cpu", "CPU usage")
     resources_box_layout.addWidget(self.vcpusDisplay)
 
-    self.storageDisplay = QLabel(f"{STORAGE_LABEL} {STORAGE_NOT_AVAILABLE}")
+    self.storageDisplay = ElidedLabel(
+      f"{STORAGE_LABEL} {STORAGE_NOT_AVAILABLE}",
+      compact_prefix=(f"{STORAGE_LABEL} ", "Disk: "),
+    )
     self.storageDisplay.setObjectName("storageResourceDisplay")
     self._configure_sidebar_resource_field(self.storageDisplay, "storage", "Storage usage")
     resources_box_layout.addWidget(self.storageDisplay)

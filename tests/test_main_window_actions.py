@@ -307,10 +307,18 @@ def test_status_card_uses_semantic_label_roles(qtbot, monkeypatch):
     assert launcher.ethAddressDisplay.property("statusField") == "address"
     assert launcher.addressDisplay.font().family() == "Courier New"
     assert launcher.ethAddressDisplay.font().family() == "Courier New"
+    assert launcher.addressDisplay.font().pointSize() == 9
+    assert not launcher.addressDisplay.wordWrap()
+    assert launcher.addressDisplay.minimumHeight() == 20
+    assert launcher.addressDisplay.sizePolicy().verticalPolicy() == QSizePolicy.Fixed
 
     for label in metadata_labels:
         assert label.property("statusField") == "metadata"
         assert label.font().family() == "Segoe UI"
+        assert label.font().pointSize() == 9
+        assert not label.wordWrap()
+        assert label.minimumHeight() == 20
+        assert label.sizePolicy().verticalPolicy() == QSizePolicy.Fixed
 
     assert 'QLabel[statusField="address"]' in frm_main.DARK_STYLESHEET
     assert 'QLabel[statusField="metadata"]' in frm_main.DARK_STYLESHEET
@@ -329,11 +337,44 @@ def test_resource_panel_uses_semantic_label_roles(qtbot, monkeypatch):
         assert label.property("resourceField") == field_role
         assert label.accessibleName() == accessible_name
         assert label.font().family() == "Segoe UI"
-        assert label.wordWrap()
+        assert label.font().pointSize() == 9
+        assert not label.wordWrap()
+        assert label.minimumHeight() == 20
+        assert label.sizePolicy().verticalPolicy() == QSizePolicy.Fixed
 
     assert 'QLabel[resourceField="memory"]' in frm_main.DARK_STYLESHEET
     assert 'QLabel[resourceField="cpu"]' in frm_main.DARK_STYLESHEET
     assert 'QLabel[resourceField="storage"]' in frm_main.DARK_STYLESHEET
+
+
+def test_sidebar_status_resource_labels_elide_without_losing_full_text(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+
+    long_eth = "ETH Address: 0x" + ("a" * 48)
+    launcher.ethAddressDisplay.resize(90, 20)
+    launcher.ethAddressDisplay.setText(long_eth)
+
+    assert launcher.ethAddressDisplay.text() == long_eth
+    assert launcher.ethAddressDisplay.toolTip() == long_eth
+    assert QLabel.text(launcher.ethAddressDisplay) != long_eth
+    assert QLabel.text(launcher.ethAddressDisplay).startswith("ETH: ")
+
+    long_memory = "Memory: 123.4 GB / 567.8 GB (91.2% used)"
+    launcher.memoryDisplay.resize(120, 20)
+    launcher.memoryDisplay.setText(long_memory)
+
+    assert launcher.memoryDisplay.text() == long_memory
+    assert launcher.memoryDisplay.toolTip() == long_memory
+    assert QLabel.text(launcher.memoryDisplay) != long_memory
+    assert QLabel.text(launcher.memoryDisplay).startswith("Mem: ")
+
+    cpu_text = "vCPUs: 14 cores (38.4% used)"
+    launcher.vcpusDisplay.resize(220, 20)
+    launcher.vcpusDisplay.setText(cpu_text)
+
+    assert launcher.vcpusDisplay.text() == cpu_text
+    assert QLabel.text(launcher.vcpusDisplay).startswith("CPU: ")
+    assert "used" not in QLabel.text(launcher.vcpusDisplay)
 
 
 def test_stylesheets_do_not_reference_removed_status_selectors():
@@ -1674,6 +1715,8 @@ def test_status_panels_have_semantic_roles(qtbot, monkeypatch):
     assert resources_box.findChild(QLabel, "memoryResourceDisplay") is launcher.memoryDisplay
     assert resources_box.findChild(QLabel, "cpuResourceDisplay") is launcher.vcpusDisplay
     assert resources_box.findChild(QLabel, "storageResourceDisplay") is launcher.storageDisplay
+    assert info_box.layout().spacing() == 3
+    assert resources_box.layout().spacing() == 3
 
 
 def test_main_window_sidebar_settings_follow_resource_panel_without_large_gap(qtbot, monkeypatch):

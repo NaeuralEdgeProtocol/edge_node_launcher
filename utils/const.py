@@ -736,9 +736,9 @@ COMMON_STYLESHEET_TEMPLATE = """
   QGroupBox[role="resourcePanel"] QLabel {{
     color: {info_box_text};
     font-family: "Segoe UI";
-    font-size: 10pt;
+    font-size: 9pt;
     font-weight: {info_box_font_weight};
-    margin: 2px;
+    margin: 1px 2px;
     background-color: transparent;
   }}
   QGroupBox[role="statusPanel"] QLabel[role="sidebarCardTitle"],
@@ -758,7 +758,7 @@ COMMON_STYLESHEET_TEMPLATE = """
     font-family: "Segoe UI";
   }}
   QGroupBox[role="resourcePanel"] QLabel {{
-    padding: 2px 4px;
+    padding: 1px 4px;
   }}
   QGroupBox[role="resourcePanel"] QLabel[resourceField="memory"],
   QGroupBox[role="resourcePanel"] QLabel[resourceField="cpu"],
