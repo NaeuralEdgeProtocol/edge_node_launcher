@@ -715,6 +715,13 @@ COMMON_STYLESHEET_TEMPLATE = """
   QPushButton[actionRole="utility"]:hover {{
     background-color: {utility_action_hover};
   }}
+  QPushButton[actionRole="primary"]:disabled,
+  QPushButton[actionRole="secondary"]:disabled,
+  QPushButton[actionRole="utility"]:disabled {{
+    background-color: {toggle_button_disabled_bg};
+    color: {toggle_button_disabled_text};
+    border: 1px solid {toggle_button_disabled_border};
+  }}
   QCheckBox[role="settingsToggle"] {{
     color: {utility_action_text};
     background-color: transparent;

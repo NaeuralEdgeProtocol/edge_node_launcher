@@ -663,6 +663,51 @@ def test_start_button_double_click_does_not_start_second_lifecycle(qtbot, monkey
         "operation": "start",
         "container_name": "r1node",
     }
+    assert launcher.toggleButton.text() == frm_main.LIFECYCLE_BUSY_TOGGLE_TEXT["start"]
+    assert not launcher.toggleButton.isEnabled()
+    assert not launcher.add_node_button.isEnabled()
+    assert not launcher.renameNodeButton.isEnabled()
+    assert not launcher.refreshButton.isEnabled()
+    assert not launcher.container_combo.isEnabled()
+
+
+def test_lifecycle_busy_state_restores_node_controls(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+
+    launcher._begin_lifecycle_operation("start", "r1node")
+
+    assert launcher.toggleButton.text() == frm_main.LIFECYCLE_BUSY_TOGGLE_TEXT["start"]
+    assert launcher.toggleButton.toolTip() == frm_main.LIFECYCLE_BUSY_TOOLTIP
+    assert launcher.add_node_button.toolTip() == frm_main.LIFECYCLE_BUSY_TOOLTIP
+    assert not launcher.toggleButton.isEnabled()
+    assert not launcher.add_node_button.isEnabled()
+    assert not launcher.renameNodeButton.isEnabled()
+    assert not launcher.refreshButton.isEnabled()
+    assert not launcher.container_combo.isEnabled()
+    assert launcher.themeToggleButton.isEnabled()
+
+    launcher._end_lifecycle_operation("r1node")
+
+    assert launcher.toggleButton.text() == frm_main.LAUNCH_CONTAINER_BUTTON_TEXT
+    assert launcher.toggleButton.toolTip() == frm_main.TOGGLE_NODE_TOOLTIP
+    assert launcher.add_node_button.toolTip() == frm_main.ADD_NODE_TOOLTIP
+    assert launcher.toggleButton.isEnabled()
+    assert launcher.add_node_button.isEnabled()
+    assert launcher.renameNodeButton.isEnabled()
+    assert launcher.refreshButton.isEnabled()
+    assert launcher.container_combo.isEnabled()
+
+
+def test_toggle_update_keeps_known_lifecycle_result_disabled_until_finish(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    launcher._begin_lifecycle_operation("launch", "r1node")
+
+    launcher.update_toggle_button_text(assume_running=True)
+
+    assert launcher.toggleButton.text() == frm_main.STOP_CONTAINER_BUTTON_TEXT
+    assert not launcher.toggleButton.isEnabled()
+    assert not launcher.add_node_button.isEnabled()
+    assert launcher.toggleButton.toolTip() == frm_main.LIFECYCLE_BUSY_TOOLTIP
 
 
 def test_start_container_uses_shared_launch_volume_resolver(qtbot, monkeypatch):

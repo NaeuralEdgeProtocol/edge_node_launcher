@@ -100,6 +100,15 @@ from ver import __VER__ as CURRENT_VERSION
 
 DASHBOARD_SPLITTER_DEFAULT_SIZES = [700, 180]
 MAIN_ACTIVITY_LOG_MAX_BLOCKS = 1000
+LIFECYCLE_BUSY_TOGGLE_TEXT = {
+  "start": "Starting...",
+  "launch": "Starting...",
+  "stop": "Stopping...",
+  "add_node": "Creating Node...",
+  "rename_restart": "Renaming...",
+}
+LIFECYCLE_DOCKER_PULL_TOGGLE_TEXT = "Pulling Image..."
+LIFECYCLE_BUSY_TOOLTIP = "Wait for the current node operation to finish."
 
 def get_platform_and_os_info():
   platform_info = platform.platform()
@@ -1470,6 +1479,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.__lifecycle_state.begin_operation(operation, container_name)
     self._sync_lifecycle_state_snapshot()
     self.add_log(f"Lifecycle operation started: {operation} on {container_name}", debug=True)
+    self._sync_lifecycle_control_state()
 
   def _try_begin_lifecycle_operation(self, operation: str, container_name: str) -> bool:
     result = self.__lifecycle_state.try_begin_operation(
@@ -1485,6 +1495,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         f"Ignoring {operation} on {container_name}; lifecycle operation {blocked.operation} is already active on {blocked.container_name}",
         color="yellow",
       )
+      self._sync_lifecycle_control_state()
       return False
 
     if result.superseded_operation is not None:
@@ -1500,6 +1511,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     started = result.operation
     self.add_log(f"Lifecycle operation started: {started.operation} on {started.container_name}", debug=True)
+    self._sync_lifecycle_control_state()
     return True
 
   def _end_lifecycle_operation(self, container_name: str = None) -> None:
@@ -1507,16 +1519,21 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     ended = self.__lifecycle_state.end_operation(container_name)
     self._sync_lifecycle_state_snapshot()
     if ended is None:
+      self._sync_lifecycle_control_state()
       return
     self.add_log(f"Lifecycle operation finished: {ended.operation} on {ended.container_name}", debug=True)
+    self._sync_lifecycle_control_state()
+    self._restore_toggle_button_after_lifecycle(ended)
 
   def _start_docker_pull(self, container_name: str, volume_name: str) -> None:
     self.__lifecycle_state.start_docker_pull(container_name, volume_name)
     self._sync_lifecycle_state_snapshot()
+    self._sync_lifecycle_control_state()
 
   def _finish_docker_pull(self) -> Optional[LaunchContext]:
     context = self.__lifecycle_state.finish_docker_pull()
     self._sync_lifecycle_state_snapshot()
+    self._sync_lifecycle_control_state(use_operation_text=False)
     return context
 
   def _should_restart_after_node_info_failure(self, container_name: str) -> bool:
@@ -2177,9 +2194,123 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     )
     return
   
+  def _node_lifecycle_control_widgets(self):
+    return [
+      widget
+      for widget in (
+        getattr(self, "add_node_button", None),
+        getattr(self, "renameNodeButton", None),
+        getattr(self, "refreshButton", None),
+        getattr(self, "container_combo", None),
+      )
+      if widget is not None
+    ]
+
+  def _set_lifecycle_widget_enabled(self, widget, enabled: bool) -> None:
+    if widget is None:
+      return
+
+    if not hasattr(self, "_lifecycle_control_tooltips"):
+      self._lifecycle_control_tooltips = {}
+
+    tooltip_key = id(widget)
+    if enabled:
+      if tooltip_key in self._lifecycle_control_tooltips:
+        widget.setToolTip(self._lifecycle_control_tooltips.pop(tooltip_key))
+    else:
+      self._lifecycle_control_tooltips.setdefault(tooltip_key, widget.toolTip())
+      widget.setToolTip(LIFECYCLE_BUSY_TOOLTIP)
+
+    widget.setEnabled(enabled)
+
+  def _apply_toggle_button_state(self, is_running: bool, *, enabled: bool = True) -> None:
+    new_text = STOP_CONTAINER_BUTTON_TEXT if is_running else LAUNCH_CONTAINER_BUTTON_TEXT
+    new_style = 'toggle_stop' if is_running else 'toggle_start'
+
+    if self.toggleButton.text() != new_text:
+      self.toggleButton.setText(new_text)
+      self.toggleButton.setAccessibleName(new_text)
+
+    self.apply_button_style(self.toggleButton, new_style)
+    self._set_lifecycle_widget_enabled(self.toggleButton, enabled)
+    if not enabled:
+      self.apply_button_style(self.toggleButton, 'disabled')
+
+  def _set_toggle_button_busy_state(self) -> None:
+    active_operation = self._active_lifecycle_operation()
+    operation_name = active_operation.get("operation") if active_operation else None
+    busy_text = LIFECYCLE_BUSY_TOGGLE_TEXT.get(operation_name)
+    if busy_text is None and self._docker_pull_in_progress():
+      busy_text = LIFECYCLE_DOCKER_PULL_TOGGLE_TEXT
+    if busy_text is None:
+      busy_text = "Working..."
+
+    if self.toggleButton.text() != busy_text:
+      self.toggleButton.setText(busy_text)
+      self.toggleButton.setAccessibleName(busy_text)
+
+    self._set_lifecycle_widget_enabled(self.toggleButton, False)
+    self.apply_button_style(self.toggleButton, 'disabled')
+
+  def _can_start_after_active_stop(self) -> bool:
+    active_operation = self._active_lifecycle_operation()
+    if active_operation is None or active_operation.get("operation") != "stop":
+      return False
+
+    try:
+      return not self.is_container_running()
+    except Exception:
+      return False
+
+  def _sync_lifecycle_control_state(self, *, use_operation_text: bool = True) -> bool:
+    if not hasattr(self, "toggleButton"):
+      return False
+
+    is_busy = self._active_lifecycle_operation() is not None or self._docker_pull_in_progress()
+    for widget in self._node_lifecycle_control_widgets():
+      self._set_lifecycle_widget_enabled(widget, not is_busy)
+
+    if is_busy:
+      if use_operation_text and self._can_start_after_active_stop():
+        self._apply_toggle_button_state(False, enabled=True)
+        return True
+
+      if use_operation_text:
+        self._set_toggle_button_busy_state()
+      else:
+        self._set_lifecycle_widget_enabled(self.toggleButton, False)
+        self.apply_button_style(self.toggleButton, 'disabled')
+      return True
+
+    self._set_lifecycle_widget_enabled(self.toggleButton, True)
+    return False
+
+  def _restore_toggle_button_after_lifecycle(self, ended_operation=None) -> None:
+    if not hasattr(self, "toggleButton"):
+      return
+    if self._active_lifecycle_operation() is not None or self._docker_pull_in_progress():
+      return
+
+    busy_texts = set(LIFECYCLE_BUSY_TOGGLE_TEXT.values()) | {LIFECYCLE_DOCKER_PULL_TOGGLE_TEXT, "Working..."}
+    if self.toggleButton.text() in busy_texts:
+      try:
+        is_running = self.docker_handler.is_container_running()
+      except Exception:
+        is_running = getattr(ended_operation, "operation", None) != "stop"
+      self._apply_toggle_button_state(is_running, enabled=True)
+      return
+
+    if self.toggleButton.text() == LAUNCH_CONTAINER_BUTTON_TEXT:
+      self.apply_button_style(self.toggleButton, 'toggle_start')
+    elif self.toggleButton.text() == STOP_CONTAINER_BUTTON_TEXT:
+      self.apply_button_style(self.toggleButton, 'toggle_stop')
   
   def update_toggle_button_text(self, assume_running: Optional[bool] = None):
     """Update the toggle button text and style based on the current container state"""
+    lifecycle_controls_busy = self._sync_lifecycle_control_state(use_operation_text=assume_running is None)
+    if lifecycle_controls_busy and assume_running is None:
+      return
+
     # Get the current text to check if it needs to be updated
     current_text = self.toggleButton.text()
     current_enabled = self.toggleButton.isEnabled()
@@ -2219,18 +2350,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     else:
         is_running = assume_running
     
-    # Determine the new state
-    new_text = STOP_CONTAINER_BUTTON_TEXT if is_running else LAUNCH_CONTAINER_BUTTON_TEXT
-    new_style = 'toggle_stop' if is_running else 'toggle_start'
-    
-    # Update text if changed
-    if current_text != new_text:
-        self.toggleButton.setText(new_text)
-        self.toggleButton.setAccessibleName(new_text)
-    
-    # Always apply the style to ensure it updates when theme changes
-    self.apply_button_style(self.toggleButton, new_style)
-    self.toggleButton.setEnabled(True)
+    self._apply_toggle_button_state(is_running, enabled=not lifecycle_controls_busy)
   
   
   def toggle_force_debug(self, state):
