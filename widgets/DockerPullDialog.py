@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar, QFrame,
-    QScrollArea, QWidget
+    QScrollArea, QWidget, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
 import re
@@ -88,6 +88,7 @@ class DockerPullDialog(QDialog):
         scroll_area.setObjectName("dockerPullLayerScrollArea")
         scroll_area.setAccessibleName("Docker pull layer list")
         scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll_area.setFrameShape(QFrame.NoFrame)
         scroll_area.setStyleSheet("""
             QScrollArea {
@@ -175,16 +176,20 @@ class DockerPullDialog(QDialog):
         layer_label = QLabel(label_text)
         layer_label.setObjectName(f"dockerPullLayerLabel_{object_suffix}")
         layer_label.setAccessibleName(accessible_name)
-        layer_label.setFixedWidth(90)
+        layer_label.setToolTip(layer_id)
+        layer_label.setMinimumWidth(76)
+        layer_label.setMaximumWidth(112)
+        layer_label.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
         layer_label.setStyleSheet("color: #60a5fa; font-weight: bold; font-family: monospace; font-size: 13px;")
 
         status_label = QLabel(status)
         status_label.setObjectName(f"dockerPullLayerStatus_{object_suffix}")
         status_label.setAccessibleName(f"{accessible_name} status")
+        status_label.setToolTip(status)
         status_label.setStyleSheet("color: #e2e8f0; font-family: monospace; font-size: 13px;")
         status_label.setWordWrap(True)
-        status_label.setMinimumWidth(132)
-        status_label.setMaximumWidth(180)
+        status_label.setMinimumWidth(120)
+        status_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         status_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
         layer_progress = QProgressBar()
@@ -193,7 +198,8 @@ class DockerPullDialog(QDialog):
         layer_progress.setRange(0, 100)
         layer_progress.setValue(0)
         layer_progress.setMinimumHeight(20)
-        layer_progress.setMinimumWidth(160)
+        layer_progress.setMinimumWidth(140)
+        layer_progress.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layer_progress.setStyleSheet("""
             QProgressBar {
                 border: 1px solid #475569;
@@ -212,7 +218,7 @@ class DockerPullDialog(QDialog):
 
         layer_layout.addWidget(layer_label)
         layer_layout.addWidget(layer_progress, 1)
-        layer_layout.addWidget(status_label)
+        layer_layout.addWidget(status_label, 1)
 
         widgets = {
             'layout': layer_layout,
@@ -273,6 +279,7 @@ class DockerPullDialog(QDialog):
             # Update status label if it exists
             if layer_id in self.layer_widgets and 'status' in self.layer_widgets[layer_id]:
                 self.layer_widgets[layer_id]['status'].setText(status)
+                self.layer_widgets[layer_id]['status'].setToolTip(status)
             
             # Check for progress information or completion status
             progress_match = re.search(r'(\d+)%', status)
@@ -333,6 +340,7 @@ class DockerPullDialog(QDialog):
             # Update status label if it exists
             if line_hash in self.layer_widgets and 'status' in self.layer_widgets[line_hash]:
                 self.layer_widgets[line_hash]['status'].setText(status)
+                self.layer_widgets[line_hash]['status'].setToolTip(status)
             
             # Check for progress information in newer format
             progress_match = re.search(r'(\d+\.\d+)MB/(\d+\.\d+)MB', status)

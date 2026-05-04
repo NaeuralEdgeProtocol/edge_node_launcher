@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (
     QDialogButtonBox,
     QLabel,
     QProgressBar,
+    QScrollArea,
     QSizePolicy,
     QTabWidget,
     QTextEdit,
@@ -557,6 +558,7 @@ def test_docker_pull_dialog_exposes_stable_visual_targets(qtbot):
     assert dialog.findChild(QWidget, "dockerPullLayerScrollContent") is not None
     assert dialog.findChild(QWidget, "dockerPullLayerFrame").accessibleName() == "Docker pull layer progress"
     assert dialog.findChild(QWidget, "dockerPullLayerScrollArea").accessibleName() == "Docker pull layer list"
+    assert dialog.findChild(QScrollArea, "dockerPullLayerScrollArea").horizontalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
     assert dialog.findChild(QWidget, "dockerPullLayerScrollContent").accessibleName() == "Docker pull layer list content"
     assert dialog.findChild(QLabel, "dockerPullLayerHeaderLabel").accessibleName() == "Layer progress heading"
     assert dialog.findChild(QLabel, "dockerPullLayerEmptyState").text() == "Waiting for Docker layer output..."
@@ -571,15 +573,25 @@ def test_docker_pull_dialog_updates_layer_progress_with_named_children(qtbot):
 
     assert not dialog.empty_layer_label.isVisible()
     assert dialog.overall_progress.value() == 50
-    assert dialog.findChild(QLabel, "dockerPullLayerLabel_abcdef123456").text() == "abcdef12..."
-    assert dialog.findChild(QLabel, "dockerPullLayerLabel_abcdef123456").accessibleName() == "Docker layer abcdef12"
-    assert dialog.findChild(QLabel, "dockerPullLayerStatus_abcdef123456").text() == "Downloading 50%"
-    assert dialog.findChild(QLabel, "dockerPullLayerStatus_abcdef123456").accessibleName() == "Docker layer abcdef12 status"
-    assert dialog.findChild(QProgressBar, "dockerPullLayerProgress_abcdef123456").value() == 50
-    assert dialog.findChild(QProgressBar, "dockerPullLayerProgress_abcdef123456").accessibleName() == "Docker layer abcdef12 progress"
-    assert dialog.findChild(QProgressBar, "dockerPullLayerProgress_abcdef123456").minimumWidth() == 160
-    assert dialog.findChild(QLabel, "dockerPullLayerStatus_abcdef123456").maximumWidth() == 180
-    assert dialog.findChild(QLabel, "dockerPullLayerStatus_abcdef123456").alignment() & Qt.AlignRight
+    layer_label = dialog.findChild(QLabel, "dockerPullLayerLabel_abcdef123456")
+    status_label = dialog.findChild(QLabel, "dockerPullLayerStatus_abcdef123456")
+    layer_progress = dialog.findChild(QProgressBar, "dockerPullLayerProgress_abcdef123456")
+    assert layer_label.text() == "abcdef12..."
+    assert layer_label.accessibleName() == "Docker layer abcdef12"
+    assert layer_label.toolTip() == "abcdef123456"
+    assert layer_label.minimumWidth() == 76
+    assert layer_label.maximumWidth() == 112
+    assert status_label.text() == "Downloading 50%"
+    assert status_label.accessibleName() == "Docker layer abcdef12 status"
+    assert status_label.toolTip() == "Downloading 50%"
+    assert status_label.maximumWidth() >= 16777215
+    assert status_label.alignment() & Qt.AlignRight
+    assert layer_progress.value() == 50
+    assert layer_progress.accessibleName() == "Docker layer abcdef12 progress"
+    assert layer_progress.minimumWidth() == 140
+    row_layout = dialog.layer_widgets["abcdef123456"]["layout"]
+    assert row_layout.stretch(1) == 1
+    assert row_layout.stretch(2) == 1
 
 
 def test_docker_pull_dialog_uses_stable_synthetic_layer_ids(qtbot):
@@ -594,7 +606,23 @@ def test_docker_pull_dialog_uses_stable_synthetic_layer_ids(qtbot):
     assert object_suffix == DockerPullDialog._synthetic_layer_id(line)
     assert dialog.findChild(QLabel, f"dockerPullLayerLabel_{object_suffix}").text() == "Layer"
     assert dialog.findChild(QLabel, f"dockerPullLayerStatus_{object_suffix}").text() == line
+    assert dialog.findChild(QLabel, f"dockerPullLayerStatus_{object_suffix}").toolTip() == line
     assert dialog.findChild(QProgressBar, f"dockerPullLayerProgress_{object_suffix}").value() == 50
+
+
+def test_docker_pull_dialog_keeps_long_layer_status_available(qtbot):
+    dialog = DockerPullDialog()
+    qtbot.addWidget(dialog)
+    long_status = "Downloading 12.5MB/240.0MB retrying after temporary registry throttling"
+
+    dialog.update_pull_progress(f"abcdef123456: {long_status}")
+
+    status_label = dialog.findChild(QLabel, "dockerPullLayerStatus_abcdef123456")
+    assert status_label.text() == long_status
+    assert status_label.toolTip() == long_status
+    assert status_label.wordWrap()
+    assert status_label.sizePolicy().horizontalPolicy() == QSizePolicy.Expanding
+    assert status_label.maximumWidth() >= 16777215
 
 
 def test_node_info_widget_baseline_clear_and_uptime_format(qtbot):
