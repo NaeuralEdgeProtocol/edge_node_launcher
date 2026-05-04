@@ -918,6 +918,46 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       process_events=process_events,
     )
 
+  def _show_loading_dialog_reference(
+    self,
+    dialog_attr: str,
+    *,
+    title: str,
+    message: str,
+    progress_message: str = None,
+  ):
+    dialog = LoadingDialog(
+      self,
+      title=title,
+      message=message,
+      size=50,
+    )
+    setattr(self, dialog_attr, dialog)
+    dialog.show()
+
+    if progress_message:
+      self._update_dialog_progress(dialog_attr, progress_message)
+
+    self._queue_ui_refresh(dialog)
+    return dialog
+
+  def _show_launch_loading_dialog(self, node_alias: str = None):
+    dialog_copy = launch_dialog_copy(node_alias)
+    return self._show_loading_dialog_reference(
+      "launcher_dialog",
+      title=dialog_copy.title,
+      message=dialog_copy.message,
+      progress_message="Preparing to launch Docker container...",
+    )
+
+  def _show_new_node_loading_dialog(self, display_name: str = None):
+    dialog_copy = launch_dialog_copy(display_name, is_new_node=True)
+    return self._show_loading_dialog_reference(
+      "startup_dialog",
+      title=dialog_copy.title,
+      message=dialog_copy.message,
+    )
+
   def _safe_close_dialog_reference(self, dialog_attr: str, dialog=None) -> bool:
     if dialog is None:
       dialog = self._dialog_reference(dialog_attr)
@@ -1383,21 +1423,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         
         container_config = self.config_manager.get_container(container_name)
         node_alias = container_config.node_alias if container_config and container_config.node_alias else None
-        dialog_copy = launch_dialog_copy(node_alias)
-            
-        # Show loading dialog for launching operation
-        self.launcher_dialog = LoadingDialog(
-            self,
-            title=dialog_copy.title,
-            message=dialog_copy.message,
-            size=50
-        )
-        self.launcher_dialog.show()
-        
-        # Update message to indicate starting the launch process
-        self.launcher_dialog.update_progress("Preparing to launch Docker container...")
-        
-        self._queue_ui_refresh(self.launcher_dialog)
+        self._show_launch_loading_dialog(node_alias)
         
         # Start the container launch process
         self._perform_container_launch(container_name, volume_name)
@@ -2944,17 +2970,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         return
 
       # Show the loading dialog - now with blue background
-      dialog_copy = launch_dialog_copy(display_name, is_new_node=True)
-        
-      self.startup_dialog = LoadingDialog(
-          self,
-          title=dialog_copy.title,
-          message=dialog_copy.message,
-          size=50
-      )
-      self.startup_dialog.show()
-      
-      self._queue_ui_refresh(self.startup_dialog)
+      self._show_new_node_loading_dialog(display_name)
       
       # Add a small delay to ensure dialog is fully rendered
       QTimer.singleShot(100, lambda: self._perform_add_new_node(container_name, volume_name, display_name))
@@ -3072,32 +3088,14 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         if not startup_dialog_visible and not launcher_dialog_visible:
             container_config = self.config_manager.get_container(container_name)
             node_alias = container_config.node_alias if container_config and container_config.node_alias else None
-            dialog_copy = launch_dialog_copy(node_alias)
-                
-            # Show loading dialog for launching operation
-            self.launcher_dialog = LoadingDialog(
-                self,
-                title=dialog_copy.title,
-                message=dialog_copy.message,
-                size=50
-            )
-            self.launcher_dialog.show()
-            
-            # Update message to indicate starting the launch process
-            self.launcher_dialog.update_progress("Preparing to launch Docker container...")
-            
-            self._queue_ui_refresh(self.launcher_dialog)
+            self._show_launch_loading_dialog(node_alias)
             
             # Add a small delay to ensure dialog is fully rendered
             QTimer.singleShot(100, lambda: self._perform_container_launch(container_name, volume_name))
         else:
             # If we already have a dialog visible, just perform the launch
-            # If launcher_dialog is visible, update its progress message
-            if launcher_dialog_visible:
-                self._update_dialog_progress("launcher_dialog", "Launching Docker container...")
-            # If startup_dialog is visible, update its progress message
-            elif startup_dialog_visible:
-                self._update_dialog_progress("startup_dialog", "Launching Docker container...", require_visible=True)
+            # Update whichever launch dialog is currently active.
+            self._update_launch_dialog_progress("Launching Docker container...")
                 
             # Perform the launch operation
             self._perform_container_launch(container_name, volume_name)
@@ -3251,20 +3249,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
             self._select_container_by_name(container_name)
             container_config = self.config_manager.get_container(container_name)
             node_alias = container_config.node_alias if container_config and container_config.node_alias else None
-            dialog_copy = launch_dialog_copy(node_alias)
-
-            self.launcher_dialog = LoadingDialog(
-                self,
-                title=dialog_copy.title,
-                message=dialog_copy.message,
-                size=50
-            )
-            self.launcher_dialog.show()
-
-            # Update message to indicate starting the launch process
-            self.launcher_dialog.update_progress("Preparing to launch Docker container...")
-
-            self._queue_ui_refresh(self.launcher_dialog)
+            self._show_launch_loading_dialog(node_alias)
 
             # Continue with container launch after pull - use a short timer to ensure UI is updated first
             QTimer.singleShot(100, lambda: self._perform_container_launch_after_pull(container_name, volume_name))

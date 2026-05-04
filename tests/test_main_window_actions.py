@@ -568,6 +568,26 @@ def test_immediate_dialog_close_does_not_clear_replaced_dialog(qtbot, monkeypatc
     assert launcher.launcher_dialog is replacement_dialog
 
 
+def test_launch_loading_dialog_helper_sets_progress_message(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+
+    dialog = launcher._show_launch_loading_dialog("alpha")
+
+    assert launcher.launcher_dialog is dialog
+    assert dialog.windowTitle() == "Launching Node"
+    assert dialog.message_label.text() == "Preparing to launch Docker container..."
+
+
+def test_new_node_loading_dialog_helper_preserves_initial_copy(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+
+    dialog = launcher._show_new_node_loading_dialog("beta")
+
+    assert launcher.startup_dialog is dialog
+    assert dialog.windowTitle() == "Starting Node"
+    assert dialog.message_label.text() == "Please wait while node 'beta' is being launched..."
+
+
 def test_stop_return_code_failure_closes_dialog_and_clears_lifecycle(qtbot, monkeypatch):
     launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
 
