@@ -151,9 +151,12 @@ class _SystemResourcesMixin:
         except:
             return 'N/A'
 
-    def get_formatted_memory_info(self):
+    def get_formatted_memory_info(self, compact=False):
         """Get formatted memory information.
-        
+
+        Args:
+            compact (bool): Whether to omit extra spaces and "used" for narrow UI surfaces
+
         Returns:
             str: Formatted memory string like "8.2 GB / 16.0 GB (51.2% used)"
         """
@@ -165,15 +168,22 @@ class _SystemResourcesMixin:
             total_str = self.format_bytes(resources['memory']['total'])
             percent = resources['memory']['percent']
             if percent != 'N/A':
+                if compact:
+                    return f"{available_str}/{total_str} ({percent:.1f}%)"
                 return f"{available_str} / {total_str} ({percent:.1f}% used)"
             else:
+                if compact:
+                    return f"{available_str}/{total_str}"
                 return f"{available_str} / {total_str}"
         else:
             return 'N/A'
 
-    def get_formatted_cpu_info(self):
+    def get_formatted_cpu_info(self, compact=False):
         """Get formatted CPU information.
-        
+
+        Args:
+            compact (bool): Whether to omit "used" for narrow UI surfaces
+
         Returns:
             str: Formatted CPU string like "8 cores (15.2% used)"
         """
@@ -183,17 +193,24 @@ class _SystemResourcesMixin:
         usage = resources['cpu']['usage']
         
         if count != 'N/A' and usage != 'N/A':
+            if compact:
+                return f"{count} cores ({usage:.1f}%)"
             return f"{count} cores ({usage:.1f}% used)"
         elif count != 'N/A':
             return f"{count} cores"
         elif usage != 'N/A':
+            if compact:
+                return f"{usage:.1f}%"
             return f"{usage:.1f}% used"
         else:
             return 'N/A'
 
-    def get_formatted_storage_info(self):
+    def get_formatted_storage_info(self, compact=False):
         """Get formatted storage information.
-        
+
+        Args:
+            compact (bool): Whether to omit extra spaces and "used" for narrow UI surfaces
+
         Returns:
             str: Formatted storage string like "189.8 GB / 273.9 GB (25.6% used)"
         """
@@ -205,8 +222,12 @@ class _SystemResourcesMixin:
             total_str = self.format_bytes(resources['storage']['total'])
             percent = resources['storage']['percent']
             if percent != 'N/A':
+                if compact:
+                    return f"{free_str}/{total_str} ({percent:.1f}%)"
                 return f"{free_str} / {total_str} ({percent:.1f}% used)"
             else:
+                if compact:
+                    return f"{free_str}/{total_str}"
                 return f"{free_str} / {total_str}"
         else:
             return 'N/A'
@@ -337,9 +358,9 @@ class _SystemResourcesMixin:
         """
         if can_add:
             return (f"Node can be created. System supports {ram_info['max_nodes_supported']} nodes total "
-                   f"({ram_info['total_ram_gb']:.1f} GB ÷ {ram_info['min_required_gb']} GB per node), "
+                   f"({ram_info['total_ram_gb']:.1f} GB / {ram_info['min_required_gb']} GB per node), "
                    f"currently running {ram_info['current_node_count']} nodes")
         else:
             return (f"Maximum node capacity reached. System supports {ram_info['max_nodes_supported']} nodes "
-                   f"({ram_info['total_ram_gb']:.1f} GB ÷ {ram_info['min_required_gb']} GB per node), "
-                   f"currently running {ram_info['current_node_count']} nodes") 
+                   f"({ram_info['total_ram_gb']:.1f} GB / {ram_info['min_required_gb']} GB per node), "
+                   f"currently running {ram_info['current_node_count']} nodes")

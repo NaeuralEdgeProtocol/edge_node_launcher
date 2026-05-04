@@ -61,10 +61,10 @@ DOWNLOAD_DOCKER_BUTTON_TEXT = 'Download Docker'
 
 # Label texts
 LOCAL_NODE_ADDRESS_LABEL_TEXT = 'Local Node Address'
-UPTIME_LABEL = 'Up Time:'
+UPTIME_LABEL = 'Uptime:'
 EPOCH_LABEL = 'Epoch:'
-EPOCH_AVAIL_LABEL = 'Epochs avail:'
-NODE_VERSION_LABEL = 'Running ver:'
+EPOCH_AVAIL_LABEL = 'Epoch availability:'
+NODE_VERSION_LABEL = 'Version:'
 
 # Resources box labels
 RESOURCES_BOX_TITLE = 'System Resources'
@@ -108,6 +108,14 @@ GPU_MEMORY_LOAD_TITLE = 'GPU Memory Load'
 # ============================================================================
 # TOOLTIP TEXTS
 # ============================================================================
+ADD_NODE_TOOLTIP = 'Create another local edge node'
+TOGGLE_NODE_TOOLTIP = 'Start or stop the selected edge node container'
+DAPP_TOOLTIP = 'Open the Ratio1 dApp for the selected network'
+EXPLORER_TOOLTIP = 'Ratio1 Explorer is not yet implemented'
+REFRESH_NODE_INFO_TOOLTIP = 'Refresh node status, addresses, metrics, and resources'
+RENAME_NODE_TOOLTIP = 'Rename the selected node alias shown in the launcher'
+THEME_TOGGLE_TOOLTIP = 'Switch between dark and light themes'
+FORCE_DEBUG_TOOLTIP = 'Run node containers with debug mode enabled'
 DOCKER_DOWNLOAD_TOOLTIP = 'Ratio1 Edge Node requires Docker Desktop running in parallel'
 COPY_ADDRESS_TOOLTIP = 'Copy address'
 COPY_ETH_ADDRESS_TOOLTIP = 'Copy Ethereum address'
@@ -129,7 +137,7 @@ RESETTING_NODE_ADDRESS_TEXT = 'Resetting node address...'
 
 # RAM checking messages
 INSUFFICIENT_RAM_TITLE = 'Cannot Add New Node'
-INSUFFICIENT_RAM_MESSAGE = 'Cannot add a new node - maximum capacity reached.\n\nSystem Information:\n• Total RAM: {total_gb:.1f} GB\n• Maximum Nodes Supported: {max_nodes} ({total_gb:.1f} GB / {min_ram_gb} GB per node)\n• Current Nodes: {current_nodes}\n\nEach node requires {min_ram_gb} GB of RAM.'
+INSUFFICIENT_RAM_MESSAGE = 'Cannot add a new node - maximum capacity reached.\n\nSystem Information:\n- Total RAM: {total_gb:.1f} GB\n- Maximum Nodes Supported: {max_nodes} ({total_gb:.1f} GB / {min_ram_gb} GB per node)\n- Current Nodes: {current_nodes}\n\nEach node requires {min_ram_gb} GB of RAM.'
 RAM_CHECK_ERROR_TITLE = 'RAM Check Error'
 RAM_CHECK_ERROR_MESSAGE = 'Unable to determine available system RAM.\n\nWould you like to proceed anyway?'
 
@@ -209,6 +217,8 @@ COMMON_STYLES = {
     "button_font_size": "16px",
     "button_margin": "4px 5px",
     "button_border_radius": "15px",
+    "action_button_border_radius": "8px",
+    "panel_border_radius": "8px",
     "combo_border_radius": "15px",
     "combo_padding": "4px",
     "combo_min_width": "100px",
@@ -234,26 +244,38 @@ DARK_COLORS = {
     "button_bg": "#0071EA",
     "button_border": "transparent",
     "button_hover": "#0679F3",
-    "progress_border": "#1E90FF",
-    "progress_chunk": "#1E90FF",
-    "widget_bg": "#000C29",
-    "debug_checkbox_color": "white",  # Orange for dark theme debug checkbox
+    "primary_action_bg": "#1B47F7",
+    "primary_action_hover": "#4458FF",
+    "primary_action_text": "#FFFFFF",
+    "primary_action_border": "transparent",
+    "secondary_action_bg": "#202734",
+    "secondary_action_hover": "#2A3342",
+    "secondary_action_text": "#E8EEF8",
+    "secondary_action_border": "#445164",
+    "utility_action_bg": "transparent",
+    "utility_action_hover": "#1A2130",
+    "utility_action_text": "#C7D4E8",
+    "utility_action_border": "#3A4658",
+    "progress_border": "#4EA3FF",
+    "progress_chunk": "#4EA3FF",
+    "widget_bg": "#0F1117",
+    "debug_checkbox_color": "white",
     
     # Log view specific colors
-    "log_view_bg": "#04254F",
+    "log_view_bg": "#151A23",
     "log_view_text": "white",
-    "log_view_border": "#1E90FF",
+    "log_view_border": "#2E6BFF",
     
     # Info box specific colors
-    "info_box_bg": "#04254F",
+    "info_box_bg": "#151A23",
     "info_box_text": "white",
-    "info_box_border": "#1E90FF",
+    "info_box_border": "#2E6BFF",
     
     # Graph specific colors
-    "graph_bg": "#001A3A",
-    "graph_border": "#10386A",
+    "graph_bg": "#14171F",
+    "graph_border": "#2F3A4A",
     "graph_text": "white",
-    "graph_cpu_color": "#1E90FF",
+    "graph_cpu_color": "#4EA3FF",
     "graph_memory_color": "#4CAF50",
     "graph_gpu_color": "#FFD700",
     "graph_gpu_memory_color": "#FF6B6B",
@@ -283,7 +305,7 @@ DARK_COLORS = {
     "toggle_button_stop_bg": "#FADC33",
     "toggle_button_stop_hover": "#FFE138",
     "toggle_button_stop_border": "transparent",
-    "toggle_button_stop_text": "#C4AC26",
+    "toggle_button_stop_text": "#1F2937",
     "toggle_button_disabled_bg": "gray",
     "toggle_button_disabled_hover": "darkgray",
     "toggle_button_disabled_border": "darkgray",
@@ -292,20 +314,22 @@ DARK_COLORS = {
 
     # ComboBox popup specific colors
     "combo_bg": "#F9F9F9",
-    "combo_border": "#10386A",
-    "combo_hover_bg": "#F0F7FF",
-    "combo_hover_border": "#0071EA",
+    "combo_border": "#2F3A4A",
+    "combo_hover_bg": "#202734",
+    "combo_hover_border": "#4EA3FF",
     "combo_arrow_color": "transparent",
     "combo_dropdown_bg": "#FFFFFF",
     "combo_dropdown_select_bg": "red",
     "combo_dropdown_select_color": "black",
-    "combobox_popup_border_color": "#1E90FF",
-    "combobox_popup_bg_color": "#04254F",
+    "combobox_popup_border_color": "#2E6BFF",
+    "combobox_popup_bg_color": "#151A23",
     "combobox_popup_item_hover_bg": "transparent",
     "combobox_popup_item_selected_bg": "#1B47F7",
     "combobox_popup_item_selected_text": "white",
     "combobox_text_color": "#333333",
     "combo_rectangle_text_color": "white",
+    "section_label_text": "#A9B7C9",
+    "section_label_border": "#2F3A4A",
 }
 
 # Color definitions for light theme
@@ -317,10 +341,22 @@ LIGHT_COLORS = {
     "button_bg": "#0071EA",
     "button_border": "transparent",
     "button_hover": "#0679F3",
+    "primary_action_bg": "#1B47F7",
+    "primary_action_hover": "#4458FF",
+    "primary_action_text": "#FFFFFF",
+    "primary_action_border": "transparent",
+    "secondary_action_bg": "#F7F9FC",
+    "secondary_action_hover": "#EEF4FF",
+    "secondary_action_text": "#1F2937",
+    "secondary_action_border": "#CBD5E1",
+    "utility_action_bg": "transparent",
+    "utility_action_hover": "#F1F5F9",
+    "utility_action_text": "#334155",
+    "utility_action_border": "#CBD5E1",
     "progress_border": "#D3D3D3",
     "progress_chunk": "#D3D3D3",
     "widget_bg": "#E6E6EA",
-    "debug_checkbox_color": "black",  # Blue for light theme debug checkbox
+    "debug_checkbox_color": "black",
     
     # Log view specific colors
     "log_view_bg": "#FFFFFF",
@@ -366,7 +402,7 @@ LIGHT_COLORS = {
     "toggle_button_stop_bg": "#FADC33",
     "toggle_button_stop_hover": "#FFE138",
     "toggle_button_stop_border": "transparent",
-    "toggle_button_stop_text": "#C4AC26",
+    "toggle_button_stop_text": "#1F2937",
     "toggle_button_disabled_bg": "gray",
     "toggle_button_disabled_hover": "darkgray",
     "toggle_button_disabled_border": "darkgray",
@@ -389,83 +425,13 @@ LIGHT_COLORS = {
     "combobox_popup_item_selected_text": "white",
     "combobox_text_color": "#333333",
     "combo_rectangle_text_color": "#1B47F7",
+    "section_label_text": "#5F6B7A",
+    "section_label_border": "#D8DEE8",
 }
 
 # Merge common styles with theme-specific colors
 DARK_THEME = {**COMMON_STYLES, **DARK_COLORS}
 LIGHT_THEME = {**COMMON_STYLES, **LIGHT_COLORS}
-
-# Checkbox style template
-CHECKBOX_STYLE_TEMPLATE = """
-    QCheckBox {{
-        color: {text_color};
-    }}
-"""
-
-# Debug checkbox style template
-DEBUG_CHECKBOX_STYLE_TEMPLATE = """
-    QCheckBox {{
-        color: {debug_checkbox_color};
-        font-weight: bold;
-    }}
-"""
-
-# Detailed checkbox styling with theme-specific customization
-DETAILED_CHECKBOX_STYLE = """
-    QCheckBox {{
-        margin-top: 4px;
-        spacing: 8px;
-        padding: 4px;
-        color: {debug_checkbox_color};
-        font-weight: bold;
-    }}
-    
-    QCheckBox:hover {{
-        background-color: transparent;
-    }}
-    
-    QCheckBox::indicator {{
-        width: 18px;
-        height: 18px;
-        border-radius: 15px;
-        border: 1px solid #666;
-    }}
-    
-    QCheckBox::indicator:unchecked {{
-        background-color: transparent;
-    }}
-    
-    QCheckBox::indicator:checked {{
-        background-color: #4CAF50;
-        border-color: #4CAF50;
-        image: url(:/icons/check.png);
-    }}
-    
-    QCheckBox::indicator:checked:hover {{
-        background-color: #45a049;
-        border-color: #45a049;
-    }}
-    
-    /* Dark theme specific */
-    .dark QCheckBox {{
-        color: {debug_checkbox_color};
-    }}
-    
-    .dark QCheckBox::indicator:unchecked {{
-        border-color: #888;
-        background-color: #333;
-    }}
-    
-    /* Light theme specific */
-    .light QCheckBox {{
-        color: {debug_checkbox_color};
-    }}
-    
-    .light QCheckBox::indicator:unchecked {{
-        border-color: #666;
-        background-color: #ffffff;
-    }}
-"""
 
 # Common stylesheet template with placeholders for theme-specific values
 COMMON_STYLESHEET_TEMPLATE = """
@@ -495,11 +461,102 @@ COMMON_STYLESHEET_TEMPLATE = """
     padding: 8px;
     margin-bottom: 6px;
   }}
+  QTextEdit#logView QScrollBar:vertical {{
+    background-color: transparent;
+    border: none;
+    width: 10px;
+    margin: 6px 3px 6px 0px;
+  }}
+  QTextEdit#logView QScrollBar::handle:vertical {{
+    background-color: {secondary_action_border};
+    border-radius: 4px;
+    min-height: 32px;
+  }}
+  QTextEdit#logView QScrollBar::handle:vertical:hover {{
+    background-color: {combo_hover_border};
+  }}
+  QTextEdit#logView QScrollBar::add-line:vertical,
+  QTextEdit#logView QScrollBar::sub-line:vertical {{
+    height: 0px;
+    border: none;
+    background: transparent;
+  }}
+  QTextEdit#logView QScrollBar::add-page:vertical,
+  QTextEdit#logView QScrollBar::sub-page:vertical {{
+    background: transparent;
+  }}
+  QLineEdit[role="dialogTextInput"] {{
+    background-color: {secondary_action_bg};
+    color: {text_color};
+    border: 1px solid {secondary_action_border};
+    border-radius: 6px;
+    padding: 6px 10px;
+    min-height: 30px;
+    selection-background-color: {primary_action_bg};
+    selection-color: {primary_action_text};
+  }}
+  QLineEdit[role="dialogTextInput"]:focus {{
+    background-color: {secondary_action_hover};
+    border: 1px solid {combo_hover_border};
+  }}
+  QLineEdit[role="dialogTextInput"]:disabled {{
+    color: {toggle_button_disabled_text};
+    background-color: {toggle_button_disabled_bg};
+    border-color: {toggle_button_disabled_border};
+  }}
   PlotWidget, QWidget[class="plot-container"] {{
     background-color: {graph_bg};
     border: 1px solid {graph_border};
     border-radius: {border_radius};
-    padding: 8px;
+    padding: 0px;
+  }}
+  QLabel[role="metricPlotTitle"] {{
+    color: {graph_text};
+    background-color: transparent;
+    font-size: 13px;
+    font-weight: bold;
+    padding: 0px;
+  }}
+  QLabel[role="metricPlotEmptyState"] {{
+    color: {section_label_text};
+    background-color: {secondary_action_bg};
+    border: 1px solid {graph_border};
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 4px 8px;
+    margin: 0px 0px 4px 0px;
+    min-height: 22px;
+  }}
+  QWidget[role="activityLogPanel"] {{
+    background-color: transparent;
+  }}
+  QWidget[role="activityLogHeader"] {{
+    background-color: transparent;
+  }}
+  QLabel[role="dashboardSectionTitle"] {{
+    color: {graph_text};
+    background-color: transparent;
+    font-family: "Segoe UI";
+    font-size: 10pt;
+    font-weight: 600;
+    padding: 0px 4px 2px 4px;
+    margin: 0px;
+  }}
+  QToolButton[role="activityLogToolButton"] {{
+    background-color: {secondary_action_bg};
+    color: {secondary_action_text};
+    border: 1px solid {secondary_action_border};
+    border-radius: 6px;
+    padding: 4px;
+  }}
+  QToolButton[role="activityLogToolButton"]:hover {{
+    background-color: {secondary_action_hover};
+  }}
+  QToolButton[role="activityLogToolButton"]:disabled {{
+    color: {toggle_button_disabled_text};
+    background-color: {toggle_button_disabled_bg};
+    border-color: {secondary_action_border};
   }}
   PlotWidget > * {{
     background-color: transparent;
@@ -560,6 +617,47 @@ COMMON_STYLESHEET_TEMPLATE = """
   QComboBox QAbstractItemView::item:selected {{
     background-color: {combo_dropdown_select_bg};
   }}
+  QLabel[role="sidebarSection"] {{
+    color: {section_label_text};
+    background-color: transparent;
+    border-bottom: 1px solid {section_label_border};
+    font-family: "Segoe UI";
+    font-size: 9pt;
+    font-weight: 600;
+    padding: 8px 8px 3px 8px;
+    margin: 8px 6px 1px 6px;
+  }}
+  QScrollArea#sidebarScrollArea {{
+    background-color: transparent;
+    border: none;
+  }}
+  QScrollArea#sidebarScrollArea QWidget#sidebarPanel {{
+    background-color: transparent;
+  }}
+  QScrollArea#sidebarScrollArea QScrollBar:vertical {{
+    background-color: transparent;
+    border: none;
+    width: 10px;
+    margin: 4px 2px 4px 0px;
+  }}
+  QScrollArea#sidebarScrollArea QScrollBar::handle:vertical {{
+    background-color: {section_label_border};
+    border-radius: 4px;
+    min-height: 32px;
+  }}
+  QScrollArea#sidebarScrollArea QScrollBar::handle:vertical:hover {{
+    background-color: {combo_hover_border};
+  }}
+  QScrollArea#sidebarScrollArea QScrollBar::add-line:vertical,
+  QScrollArea#sidebarScrollArea QScrollBar::sub-line:vertical {{
+    height: 0px;
+    border: none;
+    background: transparent;
+  }}
+  QScrollArea#sidebarScrollArea QScrollBar::add-page:vertical,
+  QScrollArea#sidebarScrollArea QScrollBar::sub-page:vertical {{
+    background: transparent;
+  }}
   QPushButton {{
     background-color: {button_bg}; 
     color: {text_color}; 
@@ -574,6 +672,88 @@ COMMON_STYLESHEET_TEMPLATE = """
   }}
   QPushButton:hover {{
     background-color: {button_hover};
+  }}
+  QPushButton[actionRole="primary"] {{
+    background-color: {primary_action_bg};
+    color: {primary_action_text};
+    border: 1px solid {primary_action_border};
+    border-radius: {action_button_border_radius};
+    padding: 5px 10px;
+    margin: 3px 6px;
+    min-height: 24px;
+    font-size: 14px;
+    font-weight: bold;
+  }}
+  QPushButton[actionRole="primary"]:hover {{
+    background-color: {primary_action_hover};
+  }}
+  QPushButton[actionRole="secondary"] {{
+    background-color: {secondary_action_bg};
+    color: {secondary_action_text};
+    border: 1px solid {secondary_action_border};
+    border-radius: {action_button_border_radius};
+    padding: 5px 10px;
+    margin: 3px 6px;
+    min-height: 22px;
+    font-size: 14px;
+    font-weight: {button_font_weight};
+  }}
+  QPushButton[actionRole="secondary"]:hover {{
+    background-color: {secondary_action_hover};
+  }}
+  QPushButton[actionRole="utility"] {{
+    background-color: {utility_action_bg};
+    color: {utility_action_text};
+    border: 1px solid {utility_action_border};
+    border-radius: {action_button_border_radius};
+    padding: 5px 10px;
+    margin: 3px 6px;
+    min-height: 22px;
+    font-size: 14px;
+    font-weight: {button_font_weight};
+  }}
+  QPushButton[actionRole="utility"]:hover {{
+    background-color: {utility_action_hover};
+  }}
+  QPushButton[actionRole="primary"]:disabled,
+  QPushButton[actionRole="secondary"]:disabled,
+  QPushButton[actionRole="utility"]:disabled {{
+    background-color: {toggle_button_disabled_bg};
+    color: {toggle_button_disabled_text};
+    border: 1px solid {toggle_button_disabled_border};
+  }}
+  QCheckBox[role="settingsToggle"] {{
+    color: {utility_action_text};
+    background-color: transparent;
+    border-radius: 6px;
+    font-family: "Segoe UI";
+    font-size: 9pt;
+    font-weight: 500;
+    spacing: 8px;
+    padding: 6px 8px;
+    margin: 4px 6px 0px 6px;
+    min-height: 28px;
+  }}
+  QCheckBox[role="settingsToggle"]:hover {{
+    background-color: {utility_action_hover};
+  }}
+  QCheckBox[role="settingsToggle"]::indicator {{
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 1px solid {utility_action_border};
+    background-color: {secondary_action_bg};
+  }}
+  QCheckBox[role="settingsToggle"]::indicator:unchecked:hover {{
+    border-color: {combo_hover_border};
+  }}
+  QCheckBox[role="settingsToggle"]::indicator:checked {{
+    background-color: {primary_action_bg};
+    border-color: {primary_action_bg};
+  }}
+  QCheckBox[role="settingsToggle"]::indicator:checked:hover {{
+    background-color: {primary_action_hover};
+    border-color: {primary_action_hover};
   }}
   QPushButton[type="confirm"] {{
     background-color: {confirm_button_bg};
@@ -608,41 +788,60 @@ COMMON_STYLESHEET_TEMPLATE = """
     min-height: 40px;
   }}
   #addNodeButton {{
-    background-color: {add_node_button_bg};
-    color: {text_color};
-    border: 1px solid {add_node_button_border};
-    padding: 5px 10px;
-    border-radius: {border_radius};
     min-height: 32px;
-    max-height: 32px;
-  }}
-  #addNodeButton:hover {{
-    background-color: {add_node_button_hover};
-    color: {add_node_button_hover_text};
   }}
   #toggleContainerButton {{
     min-height: 40px;
     max-height: 40px;
   }}
-  #infoBox {{
+  QGroupBox[role="statusPanel"],
+  QGroupBox[role="resourcePanel"] {{
     background-color: {info_box_bg};
     border: 1px solid {info_box_border};
-    border-radius: {border_radius};
+    border-radius: {panel_border_radius};
     margin: 6px;
     margin-left: 5px;
     margin-right: 5px;
     padding: 8px;
     color: {info_box_text};
   }}
-  #infoBox QLabel {{
+  QGroupBox[role="resourcePanel"] {{
+    min-height: 60px;
+  }}
+  QGroupBox[role="statusPanel"] QLabel,
+  QGroupBox[role="resourcePanel"] QLabel {{
     color: {info_box_text};
-    font-family: "Courier New";
-    font-size: 10pt;
+    font-family: "Segoe UI";
+    font-size: 9pt;
     font-weight: {info_box_font_weight};
-    margin: 2px;
+    margin: 1px 2px;
     background-color: transparent;
   }}
-  #infoBox QPushButton {{
+  QGroupBox[role="statusPanel"] QLabel[role="sidebarCardTitle"],
+  QGroupBox[role="resourcePanel"] QLabel[role="sidebarCardTitle"] {{
+    color: {section_label_text};
+    border-bottom: 1px solid {section_label_border};
+    font-family: "Segoe UI";
+    font-size: 9pt;
+    font-weight: 600;
+    padding: 0px 4px 6px 4px;
+    margin: 0px 2px 4px 2px;
+  }}
+  QGroupBox[role="statusPanel"] QLabel[statusField="address"] {{
+    font-family: "Courier New";
+  }}
+  QGroupBox[role="statusPanel"] QLabel[statusField="metadata"] {{
+    font-family: "Segoe UI";
+  }}
+  QGroupBox[role="resourcePanel"] QLabel {{
+    padding: 1px 4px;
+  }}
+  QGroupBox[role="resourcePanel"] QLabel[resourceField="memory"],
+  QGroupBox[role="resourcePanel"] QLabel[resourceField="cpu"],
+  QGroupBox[role="resourcePanel"] QLabel[resourceField="storage"] {{
+    font-family: "Segoe UI";
+  }}
+  QGroupBox[role="statusPanel"] QPushButton {{
     background-color: {button_copy_address_bg};
     border: none;
     padding: 0px;
@@ -651,51 +850,10 @@ COMMON_STYLESHEET_TEMPLATE = """
     margin-right: 0px;
     color: {text_color};
   }}
-  #infoBoxText QLabel {{
-    color: {info_box_text};
-    background-color: transparent;
-    font-weight: {info_box_font_weight};
-  }}
-  #resourcesBox {{
-    background-color: {info_box_bg};
-    border: 1px solid {info_box_border};
-    border-radius: {border_radius};
-    margin: 6px;
-    margin-left: 5px;
-    margin-right: 5px;
-    padding: 8px;
-    color: {info_box_text};
-    min-height: 60px;
-  }}
-  #resourcesBox QLabel {{
-    color: {info_box_text};
-    font-family: "Courier New";
-    font-size: 10pt;
-    font-weight: {info_box_font_weight};
-    margin: 2px;
-    padding: 2px 4px;
-    background-color: transparent;
-    word-wrap: break-word;
-    max-width: 270px;
-  }}
-  #resourcesBoxText QLabel {{
-    color: {info_box_text};
-    background-color: transparent;
-    font-weight: {info_box_font_weight};
-    word-wrap: break-word;
-    max-width: 270px;
-  }}
-  #myComboPopup {{
-    background-color: #2e2e2e; 
-    border: none; 
-}}
 
 """
 
-# Additional custom styles
-ADDITIONAL_STYLES = """
-  /* No additional styles needed anymore since we've set margins directly on layouts */
-"""
+ADDITIONAL_STYLES = ""
 
 # Apply the common template with dark theme values
 DARK_STYLESHEET = COMMON_STYLESHEET_TEMPLATE.format(**DARK_THEME) + ADDITIONAL_STYLES + """
@@ -732,4 +890,3 @@ NOTIFICATION_ADDRESS_COPY_FAILED = "No address available to copy. Try again afte
 #    margin-left: 5px;
 #    margin-right: 5px;
 #}}
-

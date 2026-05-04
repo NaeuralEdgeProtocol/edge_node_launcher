@@ -8,11 +8,13 @@ from PyQt5.QtWidgets import (
     QCheckBox
 )
 from PyQt5.QtCore import pyqtSignal, QThread, Qt, QTimer
-from PyQt5.QtGui import QFont, QColor
 import subprocess
-import os
 
 from models.AnsibleHosts import AnsibleHostsManager
+from utils.ssh_command import split_ssh_args
+
+SSH_STATUS_TIMEOUT_SECONDS = 8
+
 
 class SSHCheckThread(QThread):
     status_updated = pyqtSignal(str, bool)  # host, is_online
@@ -60,9 +62,12 @@ class SSHCheckThread(QThread):
             result = subprocess.run(
                 cmd, 
                 capture_output=True, 
-                timeout=8,  # 8 second timeout
+                timeout=SSH_STATUS_TIMEOUT_SECONDS,
                 text=True
             )
+
+            if self.isInterruptionRequested():
+                return
             
             # Check if the command was successful and returned the expected output
             if result.returncode == 0 and 'Connection successful' in result.stdout:
@@ -76,6 +81,8 @@ class SSHCheckThread(QThread):
                 self.status_updated.emit(self.host, False)
                 
         except subprocess.TimeoutExpired as e:
+            if self.isInterruptionRequested():
+                return
             print(f"SSH connection to {self.host} timed out after {e.timeout} seconds")
             print(f"Command: {' '.join(e.cmd)}")
             if hasattr(e, 'stdout') and e.stdout:
@@ -84,6 +91,8 @@ class SSHCheckThread(QThread):
                 print(f"  stderr: {e.stderr}")
             self.status_updated.emit(self.host, False)
         except subprocess.CalledProcessError as e:
+            if self.isInterruptionRequested():
+                return
             print(f"SSH connection to {self.host} failed with error: {str(e)}")
             print(f"Return code: {e.returncode}")
             if hasattr(e, 'stdout') and e.stdout:
@@ -92,6 +101,8 @@ class SSHCheckThread(QThread):
                 print(f"  stderr: {e.stderr}")
             self.status_updated.emit(self.host, False)
         except Exception as e:
+            if self.isInterruptionRequested():
+                return
             print(f"SSH check error for {self.host}: {str(e)}")
             import traceback
             traceback.print_exc()
@@ -100,25 +111,25 @@ class SSHCheckThread(QThread):
 class StatusIndicator(QLabel):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(12, 12)
+        self.setFixedSize(10, 10)
         self.setAlignment(Qt.AlignCenter)
         self.setProperty("is_online", False)
         self.set_status(False)
 
     def set_status(self, is_online):
         """Set the status indicator color based on online status."""
-        print(f"StatusIndicator.set_status called with is_online={is_online}")
-        
         # Set the property first
         self.setProperty("is_online", is_online)
+        self.setAccessibleName("Host status online" if is_online else "Host status offline")
+        self.setToolTip("Host status online" if is_online else "Host status offline")
         
         # Then update the style
         color = "#4CAF50" if is_online else "#FF5252"  # Green if online, red if offline
         self.setStyleSheet(f"""
             QLabel {{
                 background-color: {color};
-                border-radius: 6px;
-                margin: 2px;
+                border: 1px solid #334155;
+                border-radius: 5px;
             }}
         """)
         
@@ -134,59 +145,88 @@ class HostSelector(QWidget):
     mode_changed = pyqtSignal(bool)  # Emitted when mode is changed (True for multi-host)
     host_status_updated = pyqtSignal(str, bool)  # Emitted when host status is updated (host_name, is_online)
 
-    def __init__(self, parent=None):
+    def __init__(
+        self,
+        parent=None,
+        hosts_manager=None,
+        auto_refresh: bool = True,
+        status_interval_ms: int = 10000,
+    ):
         super().__init__(parent)
-        self.hosts_manager = AnsibleHostsManager()
+        self.setObjectName("hostSelectorWidget")
+        self.setAccessibleName("Host selector")
+        self.hosts_manager = hosts_manager or AnsibleHostsManager()
         self.status_threads = {}  # Keep track of status check threads
+        self.status_thread = None
         self.status_indicators = {}  # Keep track of status indicators
         self._is_pro_mode = False  # Track pro mode state
-        self.initUI()
-        
-        # Set up timer for periodic status checks
+        self.initUI(auto_refresh=auto_refresh)
+        self._init_status_timer(status_interval_ms)
+
+    def _init_status_timer(self, status_interval_ms: int):
+        """Set up periodic host-status checks."""
         self.status_timer = QTimer(self)
         self.status_timer.timeout.connect(self._check_current_host_status)
-        self.status_timer.start(10000)  # Check every 10 seconds
+        if status_interval_ms > 0:
+            self.status_timer.start(status_interval_ms)
 
-    def initUI(self):
+    def initUI(self, auto_refresh: bool = True):
         layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
         
         # Mode selector
         mode_layout = QHBoxLayout()
-        self.mode_checkbox = QCheckBox("Multi-host Mode")
-        self.mode_checkbox.setFont(QFont("Courier New", 10, QFont.Bold))
+        mode_layout.setContentsMargins(0, 0, 0, 0)
+        self.mode_checkbox = QCheckBox("Multi-host mode")
+        self.mode_checkbox.setObjectName("hostSelectorModeCheckbox")
+        self.mode_checkbox.setAccessibleName("Multi-host mode")
+        self.mode_checkbox.setToolTip("Enable multi-host mode")
         self.mode_checkbox.stateChanged.connect(self._on_mode_changed)
         mode_layout.addWidget(self.mode_checkbox)
         layout.addLayout(mode_layout)
 
         # Host selector - vertical layout
         host_layout = QVBoxLayout()
+        host_layout.setContentsMargins(0, 0, 0, 0)
+        host_layout.setSpacing(6)
         
         # Label in its own row
-        self.host_label = QLabel("Select Host:")
-        self.host_label.setFont(QFont("Courier New", 10))
+        self.host_label = QLabel("Host")
+        self.host_label.setObjectName("hostSelectorHostLabel")
+        self.host_label.setAccessibleName("Host selector label")
         host_layout.addWidget(self.host_label)
         
         # Dropdown, status indicator and refresh button in a horizontal layout
         controls_layout = QHBoxLayout()
+        controls_layout.setContentsMargins(0, 0, 0, 0)
+        controls_layout.setSpacing(8)
         
         # Create a widget to hold the combobox and status indicator
         combo_container = QWidget()
+        combo_container.setObjectName("hostSelectorComboContainer")
+        combo_container.setAccessibleName("Host selector controls")
         combo_layout = QHBoxLayout(combo_container)
         combo_layout.setContentsMargins(0, 0, 0, 0)
         combo_layout.setSpacing(4)
         
         self.host_combo = QComboBox()
-        self.host_combo.setFont(QFont("Courier New", 10))
-        self.host_combo.setMinimumWidth(200)
+        self.host_combo.setObjectName("hostSelectorCombo")
+        self.host_combo.setAccessibleName("Host selector")
+        self.host_combo.setToolTip("Select a host")
+        self.host_combo.setMinimumWidth(180)
         
         # Add status indicator next to the combobox
         self.current_status = StatusIndicator()
+        self.current_status.setObjectName("hostSelectorStatusIndicator")
         
         combo_layout.addWidget(self.host_combo)
         combo_layout.addWidget(self.current_status)
         
         self.refresh_button = QPushButton("Refresh")
-        self.refresh_button.setFont(QFont("Courier New", 10))
+        self.refresh_button.setObjectName("hostSelectorRefreshButton")
+        self.refresh_button.setAccessibleName("Refresh hosts")
+        self.refresh_button.setToolTip("Refresh hosts")
         
         controls_layout.addWidget(combo_container)
         controls_layout.addWidget(self.refresh_button)
@@ -206,8 +246,9 @@ class HostSelector(QWidget):
         self.refresh_button.setVisible(False)
         self.current_status.setVisible(False)
         
-        # Load hosts
-        self.refresh_hosts()
+        # Load hosts unless a test or visual harness will do it explicitly.
+        if auto_refresh:
+            self.refresh_hosts()
 
     def refresh_hosts(self):
         """Refresh the list of available hosts."""
@@ -228,7 +269,50 @@ class HostSelector(QWidget):
         # Check status of current host
         if self.host_combo.currentText():
             self.check_host_status(self.host_combo.currentText())
-            
+
+    def _cleanup_status_thread(self, host_name: str, thread):
+        if self.status_threads.get(host_name) is thread:
+            self.status_threads.pop(host_name, None)
+        if self.status_thread is thread:
+            self.status_thread = None
+        try:
+            thread.deleteLater()
+        except RuntimeError:
+            pass
+
+    def _request_status_thread_stop(self, thread):
+        try:
+            if thread and thread.isRunning():
+                thread.requestInterruption()
+        except RuntimeError:
+            pass
+
+    def _active_status_thread_for(self, host_name: str):
+        thread = self.status_threads.get(host_name)
+        if thread is None:
+            return None
+        try:
+            if thread.isRunning():
+                return thread
+        except RuntimeError:
+            pass
+        self.status_threads.pop(host_name, None)
+        return None
+
+    def _cancel_status_checks(self):
+        if hasattr(self, "status_timer") and self.status_timer.isActive():
+            self.status_timer.stop()
+        for thread in list(self.status_threads.values()):
+            self._request_status_thread_stop(thread)
+        self._request_status_thread_stop(self.status_thread)
+
+    def _get_ssh_command_parts(self, host_name: str):
+        if hasattr(self.hosts_manager, "get_ssh_command_parts"):
+            return self.hosts_manager.get_ssh_command_parts(host_name)
+
+        ssh_command_str = self.hosts_manager.get_ssh_command(host_name)
+        return split_ssh_args(ssh_command_str)
+
     def check_host_status(self, host_name: str):
         """Check if a host is online."""
         if not host_name:
@@ -236,25 +320,21 @@ class HostSelector(QWidget):
             
         # Check if we're in simple mode - if so, skip SSH checks
         if hasattr(self, '_is_pro_mode') and not self._is_pro_mode:
-            print(f"Simple mode: skipping SSH check for host {host_name}")
             # Emit a fake "online" status to avoid blocking the UI
             self.host_status_updated.emit(host_name, True)
             return
             
         try:
-            # Stop any running status check
-            if hasattr(self, 'status_thread') and self.status_thread and self.status_thread.isRunning():
-                try:
-                    self.status_thread.terminate()
-                    self.status_thread.wait(1000)  # Wait up to 1 second for thread to terminate
-                    if self.status_thread.isRunning():
-                        print(f"Warning: Status check thread for {host_name} could not be terminated")
-                except Exception as e:
-                    print(f"Error terminating status thread: {str(e)}")
+            active_thread = self._active_status_thread_for(host_name)
+            if active_thread is not None:
+                print(f"Status check for {host_name} is already running")
+                return
+
+            if self.status_thread is not None:
+                self._request_status_thread_stop(self.status_thread)
                 
-            # Get SSH command for the host
-            ssh_command_str = self.hosts_manager.get_ssh_command(host_name)
-            if not ssh_command_str:
+            ssh_command = self._get_ssh_command_parts(host_name)
+            if not ssh_command:
                 print(f"No SSH command available for host: {host_name}")
                 self.current_status.setProperty("is_online", False)
                 self.current_status.set_status(False)
@@ -270,15 +350,18 @@ class HostSelector(QWidget):
                 self.host_status_updated.emit(host_name, False)
                 return
                 
-            # Convert the SSH command string to a list
-            # This is important because SSHCheckThread expects a list, not a string
-            ssh_command = ssh_command_str.split()
-            
             print(f"Using SSH command: {ssh_command}")
             
             # Start status check thread
             self.status_thread = SSHCheckThread(host_name, ssh_command)
             self.status_thread.status_updated.connect(self._on_status_updated)
+            self.status_thread.finished.connect(
+                lambda checked_host=host_name, checked_thread=self.status_thread: self._cleanup_status_thread(
+                    checked_host,
+                    checked_thread,
+                )
+            )
+            self.status_threads[host_name] = self.status_thread
             self.status_thread.start()
             
         except Exception as e:
@@ -288,6 +371,10 @@ class HostSelector(QWidget):
             self.current_status.setProperty("is_online", False)
             self.current_status.set_status(False)
             self.host_status_updated.emit(host_name, False)
+
+    def closeEvent(self, event):
+        self._cancel_status_checks()
+        super().closeEvent(event)
 
     def _on_status_updated(self, host_name, is_online):
         """Handle status update from the check thread.
@@ -342,6 +429,10 @@ class HostSelector(QWidget):
     def get_ssh_command(self, host_name: str) -> str:
         """Get SSH command for the selected host."""
         return self.hosts_manager.get_ssh_command(host_name)
+
+    def get_ssh_command_parts(self, host_name: str):
+        """Get structured SSH command arguments for the selected host."""
+        return self._get_ssh_command_parts(host_name)
 
     def apply_stylesheet(self, is_dark_theme: bool):
         """Apply theme-specific styles."""
@@ -504,8 +595,6 @@ class HostSelector(QWidget):
         self.refresh_button.setStyleSheet(button_style)
         self.host_label.setStyleSheet(f"color: {text_color};")
 
-        self.host_label.setStyleSheet(f"color: {text_color};")
-
     def is_multi_host_mode(self) -> bool:
         """Check if multi-host mode is enabled"""
         return self.mode_checkbox.isChecked()
@@ -534,4 +623,4 @@ class HostSelector(QWidget):
         if self.isVisible() and self.host_combo.isVisible():
             current_host = self.host_combo.currentText()
             if current_host:
-                self.check_host_status(current_host) 
+                self.check_host_status(current_host)

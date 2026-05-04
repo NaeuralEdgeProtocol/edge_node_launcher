@@ -90,14 +90,23 @@ To install and run Edge Node Launcher, follow these steps:
    cd edge_node_launcher
    ```
 
-2. Install the required dependencies:
+2. Create a Python 3.14 environment with `uv`:
    ```sh
-   pip install -r requirements.txt
+   uv venv --python 3.14 .venv
    ```
 
-3. Run the application:
+3. Install the required dependencies:
    ```sh
-   python main.py
+   uv pip install -r requirements.txt
+   ```
+
+4. Run the application:
+   ```sh
+   # Windows
+   .venv/Scripts/python.exe main.py
+
+   # macOS/Linux
+   .venv/bin/python main.py
    ```
 
 ## Building the Application
@@ -131,6 +140,22 @@ The application displays plots for CPU load, memory load, GPU load, and GPU memo
 The application can check for updates, download the latest release, and replace the current executable. To check for updates, ensure you have an internet connection and the application will handle the rest.
 
 ## Development
+
+Install test dependencies into the same Python 3.14 environment:
+
+```sh
+uv pip install -r requirements.txt pytest pytest-qt
+```
+
+Run the baseline test suite:
+
+```sh
+# Windows
+.venv/Scripts/python.exe -m pytest
+
+# macOS/Linux
+.venv/bin/python -m pytest
+```
 
 ### Code Structure
 

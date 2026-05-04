@@ -1,5 +1,43 @@
 """Docker utility functions."""
 
+import json
+import os
+import subprocess
+from pathlib import Path
+
+DOCKER_NAME_CHECK_TIMEOUT = 10
+WINDOWS_CREATE_NO_WINDOW = 0x08000000
+
+
+def _docker_container_names(name_filter: str):
+    command = [
+        'docker',
+        'ps',
+        '-a',
+        '--format',
+        '{{.Names}}',
+        '--filter',
+        f'name={name_filter}',
+    ]
+    kwargs = {
+        "capture_output": True,
+        "text": True,
+        "timeout": DOCKER_NAME_CHECK_TIMEOUT,
+    }
+    if os.name == 'nt':
+        kwargs["creationflags"] = getattr(
+            subprocess,
+            "CREATE_NO_WINDOW",
+            WINDOWS_CREATE_NO_WINDOW,
+        )
+
+    try:
+        result = subprocess.run(command, **kwargs)
+    except Exception:
+        return []
+
+    return [name.strip() for name in result.stdout.split('\n') if name.strip()]
+
 def get_volume_name(container_name):
     """Get volume name from container name.
     
@@ -47,11 +85,6 @@ def generate_container_name(prefix="r1node"):
     Returns:
         str: Sequential container name
     """
-    import subprocess
-    import os
-    import json
-    from pathlib import Path
-
     # Config file path
     config_dir = os.path.join(str(Path.home()), ".ratio1", "edge_node_launcher")
     containers_file = os.path.join(config_dir, "containers.json")
@@ -59,13 +92,7 @@ def generate_container_name(prefix="r1node"):
     # Find highest index in Docker containers
     docker_highest_index = -1  # Start from -1 so first container can be r1node (without number)
     try:
-        result = subprocess.run(
-            ['docker', 'ps', '-a', '--format', '{{.Names}}', '--filter', f'name={prefix}'],
-            capture_output=True, text=True
-        )
-        
-        existing_containers = result.stdout.strip().split('\n')
-        existing_containers = [c for c in existing_containers if c]  # Remove empty strings
+        existing_containers = _docker_container_names(prefix)
         
         for container in existing_containers:
             if container.startswith(prefix):
@@ -120,11 +147,7 @@ def generate_container_name(prefix="r1node"):
         # Check if this name exists in Docker but not in config
         exists_in_docker = False
         try:
-            result = subprocess.run(
-                ['docker', 'ps', '-a', '--format', '{{.Names}}', '--filter', f'name={next_name}'],
-                capture_output=True, text=True
-            )
-            docker_containers = [c.strip() for c in result.stdout.split('\n') if c.strip()]
+            docker_containers = _docker_container_names(next_name)
             exists_in_docker = next_name in docker_containers
         except Exception:
             exists_in_docker = False
@@ -144,4 +167,4 @@ def generate_container_name(prefix="r1node"):
             continue
         
         # Otherwise return the name
-        return next_name 
+        return next_name

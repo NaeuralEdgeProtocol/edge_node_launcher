@@ -34,10 +34,8 @@ if __name__ == '__main__':
         except Exception as e:
             print(f"Error setting AppUserModelID: {e}")
     
-    # Create and show the main window
+    # Create the main window. The launcher shows itself after UI setup so startup checks can log into it.
     manager = EdgeNodeLauncher(icon)
-    manager.show()
     
     # Start the event loop
     sys.exit(app.exec_())
-

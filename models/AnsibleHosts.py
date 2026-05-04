@@ -2,7 +2,8 @@ import os
 import yaml
 from dataclasses import dataclass
 from typing import Dict, Optional
-from pathlib import Path
+
+from utils.ssh_command import join_ssh_command, split_ssh_args
 
 @dataclass
 class AnsibleHost:
@@ -53,8 +54,8 @@ class AnsibleHostsManager:
         """Get host configuration by name."""
         return self.hosts.get(host_name)
 
-    def get_ssh_command(self, host_name: str) -> Optional[str]:
-        """Generate SSH command for the given host."""
+    def get_ssh_command_parts(self, host_name: str) -> Optional[list[str]]:
+        """Generate structured SSH command arguments for the given host."""
         host = self.get_host(host_name)
         if not host:
             return None
@@ -62,12 +63,17 @@ class AnsibleHostsManager:
         cmd = ['ssh']
         
         if host.ansible_ssh_common_args:
-            cmd.extend(host.ansible_ssh_common_args.split())
+            cmd.extend(split_ssh_args(host.ansible_ssh_common_args))
             
         if host.ansible_ssh_private_key_file:
             key_file = os.path.expanduser(host.ansible_ssh_private_key_file)
             cmd.extend(['-i', key_file])
             
         cmd.extend([f'{host.ansible_user}@{host.ansible_host}'])
-        
-        return ' '.join(cmd) 
+
+        return cmd
+
+    def get_ssh_command(self, host_name: str) -> Optional[str]:
+        """Generate a display-friendly SSH command for the given host."""
+        cmd = self.get_ssh_command_parts(host_name)
+        return join_ssh_command(cmd) if cmd else None

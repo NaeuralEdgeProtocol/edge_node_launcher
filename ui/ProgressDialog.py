@@ -74,6 +74,7 @@ class ImagePullProgressDialog(QDialog):
         # Cancel button
         button_layout = QHBoxLayout()
         self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.setObjectName("imagePullCancelButton")
         self.cancel_button.clicked.connect(self.reject)
         button_layout.addStretch()
         button_layout.addWidget(self.cancel_button)
@@ -172,4 +173,4 @@ class ImagePullProgressDialog(QDialog):
     def safe_close(self):
         """Safely close the dialog with a timer to prevent direct deletion."""
         # Use a short timer to ensure proper context for closing
-        QTimer.singleShot(100, self.close) 
+        QTimer.singleShot(100, self.close)

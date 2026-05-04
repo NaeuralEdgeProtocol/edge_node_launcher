@@ -2,85 +2,12 @@ import sys
 import base64
 import traceback
 from datetime import datetime
-import random
-import subprocess
-import math
 
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QAbstractButton, QCheckBox, QRadioButton, QLabel
-from PyQt5.QtCore import Qt, QRect, QPropertyAnimation, QTimer, QSize
-from PyQt5.QtGui import QFont, QPixmap, QIcon, QPainter, QColor, QBrush, QPen
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QAbstractButton, QCheckBox, QRadioButton
+from PyQt5.QtCore import Qt, QRect, QRectF, QPropertyAnimation
+from PyQt5.QtGui import QFont, QPixmap, QIcon, QPainter, QColor, QBrush
 from pyqtgraph import AxisItem
-
-# List of adjectives and nouns for generating container names
-ADJECTIVES = [
-    "swift", "bright", "calm", "wise", "bold", 
-    "quick", "keen", "brave", "agile", "noble"
-]
-
-NOUNS = [
-    "falcon", "tiger", "eagle", "wolf", "bear",
-    "hawk", "lion", "puma", "lynx", "fox"
-]
-
-def generate_container_name(prefix="r1node"):
-    """Generate a sequential container name.
-    
-    First container is named just "r1node" (no number),
-    subsequent containers are "r1node1", "r1node2", etc.
-    """
-    # Get list of existing containers with the prefix
-    try:
-        result = subprocess.run(
-            ['docker', 'ps', '-a', '--format', '{{.Names}}', '--filter', f'name={prefix}'],
-            capture_output=True, text=True
-        )
-        
-        # Parse existing container names and find the highest index
-        existing_containers = result.stdout.strip().split('\n')
-        existing_containers = [c for c in existing_containers if c]  # Remove empty strings
-        
-        highest_index = -1  # Start from -1 so first container will be r1node0
-        for container in existing_containers:
-            if container.startswith(prefix):
-                try:
-                    # Extract the number after the prefix
-                    index_str = container[len(prefix):]
-                    if index_str.isdigit():
-                        index = int(index_str)
-                        highest_index = max(highest_index, index)
-                except (ValueError, IndexError):
-                    continue
-        
-        # Return next available index
-        return f"{prefix}{highest_index + 1}"
-        
-    except Exception as e:
-        # In case of any error, start from 0
-        return f"{prefix}0"
-
-def get_volume_name(container_name):
-    """Get volume name from container name"""
-    # For legacy container names
-    if "edge_node_container" in container_name:
-        return container_name.replace("container", "volume")
-    
-    # For new r1node naming convention
-    if container_name == "r1node":
-        return "r1vol"  # First container gets simple volume name
-    
-    # For r1node with sequential numbers
-    if container_name.startswith("r1node"):
-        # Extract the number part
-        try:
-            # Get the numeric part after "r1node"
-            number_part = container_name[6:]
-            if number_part.isdigit():
-                return f"r1vol{number_part}"
-        except (ValueError, IndexError):
-            pass
-    
-    # Fallback
-    return f"volume_{container_name}"
+from widgets.loading_indicator import LoadingIndicator
 
 def get_icon_from_base64(base64_str):
   icon_data = base64.b64decode(base64_str)
@@ -106,6 +33,18 @@ class DateAxisItem(AxisItem):
     self.timestamps = None  # Store actual timestamps from the data
     self.parent = None  # Store the parent widget for debugging
     return
+
+  def paint(self, painter, *args):
+    try:
+      return super().paint(painter, *args)
+    except RuntimeError:
+      return None
+
+  def boundingRect(self):
+    try:
+      return super().boundingRect()
+    except RuntimeError:
+      return QRectF()
 
   def setTimestamps(self, timestamps, parent):
     """Store the actual timestamps from the data to map axis values."""
@@ -202,66 +141,3 @@ class ToggleButton1(QAbstractButton):
     self.update()
 
   circle_position = property(get_circle_position, set_circle_position)
-
-class LoadingIndicator(QLabel):
-    def __init__(self, parent=None, size=40):
-        super().__init__(parent)
-        self.angle = 0
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.rotate)
-        self.setFixedSize(QSize(size, size))
-        self._size = size
-        self._color = QColor("#4CAF50")  # Default green color
-        
-    def start(self):
-        """Start the loading animation."""
-        self.show()
-        self.timer.start(50)  # Update every 50ms
-        
-    def stop(self):
-        """Stop the loading animation."""
-        self.timer.stop()
-        self.hide()
-        
-    def rotate(self):
-        """Rotate the spinner by 30 degrees."""
-        self.angle = (self.angle + 30) % 360
-        self.update()
-        
-    def setColor(self, color):
-        """Set the color of the spinner."""
-        self._color = QColor(color)
-        self.update()
-        
-    def paintEvent(self, event):
-        """Paint the spinning indicator."""
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        
-        # Calculate center and radius
-        center = self.rect().center()
-        radius = (min(self.width(), self.height()) - 4) / 2
-        
-        # Set up the pen for drawing
-        pen = QPen(self._color)
-        pen.setWidth(3)
-        painter.setPen(pen)
-        
-        # Draw 8 lines with varying opacity
-        for i in range(8):
-            # Calculate opacity based on position
-            opacity = 1.0 - (i * 0.1)
-            self._color.setAlphaF(opacity)
-            pen.setColor(self._color)
-            painter.setPen(pen)
-            
-            # Calculate line position
-            angle_rad = math.radians(self.angle + (i * 45))
-            start_x = center.x() + (radius * 0.5 * math.cos(angle_rad))
-            start_y = center.y() + (radius * 0.5 * math.sin(angle_rad))
-            end_x = center.x() + (radius * math.cos(angle_rad))
-            end_y = center.y() + (radius * math.sin(angle_rad))
-            
-            # Draw the line
-            painter.drawLine(int(start_x), int(start_y), int(end_x), int(end_y))
-

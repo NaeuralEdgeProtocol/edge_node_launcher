@@ -1,7 +1,117 @@
-from PyQt5.QtWidgets import QComboBox, QStyledItemDelegate, QApplication, QWidget, QStylePainter, QStyle, QStyleOptionComboBox
+from PyQt5.QtWidgets import QApplication, QComboBox, QSizePolicy, QStyledItemDelegate
 from PyQt5.QtCore import Qt, QObject, QEvent, QTimer, QRect, QSize
-from PyQt5.QtGui import QFontMetrics, QPainter, QPalette, QIcon, QColor
+from PyQt5.QtGui import QColor, QFontMetrics, QIcon, QPainter, QPen
 from utils.const import DARK_STYLESHEET, DARK_COLORS, LIGHT_COLORS
+from utils.screen_geometry import screen_geometry
+
+
+_COMBO_THEME_COLORS = {
+    False: {
+        "surface": "#F8FAFC",
+        "surface_hover": "#FFFFFF",
+        "border": "#CBD5E1",
+        "border_focus": "#1B47F7",
+        "text": "#1F2937",
+        "arrow": "#5F6B7A",
+        "popup_bg": LIGHT_COLORS["combobox_popup_bg_color"],
+        "popup_border": LIGHT_COLORS["combobox_popup_border_color"],
+        "popup_hover": LIGHT_COLORS["combo_hover_bg"],
+        "popup_selected_bg": LIGHT_COLORS["combobox_popup_item_selected_bg"],
+        "popup_selected_text": LIGHT_COLORS["combobox_popup_item_selected_text"],
+    },
+    True: {
+        "surface": "#151A23",
+        "surface_hover": "#202734",
+        "border": "#445164",
+        "border_focus": "#4EA3FF",
+        "text": "#E8EEF8",
+        "arrow": "#A9B7C9",
+        "popup_bg": DARK_COLORS["combobox_popup_bg_color"],
+        "popup_border": DARK_COLORS["combobox_popup_border_color"],
+        "popup_hover": "#202734",
+        "popup_selected_bg": DARK_COLORS["combobox_popup_item_selected_bg"],
+        "popup_selected_text": DARK_COLORS["combobox_popup_item_selected_text"],
+    },
+}
+
+_SELECTED_TEXT_MARGIN = 36
+
+
+def _combo_stylesheet(colors):
+    return f"""
+QComboBox {{
+    combobox-popup: 1;
+    background-color: {colors["surface"]};
+    color: {colors["text"]};
+    border: 1px solid {colors["border"]};
+    border-radius: 16px;
+    padding: 0px 34px 0px 12px;
+    min-height: 34px;
+    font-weight: normal;
+}}
+QComboBox:hover {{
+    background-color: {colors["surface_hover"]};
+    border-color: {colors["border_focus"]};
+}}
+QComboBox:focus {{
+    border-color: {colors["border_focus"]};
+}}
+QComboBox::drop-down {{
+    subcontrol-origin: padding;
+    subcontrol-position: right center;
+    width: 30px;
+    border: none;
+    background: transparent;
+}}
+QComboBox::down-arrow {{
+    image: none;
+    width: 0px;
+    height: 0px;
+}}
+"""
+
+
+def _line_edit_stylesheet(colors):
+    return f"""
+QLineEdit {{
+    background: transparent;
+    color: transparent;
+    selection-color: transparent;
+    selection-background-color: transparent;
+    border: none;
+    padding: 0px;
+    margin: 0px;
+}}
+"""
+
+
+def _popup_stylesheet(colors):
+    return f"""
+QListView {{
+    border: 1px solid {colors["popup_border"]};
+    border-radius: 8px;
+    background-color: {colors["popup_bg"]};
+    outline: none;
+    padding: 8px;
+}}
+QListView::item {{
+    border-radius: 6px;
+    padding: 6px;
+    margin: 2px;
+    color: {colors["text"]};
+    text-align: center;
+}}
+QListView::item:hover {{
+    background-color: {colors["popup_hover"]};
+}}
+QListView::item:selected {{
+    background-color: {colors["popup_selected_bg"]};
+    color: {colors["popup_selected_text"]};
+}}
+QComboBox QAbstractItemView::item {{
+    text-align: center;
+}}
+"""
 
 class NoDecorationsDelegate(QStyledItemDelegate):
     """A delegate that removes all decorations and indicators from combo box items"""
@@ -45,51 +155,22 @@ class CenteredComboBox(QComboBox):
         # Center the text in the line edit
         self.lineEdit().setAlignment(Qt.AlignCenter)
 
-        # Make the line edit look like a non-editable combo box
+        # Make the line edit behave like selected combo text.
         self.lineEdit().setFrame(False)
-        
-        # Completely remove the dropdown button to ensure text centering
-        self.setStyleSheet("""
-            QComboBox {
-            	  font-weight: normal !important;
-                combobox-popup: 1;
-                background: transparent;
-                border-radius: 15px;
-                padding-left: 0px;
-                padding-right: 0px;
-                color: """ + (DARK_COLORS["combo_rectangle_text_color"] if self.is_dark_theme() else LIGHT_COLORS["combo_rectangle_text_color"]) + """;
-            }
-            QComboBox::drop-down {
-                subcontrol-origin: padding;
-                subcontrol-position: right;
-                width: 0px;
-                border: none;
-                background: transparent;
-                image: none;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                width: 0px;
-                height: 0px;
-                background: transparent;
-            }
-        """)
-        
-        # Apply a balanced margin to the line edit for perfect centering
-        self.lineEdit().setStyleSheet("""
-            background: transparent;
-            border: none;
-            padding-left: 0px;
-            padding-right: 0px;
-            margin: 0px;
-        """)
-        
+        self.lineEdit().hide()
+        self.lineEdit().setAttribute(Qt.WA_TransparentForMouseEvents, True)
+
         self.lineEdit().installEventFilter(ClickToOpenFilter(self))
         # Disable all text interactions:
         self.lineEdit().setFocusPolicy(Qt.NoFocus)
 
         # (Optional) Change the cursor so it doesn't look like an I-beam:
         self.lineEdit().setCursor(Qt.ArrowCursor)
+
+        self.setMinimumHeight(36)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.setMinimumContentsLength(1)
 
         # Make sure the popup is also properly styled
         self.view().parentWidget().setStyleSheet("background: transparent;")
@@ -100,127 +181,46 @@ class CenteredComboBox(QComboBox):
             
         # Apply the default theme
         self.apply_default_theme()
-        
-        # Set this to prevent the dropdown arrow from appearing
+
         self.setMaxVisibleItems(10)
-        self.setSizeAdjustPolicy(QComboBox.AdjustToContents)
         
     def paintEvent(self, event):
-        """Override the paint event to have complete control over rendering"""
-        # Use QStylePainter for more reliable styled drawing
-        painter = QStylePainter(self)
-        
-        # Create style option
-        opt = QStyleOptionComboBox()
-        self.initStyleOption(opt)
-        
-        # Disable the arrow by removing its subcontrol
-        opt.subControls &= ~QStyle.SC_ComboBoxArrow
-        
-        # Draw the combobox without the arrow
-        painter.drawComplexControl(QStyle.CC_ComboBox, opt)
-        
-        # Draw the text centered in the box
-        if self.currentText():
-            text_rect = self.rect()
-            text_rect.adjust(10, 0, -10, 0)  # Add some padding
-            
-            # Set the text color based on the theme, converting the string color to QColor
-            if self.is_dark_theme():
-                painter.setPen(QColor(DARK_COLORS["combobox_text_color"]))
-            else:
-                painter.setPen(QColor(LIGHT_COLORS["combobox_text_color"]))
-                
-            # painter.drawText(text_rect, Qt.AlignCenter, self.currentText())
+        """Draw the themed combo, selected text, and dropdown chevron."""
+        super().paintEvent(event)
+
+        colors = _COMBO_THEME_COLORS[self.is_dark_theme()]
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        text_rect = self.rect().adjusted(
+            _SELECTED_TEXT_MARGIN,
+            0,
+            -_SELECTED_TEXT_MARGIN,
+            0,
+        )
+        painter.setPen(QColor(colors["text"]))
+        selected_text = QFontMetrics(self.font()).elidedText(
+            self.currentText(),
+            Qt.ElideMiddle,
+            text_rect.width(),
+        )
+        painter.drawText(text_rect, Qt.AlignCenter | Qt.AlignVCenter, selected_text)
+
+        pen = QPen(QColor(colors["arrow"]), 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+        painter.setPen(pen)
+        center_y = self.height() // 2
+        center_x = self.width() - 17
+        painter.drawLine(center_x - 5, center_y - 2, center_x, center_y + 3)
+        painter.drawLine(center_x, center_y + 3, center_x + 5, center_y - 2)
 
     def apply_default_theme(self):
         """Apply appropriate styling for the current theme when the widget is first created"""
-        is_dark = self.is_dark_theme()
-        
-        if is_dark:
-            text_color = DARK_COLORS["combobox_text_color"]
-            combo_text_color = DARK_COLORS["combo_rectangle_text_color"]
-            # Dark theme button appearance
-            line_edit_style = f"""
-                QLineEdit {{
-                    background: transparent;
-                    color: {text_color};
-                    border: none;
-                    padding-left: 0px;
-                    padding-right: 0px;
-                    margin: 0px;
-                }}
-            """
-            
-            # Update the combo box style with the text color
-            self.setStyleSheet(f"""
-                QComboBox {{
-                    font-weight: normal !important;
-                    combobox-popup: 1;
-                    background: transparent;
-                    border-radius: 15px;
-                    padding-left: 0px;
-                    padding-right: 0px;
-                    color: {combo_text_color};
-                }}
-                QComboBox::drop-down {{
-                    subcontrol-origin: padding;
-                    subcontrol-position: right;
-                    width: 0px;
-                    border: none;
-                    background: transparent;
-                    image: none;
-                }}
-                QComboBox::down-arrow {{
-                    image: none;
-                    width: 0px;
-                    height: 0px;
-                    background: transparent;
-                }}
-            """)
-        else:
-            text_color = LIGHT_COLORS["combobox_text_color"]
-            combo_text_color = LIGHT_COLORS["combo_rectangle_text_color"]
-            # Light theme button appearance
-            line_edit_style = f"""
-                QLineEdit {{
-                    background: transparent;
-                    color: {text_color};
-                    border: none;
-                    padding-left: 0px;
-                    padding-right: 0px;
-                    margin: 0px;
-                }}
-            """
-            
-            # Update the combo box style with the text color
-            self.setStyleSheet(f"""
-                QComboBox {{
-                    font-weight: normal !important;
-                    combobox-popup: 1;
-                    background: transparent;
-                    border-radius: 15px;
-                    padding-left: 0px;
-                    padding-right: 0px;
-                    color: {combo_text_color};
-                }}
-                QComboBox::drop-down {{
-                    subcontrol-origin: padding;
-                    subcontrol-position: right;
-                    width: 0px;
-                    border: none;
-                    background: transparent;
-                    image: none;
-                }}
-                QComboBox::down-arrow {{
-                    image: none;
-                    width: 0px;
-                    height: 0px;
-                    background: transparent;
-                }}
-            """)
-            
-        self.lineEdit().setStyleSheet(line_edit_style)
+        colors = _COMBO_THEME_COLORS[self.is_dark_theme()]
+        self.setStyleSheet(_combo_stylesheet(colors))
+        self.lineEdit().setStyleSheet(_line_edit_stylesheet(colors))
+        self.lineEdit().setTextMargins(28, 0, 28, 0)
+        self.lineEdit().hide()
+        self.update()
 
     def addItem(self, text, userData=None):
         """Override addItem to ensure new items are center-aligned"""
@@ -271,80 +271,8 @@ class CenteredComboBox(QComboBox):
             # Remove any decoration or icon
             self.setItemData(i, None, Qt.DecorationRole)
 
-        # Determine if we're in dark or light theme
-        is_dark = self.is_dark_theme()
-        
-        if is_dark:
-            popup_border_color = DARK_COLORS["combobox_popup_border_color"]
-            popup_bg_color = DARK_COLORS["combobox_popup_bg_color"]
-            popup_item_selected_bg = DARK_COLORS["combobox_popup_item_selected_bg"]
-            popup_item_selected_text = DARK_COLORS["combobox_popup_item_selected_text"]
-            
-            # Original dark theme styling (restored)
-            self.view().setStyleSheet(f"""
-                QListView {{
-                    border: 1px solid {popup_border_color};
-                    border-radius: 6px;
-                    background-color: {popup_bg_color};
-                    outline: 10px;
-                    padding: 14px;
-                }}
-                
-                QListView::item {{
-                    border-radius: 6px;
-                    padding: 4px;
-                    margin: 2px;
-                    text-align: center;
-                }}
-                
-                QListView::item:selected {{
-                    background-color: {popup_item_selected_bg};
-                    color: {popup_item_selected_text};
-                }}
-                QComboBox QAbstractItemView::item {{
-                    text-align: center;
-                }}
-            """)
-        else:
-            popup_border_color = LIGHT_COLORS["combobox_popup_border_color"]
-            popup_bg_color = LIGHT_COLORS["combobox_popup_bg_color"]
-            popup_item_hover_bg = LIGHT_COLORS["combobox_popup_item_hover_bg"]
-            popup_item_selected_bg = LIGHT_COLORS["combobox_popup_item_selected_bg"]
-            popup_item_selected_text = LIGHT_COLORS["combobox_popup_item_selected_text"]
-            text_color = LIGHT_COLORS["combobox_text_color"]
-            
-            # Light theme styling (enhanced for better appearance)
-            self.view().setStyleSheet(f"""
-                QListView {{
-                    border: 1px solid {popup_border_color};
-                    border-radius: 8px;
-                    background-color: {popup_bg_color};
-                    outline: none;
-                    padding: 14px;
-                    box-shadow: 0px 3px 8px rgba(0, 0, 0, 0.15);
-                }}
-                
-                QListView::item {{
-                    border-radius: 6px;
-                    padding: 6px;
-                    margin: 3px;
-                    color: {text_color};
-                    text-align: center;
-                }}
-                
-                QListView::item:hover {{
-                    background-color: {popup_item_hover_bg};
-                }}
-                
-                QListView::item:selected {{
-                    background-color: {popup_item_selected_bg};
-                    color: {popup_item_selected_text};
-                }}
-                                
-                QComboBox QAbstractItemView::item {{
-                    text-align: center;
-                }}
-            """)
+        colors = _COMBO_THEME_COLORS[self.is_dark_theme()]
+        self.view().setStyleSheet(_popup_stylesheet(colors))
 
         # Set window flags to remove frame and shadow
         self.view().window().setWindowFlags(Qt.Popup | Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint)
@@ -416,7 +344,7 @@ class CenteredComboBox(QComboBox):
         new_x = combobox_center_x - popup_width // 2
         
         # Make sure the popup doesn't go off-screen
-        screen = QApplication.desktop().screenGeometry(self)
+        screen = self._popup_screen_geometry()
         if new_x < screen.left():
             new_x = screen.left()
         elif (new_x + popup_width) > screen.right():
@@ -424,3 +352,6 @@ class CenteredComboBox(QComboBox):
         
         # Reposition the popup
         popup.move(new_x, popup.y())
+
+    def _popup_screen_geometry(self):
+        return screen_geometry(self)

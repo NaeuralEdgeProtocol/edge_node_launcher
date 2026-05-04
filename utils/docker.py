@@ -11,14 +11,35 @@ from time import sleep
 from uuid import uuid4
 
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtWidgets import (QApplication, QDialog, QInputDialog, QLabel,
-                             QMessageBox, QProgressBar, QTextEdit, QVBoxLayout)
+from PyQt5.QtWidgets import (QDialog, QInputDialog, QLabel,
+                             QMessageBox, QProgressBar, QSizePolicy, QTextEdit, QVBoxLayout)
 
 from .const import *
 from .docker_commands import DockerCommandHandler
 from .ssh_service import SSHService, SSHConfig
 from .service_manager import ServiceManager
+from .screen_geometry import screen_geometry
+from .ssh_command import split_ssh_args
 from widgets.dialogs.DockerCheckDialog import DockerCheckDialog
+
+DOCKER_CHECK_TIMEOUT_SECONDS = 10
+DOCKER_CLEANUP_TIMEOUT_SECONDS = 30
+DOCKER_STOP_TIMEOUT_SECONDS = 45
+DOCKER_LAUNCH_TIMEOUT_SECONDS = 120
+GPU_CHECK_TIMEOUT_SECONDS = 5
+WINDOWS_CREATE_NO_WINDOW = 0x08000000
+
+
+def check_output_no_window(command, timeout: int):
+  kwargs = {
+    "stderr": subprocess.STDOUT,
+    "universal_newlines": True,
+    "timeout": timeout,
+  }
+  if os.name == 'nt':
+    kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", WINDOWS_CREATE_NO_WINDOW)
+  return subprocess.check_output(command, **kwargs)
+
 
 def get_user_folder():
   """
@@ -95,36 +116,52 @@ class ProgressBarWindow(QDialog):
     super().__init__()
     self.sender = sender
     self.setWindowTitle("Progress")
+    self.setObjectName("legacyDockerPullProgressDialog")
+    self.setAccessibleName("Docker pull progress")
     self.setWindowIcon(icon_object)
     self.setWindowModality(Qt.ApplicationModal)
-    self.setGeometry(300, 300, 600, 400)  # Larger size
+    self.resize(600, 400)
+    self.setMinimumSize(560, 360)
     layout = QVBoxLayout()
+    layout.setContentsMargins(18, 18, 18, 16)
+    layout.setSpacing(12)
 
     self.label = QLabel(message)
+    self.label.setObjectName("legacyDockerPullProgressMessage")
+    self.label.setAccessibleName("Docker pull progress message")
+    self.label.setWordWrap(True)
     layout.addWidget(self.label)
 
     self.output_edit = QTextEdit()
+    self.output_edit.setObjectName("legacyDockerPullOutput")
+    self.output_edit.setAccessibleName("Docker pull output")
     self.output_edit.setReadOnly(True)
+    self.output_edit.setMinimumHeight(190)
+    self.output_edit.setLineWrapMode(QTextEdit.WidgetWidth)
+    self.output_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
     layout.addWidget(self.output_edit)
 
     self.progress_bar = QProgressBar(self)
+    self.progress_bar.setObjectName("legacyDockerPullProgressBar")
+    self.progress_bar.setAccessibleName("Docker pull progress")
+    self.progress_bar.setRange(0, 100)
     self.progress_bar.setMaximum(100)
+    self.progress_bar.setMinimumHeight(24)
     layout.addWidget(self.progress_bar)
 
     self.setLayout(layout)
     self.apply_stylesheet()
     
-    screen_geometry = QApplication.desktop().screenGeometry()
-    x = (screen_geometry.width() - self.width()) // 2
-    y = (screen_geometry.height() - self.height()) // 2
-    self.move(x, y)
+    frame = self.frameGeometry()
+    frame.moveCenter(screen_geometry(self).center())
+    self.move(frame.topLeft())
     return
   
   
   def update_progress(self, output, progress):
     self.output_edit.append(output)
     self.output_edit.verticalScrollBar().setValue(self.output_edit.verticalScrollBar().maximum())
-    self.progress_bar.setValue(progress)
+    self.progress_bar.setValue(max(0, min(100, progress)))
 
 
   def apply_stylesheet(self):
@@ -191,10 +228,7 @@ class _DockerUtilsMixin:
   def check_nvidia_gpu_available(self):
     result = False
     try:
-      if os.name == 'nt':
-        output = subprocess.check_output(['nvidia-smi', '-L'], stderr=subprocess.STDOUT, universal_newlines=True, creationflags=subprocess.CREATE_NO_WINDOW)
-      else:
-        output = subprocess.check_output(['nvidia-smi', '-L'], stderr=subprocess.STDOUT, universal_newlines=True)
+      output = check_output_no_window(['nvidia-smi', '-L'], timeout=GPU_CHECK_TIMEOUT_SECONDS)
       result = 'GPU' in output
     except Exception as exc:
       result = False
@@ -348,33 +382,32 @@ class _DockerUtilsMixin:
     self.add_log('Checking Docker status...')
     try:
         # First check if Docker is installed
-        if os.name == 'nt':
-            output = subprocess.check_output(['docker', '--version'], stderr=subprocess.STDOUT, universal_newlines=True, creationflags=subprocess.CREATE_NO_WINDOW)
-        else:
-            output = subprocess.check_output(['docker', '--version'], stderr=subprocess.STDOUT, universal_newlines=True)
+        try:
+            output = check_output_no_window(['docker', '--version'], timeout=DOCKER_CHECK_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            return False, False, f"Docker version check timed out after {DOCKER_CHECK_TIMEOUT_SECONDS} seconds"
+        except subprocess.CalledProcessError as exc:
+            return False, False, f"Docker version check failed: {exc.output or exc}"
         self.add_log("Docker version: " + output.strip())
         
         # Then check if Docker daemon is running
-        if os.name == 'nt':
-            subprocess.check_output(['docker', 'info'], stderr=subprocess.STDOUT, universal_newlines=True, creationflags=subprocess.CREATE_NO_WINDOW)
-        else:
-            subprocess.check_output(['docker', 'info'], stderr=subprocess.STDOUT, universal_newlines=True)
+        try:
+            check_output_no_window(['docker', 'info'], timeout=DOCKER_CHECK_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            return True, False, f"Docker daemon check timed out after {DOCKER_CHECK_TIMEOUT_SECONDS} seconds"
+        except subprocess.CalledProcessError:
+            return True, False, "Docker daemon is not running"
         
         self.add_log("Docker daemon is running")
         return True, True, None
     except FileNotFoundError:
         return False, False, "Docker is not installed"
-    except subprocess.CalledProcessError:
-        return True, False, "Docker daemon is not running"
 
 
   def is_container_running(self):
     try:
       inspect_cmd = self.get_inspect_command()
-      if os.name == 'nt':
-        status = subprocess.check_output(inspect_cmd, stderr=subprocess.STDOUT, universal_newlines=True, creationflags=subprocess.CREATE_NO_WINDOW)
-      else:
-        status = subprocess.check_output(inspect_cmd, stderr=subprocess.STDOUT, universal_newlines=True)
+      status = check_output_no_window(inspect_cmd, timeout=DOCKER_CHECK_TIMEOUT_SECONDS)
 
       status = status.strip()
       container_running = status.split()[-1] == 'true'
@@ -386,14 +419,23 @@ class _DockerUtilsMixin:
         if container_running:
           self.post_launch_setup()
       return container_running
+    except subprocess.TimeoutExpired:
+      self.add_log(f'Container status check timed out after {DOCKER_CHECK_TIMEOUT_SECONDS} seconds', debug=True, color="red")
+      return False
     except:
       return False
 
 
   def launch_container(self):
     print('launch_container')
-    # Check Docker status first
-    if not self.check_docker():
+    # Check local Docker status before local launches. Remote mode restarts a
+    # service through SSH and must not depend on the workstation Docker daemon.
+    if not self.is_remote:
+      is_installed, is_running, error_message = self.check_docker()
+      if not (is_installed and is_running):
+        if error_message:
+          self.add_log(f'Docker is not ready: {error_message}')
+        QMessageBox.warning(self, 'Docker Status', error_message or 'Docker is not ready.')
         return
 
     is_env_ok = self.__check_env_keys()
@@ -428,21 +470,12 @@ class _DockerUtilsMixin:
     self.add_log("Attempting to clean up the container...")
     clean_cmd = self.get_clean_cmd()
     try:
-      if os.name == 'nt':
-        # subprocess.call(clean_cmd, creationflags=subprocess.CREATE_NO_WINDOW)
-        output = subprocess.check_output(
-          clean_cmd, 
-          stderr=subprocess.STDOUT, 
-          universal_newlines=True, 
-          creationflags=subprocess.CREATE_NO_WINDOW
-        )
-      else:
-        output = subprocess.check_output(
-          clean_cmd, 
-          stderr=subprocess.STDOUT
-        )
-      # endif windows or not
+      output = check_output_no_window(clean_cmd, timeout=DOCKER_CLEANUP_TIMEOUT_SECONDS)
       self.add_log('Container cleanup status: {}'.format(output))
+    except subprocess.TimeoutExpired:
+      self.add_log(
+        f'Edge Node container cleanup timed out after {DOCKER_CLEANUP_TIMEOUT_SECONDS} seconds'
+      )
     except subprocess.CalledProcessError as e:
       error_code = e.returncode
       error_output = e.output
@@ -453,26 +486,17 @@ class _DockerUtilsMixin:
     try:
       self.add_log('Starting Edge Node container...')
       run_cmd = self.get_cmd()
-      if os.name == 'nt':
-        # rc = subprocess.call(run_cmd, creationflags=subprocess.CREATE_NO_WINDOW, timeout=20)
-        output = subprocess.check_output(
-          run_cmd, 
-          stderr=subprocess.STDOUT, 
-          universal_newlines=True, 
-          creationflags=subprocess.CREATE_NO_WINDOW
-        )
-      else:
-        # rc = subprocess.call(run_cmd, timeout=20)
-        output = subprocess.check_output(
-          run_cmd, 
-          stderr=subprocess.STDOUT, 
-        )
-      # endif windows or not
+      output = check_output_no_window(run_cmd, timeout=DOCKER_LAUNCH_TIMEOUT_SECONDS)
       self.add_log('Container start status: {}'.format(output))
       QMessageBox.information(self, 'Container Launch', 'Container launched successfully.')
       self.add_log('Edge Node container launched successfully.')
       self.post_launch_setup()
       # endif container running
+    except subprocess.TimeoutExpired:
+      QMessageBox.warning(self, 'Container Launch', 'Failed to launch container')
+      self.add_log(
+        f'Edge Node container start timed out after {DOCKER_LAUNCH_TIMEOUT_SECONDS} seconds'
+      )
     except subprocess.CalledProcessError as e:
       error_code = e.returncode
       error_output = e.output
@@ -490,10 +514,7 @@ class _DockerUtilsMixin:
       self.add_log(f'Stopping Edge Node container {name_to_stop}...')
       stop_cmd = self.get_stop_command() + [name_to_stop]  # Append container name to stop command
       
-      if os.name == 'nt':
-        subprocess.check_call(stop_cmd, creationflags=subprocess.CREATE_NO_WINDOW)
-      else:
-        subprocess.check_call(stop_cmd)
+      check_output_no_window(stop_cmd, timeout=DOCKER_STOP_TIMEOUT_SECONDS)
       sleep(2)
       QMessageBox.information(self, 'Container Stop', 'Container stopped successfully.')      
       self.add_log('Edge Node container stopped successfully.')
@@ -503,13 +524,17 @@ class _DockerUtilsMixin:
         if container_name:
           # Replace the default container name with the provided one
           clean_cmd = clean_cmd[:-1] + [name_to_stop]
-        if os.name == 'nt':
-          subprocess.check_call(clean_cmd, creationflags=subprocess.CREATE_NO_WINDOW)
-        else:
-          subprocess.check_call(clean_cmd)
+        check_output_no_window(clean_cmd, timeout=DOCKER_CLEANUP_TIMEOUT_SECONDS)
         self.add_log('Edge Node container removed.')
+      except subprocess.TimeoutExpired:
+        self.add_log(
+          f'Edge Node container removal timed out after {DOCKER_CLEANUP_TIMEOUT_SECONDS} seconds'
+        )
       except subprocess.CalledProcessError:
         self.add_log('Edge Node container removal failed probably due to already being removed.')
+    except subprocess.TimeoutExpired:
+      QMessageBox.warning(self, 'Container Stop', 'Failed to stop container.')
+      self.add_log(f'Edge Node container stop timed out after {DOCKER_STOP_TIMEOUT_SECONDS} seconds.')
     except subprocess.CalledProcessError:
       QMessageBox.warning(self, 'Container Stop', 'Failed to stop container.')
       self.add_log('Edge Node container stop failed.')
@@ -535,14 +560,14 @@ class _DockerUtilsMixin:
       user=host_config.ansible_user,
       password=host_config.ansible_become_password,
       private_key=host_config.ansible_ssh_private_key_file,
-      ssh_args=host_config.ansible_ssh_common_args.split() if host_config.ansible_ssh_common_args else None
+      ssh_args=split_ssh_args(host_config.ansible_ssh_common_args) if host_config.ansible_ssh_common_args else None
     )
     
     self.ssh_service.configure(ssh_config)
     
     # Update Docker settings
     self.is_remote = True
-    self.remote_ssh_command = ssh_command.split()
+    self.remote_ssh_command = split_ssh_args(ssh_command)
     self.__setup_docker_run()
     
     # Update Docker command handler
@@ -555,4 +580,3 @@ class _DockerUtilsMixin:
     self.ssh_service.clear_configuration()
     self.docker_commands.clear_remote_connection()
     self.__setup_docker_run()
-  

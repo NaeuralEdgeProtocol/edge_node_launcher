@@ -1,9 +1,14 @@
 import os
 import json
 import logging
+import subprocess
 from pathlib import Path
 from typing import List, Dict, Optional, Any
 from utils.const import CONFIG_DIR
+
+DOCKER_VOLUME_CHECK_TIMEOUT = 10
+WINDOWS_CREATE_NO_WINDOW = 0x08000000
+
 
 # Container configuration structure
 class ContainerConfig:
@@ -217,26 +222,29 @@ class ConfigManager:
         Returns:
             bool: True if the volume exists, False otherwise
         """
+        command = ['docker', 'volume', 'inspect', volume_name]
+        kwargs = {
+            "capture_output": True,
+            "text": True,
+            "timeout": DOCKER_VOLUME_CHECK_TIMEOUT,
+        }
+        if os.name == 'nt':
+            kwargs["creationflags"] = getattr(
+                subprocess,
+                "CREATE_NO_WINDOW",
+                WINDOWS_CREATE_NO_WINDOW,
+            )
+
         try:
-            import subprocess
-            import os
-            
-            # Command to check if volume exists
-            command = ['docker', 'volume', 'inspect', volume_name]
-            
-            # Execute command
-            if os.name == 'nt':
-                result = subprocess.run(
-                    command,
-                    capture_output=True,
-                    text=True,
-                    creationflags=subprocess.CREATE_NO_WINDOW
-                )
-            else:
-                result = subprocess.run(command, capture_output=True, text=True)
-                
-            # Return True if command was successful (volume exists)
+            result = subprocess.run(command, **kwargs)
             return result.returncode == 0
+        except subprocess.TimeoutExpired:
+            logging.warning(
+                "Docker volume check timed out after %s seconds for %s",
+                DOCKER_VOLUME_CHECK_TIMEOUT,
+                volume_name,
+            )
+            return False
         except Exception as e:
             logging.error(f"Error checking if volume exists: {str(e)}")
             return False
@@ -326,4 +334,66 @@ class ConfigManager:
         Returns:
             bool: True if force debug is enabled, False otherwise
         """
-        return self.settings.get('force_debug', False) 
+        return self.settings.get('force_debug', False)
+
+    def set_dashboard_splitter_sizes(self, sizes: list) -> bool:
+        """Persist dashboard splitter sizes."""
+        try:
+            normalized = [int(size) for size in sizes]
+            if len(normalized) != 2 or any(size <= 0 for size in normalized):
+                return False
+            self.settings['dashboard_splitter_sizes'] = normalized
+            return self.save_settings()
+        except Exception as e:
+            logging.error(f"Error setting dashboard splitter sizes: {str(e)}")
+            return False
+
+    def get_dashboard_splitter_sizes(self):
+        """Get saved dashboard splitter sizes, or None when invalid/missing."""
+        try:
+            sizes = self.settings.get('dashboard_splitter_sizes')
+            if not isinstance(sizes, list) or len(sizes) != 2:
+                return None
+            normalized = [int(size) for size in sizes]
+            if any(size <= 0 for size in normalized):
+                return None
+            return normalized
+        except Exception as e:
+            logging.error(f"Error getting dashboard splitter sizes: {str(e)}")
+            return None
+
+    def set_main_window_geometry(self, geometry: dict) -> bool:
+        """Persist main window client geometry."""
+        try:
+            normalized = {
+                "x": int(geometry["x"]),
+                "y": int(geometry["y"]),
+                "width": int(geometry["width"]),
+                "height": int(geometry["height"]),
+            }
+            if normalized["width"] <= 0 or normalized["height"] <= 0:
+                return False
+            self.settings["main_window_geometry"] = normalized
+            return self.save_settings()
+        except Exception as e:
+            logging.error(f"Error setting main window geometry: {str(e)}")
+            return False
+
+    def get_main_window_geometry(self):
+        """Get saved main window client geometry, or None when invalid/missing."""
+        try:
+            geometry = self.settings.get("main_window_geometry")
+            if not isinstance(geometry, dict):
+                return None
+            normalized = {
+                "x": int(geometry["x"]),
+                "y": int(geometry["y"]),
+                "width": int(geometry["width"]),
+                "height": int(geometry["height"]),
+            }
+            if normalized["width"] <= 0 or normalized["height"] <= 0:
+                return None
+            return normalized
+        except Exception as e:
+            logging.error(f"Error getting main window geometry: {str(e)}")
+            return None

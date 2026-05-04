@@ -1,7 +1,7 @@
 import os
 import json
 import subprocess
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Union
 from dataclasses import dataclass
 from datetime import datetime
 from PyQt5.QtCore import QThread, pyqtSignal
@@ -16,6 +16,7 @@ from models.NodeHistory import NodeHistory
 from models.StartupConfig import StartupConfig
 from models.ConfigApp import ConfigApp
 from utils.const import DOCKER_VOLUME_PATH
+from utils.ssh_command import split_ssh_args
 
 # Docker configuration
 DOCKER_IMAGE = "ratio1/edge_node:mainnet"
@@ -25,6 +26,8 @@ DOCKER_TAG = "latest"
 DEFAULT_TIMEOUT = 90  # Default timeout for commands in seconds
 REMOTE_TIMEOUT = 120   # Extended timeout for remote commands in seconds 
 THREAD_JOIN_TIMEOUT = 2  # Timeout for thread joining in seconds
+DOCKER_STATUS_TIMEOUT = 10  # Short timeout for UI refresh/status checks
+GPU_CHECK_TIMEOUT = 5  # Short timeout for nvidia-smi availability probes
 
 @dataclass
 class ContainerInfo:
@@ -317,12 +320,15 @@ class DockerStreamingCommandThread(QThread):
             except Exception as e:
                 logging.error(f"Error terminating process: {e}")
 
+DockerDirectCommand = Union[List[str], Callable[[], List[str]]]
+
+
 class DockerDirectCommandThread(QThread):
     """ Thread to run a direct Docker command (not a container exec command) """
     command_finished = pyqtSignal(object)
     command_error = pyqtSignal(str)
 
-    def __init__(self, command: list, remote_ssh_command: list = None):
+    def __init__(self, command: DockerDirectCommand, remote_ssh_command: list = None):
         super().__init__()
         self.command = command
         self.remote_ssh_command = remote_ssh_command
@@ -332,8 +338,8 @@ class DockerDirectCommandThread(QThread):
 
     def run(self):
         try:
-            full_command = self.command
-            is_docker_pull = len(self.command) >= 2 and self.command[0] == 'docker' and self.command[1] == 'pull'
+            full_command = self.command() if callable(self.command) else self.command
+            is_docker_pull = len(full_command) >= 2 and full_command[0] == 'docker' and full_command[1] == 'pull'
 
             # Add remote prefix if needed
             if self.remote_ssh_command:
@@ -406,11 +412,12 @@ class DockerCommandHandler:
         """Set the container name."""
         self.container_name = container_name
 
-    def execute_command(self, command: list) -> tuple:
+    def execute_command(self, command: list, timeout: int = None) -> tuple:
         """Execute a docker command.
         
         Args:
             command: Command to execute as list of strings
+            timeout: Optional command timeout in seconds
             
         Returns:
             tuple: (stdout, stderr, return_code)
@@ -418,14 +425,30 @@ class DockerCommandHandler:
         try:
             if self._debug_mode:
                 print(f"Executing command: {' '.join(command)}")
-                
-            result = subprocess.run(command, capture_output=True, text=True)
+
+            command_timeout = timeout if timeout is not None else (
+                REMOTE_TIMEOUT if self.remote_ssh_command else DEFAULT_TIMEOUT
+            )
+            kwargs = {
+                "capture_output": True,
+                "text": True,
+                "timeout": command_timeout,
+            }
+            if os.name == 'nt':
+                kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+
+            result = subprocess.run(command, **kwargs)
             
             if self._debug_mode and result.returncode != 0:
                 print(f"Command failed with code {result.returncode}")
                 print(f"stderr: {result.stderr}")
                 
             return result.stdout, result.stderr, result.returncode
+        except subprocess.TimeoutExpired as e:
+            error_msg = f"Command timed out after {e.timeout} seconds: {' '.join(command)}"
+            if self._debug_mode:
+                print(error_msg)
+            return "", error_msg, 124
         except Exception as e:
             if self._debug_mode:
                 print(f"Command execution failed: {str(e)}")
@@ -439,7 +462,7 @@ class DockerCommandHandler:
         """
         # Check if image exists
         command = ['docker', 'images', '-q', DOCKER_IMAGE]
-        stdout, stderr, return_code = self.execute_command(command)
+        stdout, stderr, return_code = self.execute_command(command, timeout=DOCKER_STATUS_TIMEOUT)
         
         if stdout.strip():  # Image exists
             return True
@@ -532,7 +555,7 @@ class DockerCommandHandler:
         
         return stdout, stderr, return_code
 
-    def get_launch_command(self, volume_name: str = None) -> list:
+    def get_launch_command(self, volume_name: str = None, container_name: str = None) -> list:
         """Get the Docker command that will be used to launch the container.
         
         Args:
@@ -544,6 +567,8 @@ class DockerCommandHandler:
         # Check for GPU support
         use_gpu = self.check_nvidia_gpu_available()
         
+        target_container_name = container_name or self.container_name
+
         # Base command with container name
         command = [
             'docker', 'run'
@@ -566,7 +591,7 @@ class DockerCommandHandler:
         command += [
             '-d',  # Run in detached mode
             '--privileged',  # Privileged mode
-            '--name', self.container_name,  # Set container name
+            '--name', target_container_name,  # Set container name
             '--restart', 'unless-stopped',  # Restart policy
         ]
         
@@ -584,7 +609,7 @@ class DockerCommandHandler:
 
     def set_remote_connection(self, ssh_command: str):
         """Set up remote connection using SSH command."""
-        self.remote_ssh_command = ssh_command.split() if ssh_command else None
+        self.remote_ssh_command = split_ssh_args(ssh_command) if ssh_command else None
 
     def clear_remote_connection(self):
         """Clear remote connection settings."""
@@ -687,21 +712,16 @@ class DockerCommandHandler:
                 if self.remote_ssh_command:
                     full_command = self.remote_ssh_command + full_command
 
-                if os.name == 'nt':
-                    result = subprocess.run(
-                        full_command,
-                        capture_output=True,
-                        text=True,
-                        creationflags=subprocess.CREATE_NO_WINDOW
-                    )
-                else:
-                    result = subprocess.run(full_command, capture_output=True, text=True)
+                stdout, stderr, return_code = self.execute_command(
+                    full_command,
+                    timeout=DEFAULT_TIMEOUT,
+                )
 
-                if result.returncode != 0:
-                    error_callback(f"Command failed: {result.stderr}")
+                if return_code != 0:
+                    error_callback(f"Command failed: {stderr}")
                     return
 
-                process_allowed_addresses(result.stdout)
+                process_allowed_addresses(stdout)
             except Exception as e:
                 error_callback(str(e))
         except Exception as e:
@@ -795,7 +815,7 @@ class DockerCommandHandler:
         if all_containers:
             command.append('-a')
             
-        stdout, stderr, return_code = self.execute_command(command)
+        stdout, stderr, return_code = self.execute_command(command, timeout=DOCKER_STATUS_TIMEOUT)
         if return_code != 0:
             raise Exception(f"Failed to list containers: {stderr}")
             
@@ -854,7 +874,7 @@ class DockerCommandHandler:
         """
         name = container_name or self.container_name
         command = ['docker', 'inspect', name]
-        stdout, stderr, return_code = self.execute_command(command)
+        stdout, stderr, return_code = self.execute_command(command, timeout=DOCKER_STATUS_TIMEOUT)
         if return_code != 0:
             raise Exception(f"Failed to inspect container {name}: {stderr}")
             
@@ -878,7 +898,7 @@ class DockerCommandHandler:
         except Exception:
             return False
 
-    def _execute_direct_threaded(self, command: list, callback=None, error_callback=None) -> None:
+    def _execute_direct_threaded(self, command: DockerDirectCommand, callback=None, error_callback=None) -> None:
         """Execute a direct Docker command in a background thread.
         
         Args:
@@ -896,6 +916,15 @@ class DockerCommandHandler:
         
         self.threads.append(thread)  # Keep reference to prevent GC
         thread.start()
+
+    def _execute_launch_threaded(self, volume_name: str = None, callback=None, error_callback=None) -> None:
+        """Build and execute the Docker launch command entirely off the UI thread."""
+        container_name = self.container_name
+
+        def build_launch_command():
+            return self.get_launch_command(volume_name, container_name=container_name)
+
+        self._execute_direct_threaded(build_launch_command, callback, error_callback)
 
     def _handle_direct_thread_finished(self, thread, callback, error_callback):
         # This method runs in the main thread
@@ -968,9 +997,7 @@ class DockerCommandHandler:
                 error_callback
             )
         else:  # Container doesn't exist, create it
-            # Launch the container
-            launch_command = self.get_launch_command(volume_name)
-            self._execute_direct_threaded(launch_command, callback, error_callback)
+            self._execute_launch_threaded(volume_name, callback, error_callback)
     
     def _handle_container_remove_result(self, result, volume_name, callback, error_callback):
         """Handle the result of container removal during launch.
@@ -989,8 +1016,23 @@ class DockerCommandHandler:
             return
             
         # Container was removed successfully, now launch a new one
-        launch_command = self.get_launch_command(volume_name)
-        self._execute_direct_threaded(launch_command, callback, error_callback)
+        self._execute_launch_threaded(volume_name, callback, error_callback)
+
+    def remove_container_threaded(self, container_name: str, callback, error_callback, force: bool = True) -> None:
+        """Remove a container in a background thread."""
+        try:
+            if not container_name:
+                error_callback("No container name specified")
+                return
+
+            command = ['docker', 'rm']
+            if force:
+                command.append('-f')
+            command.append(container_name)
+            self._execute_direct_threaded(command, callback, error_callback)
+        except Exception as e:
+            logging.error(f"Error in remove_container_threaded: {str(e)}")
+            error_callback(f"Error removing container: {str(e)}")
 
     def stop_container_threaded(self, container_name: str, callback, error_callback) -> None:
         """Stop a container in a background thread.
@@ -1020,38 +1062,32 @@ class DockerCommandHandler:
         Returns:
             bool: True if NVIDIA GPU is available
         """
-        # Simple check first - if nvidia-smi doesn't exist, don't even try to run it
-        try:
-            # Use 'which' on Unix or 'where' on Windows to check if nvidia-smi exists
-            with open(os.devnull, 'w') as devnull:
-                if platform.system() == 'Windows':
-                    subprocess.check_call(['where', 'nvidia-smi'], stdout=devnull, stderr=devnull)
-                else:  # Unix-like systems (Linux, macOS)
-                    subprocess.check_call(['which', 'nvidia-smi'], stdout=devnull, stderr=devnull)
-        except subprocess.CalledProcessError:
-            # Command exists but failed for other reasons
+        lookup_command = (
+            ['where', 'nvidia-smi']
+            if platform.system() == 'Windows'
+            else ['which', 'nvidia-smi']
+        )
+        _, _, return_code = self.execute_command(
+            lookup_command,
+            timeout=GPU_CHECK_TIMEOUT,
+        )
+        if return_code != 0:
             return False
-        except Exception:
-            # Command doesn't exist or other error
+
+        output, _, return_code = self.execute_command(
+            ['nvidia-smi', '-L'],
+            timeout=GPU_CHECK_TIMEOUT,
+        )
+        if return_code != 0:
             return False
-            
-        # If we got here, nvidia-smi exists, so try to run it
-        try:
-            if platform.system() == 'Windows':
-                output = subprocess.check_output(['nvidia-smi', '-L'], stderr=subprocess.STDOUT, universal_newlines=True, creationflags=subprocess.CREATE_NO_WINDOW)
-            else:
-                output = subprocess.check_output(['nvidia-smi', '-L'], stderr=subprocess.STDOUT, universal_newlines=True)
-            
-            result = 'GPU' in output
-            
-            if self._debug_mode:
-                clean_output = output.strip().replace('\n', ' ')
-                print(f'NVIDIA GPU available: {result} ({clean_output})')
-                
-            return result
-        except Exception:
-            # Any error during execution means no GPU
-            return False
+
+        result = 'GPU' in output
+
+        if self._debug_mode:
+            clean_output = output.strip().replace('\n', ' ')
+            print(f'NVIDIA GPU available: {result} ({clean_output})')
+
+        return result
 
     def terminate_monitoring_operations(self):
         """Terminate only monitoring/API operations, not actual Docker containers"""
