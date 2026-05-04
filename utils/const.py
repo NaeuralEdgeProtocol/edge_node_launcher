@@ -480,6 +480,18 @@ COMMON_STYLESHEET_TEMPLATE = """
     font-size: 12px;
     padding: 0px 0px 4px 0px;
   }}
+  QWidget[role="activityLogPanel"] {{
+    background-color: transparent;
+  }}
+  QLabel[role="dashboardSectionTitle"] {{
+    color: {graph_text};
+    background-color: transparent;
+    font-family: "Segoe UI";
+    font-size: 10pt;
+    font-weight: 600;
+    padding: 0px 4px 2px 4px;
+    margin: 0px;
+  }}
   PlotWidget > * {{
     background-color: transparent;
   }}

@@ -40,6 +40,13 @@ def test_settings_toggle_checkbox_uses_semantic_ui_styles():
         assert "image: url(:/icons/check.png)" not in stylesheet
 
 
+def test_dashboard_activity_log_panel_uses_semantic_styles():
+    for stylesheet in (DARK_STYLESHEET, LIGHT_STYLESHEET):
+        assert 'QWidget[role="activityLogPanel"]' in stylesheet
+        assert 'QLabel[role="dashboardSectionTitle"]' in stylesheet
+        assert 'font-family: "Segoe UI";' in stylesheet
+
+
 def test_stop_button_text_uses_readable_dark_color_on_yellow():
     for colors in (DARK_COLORS, LIGHT_COLORS):
         assert colors["toggle_button_stop_text"] == "#1F2937"

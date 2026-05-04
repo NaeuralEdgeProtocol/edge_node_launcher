@@ -124,6 +124,8 @@ def log_with_color(message, color="gray"):
 class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourcesMixin):
   def __init__(self, app_icon=None):
     self.logView = None
+    self.activityLogPanel = None
+    self.activity_log_title = None
     self.dashboard_splitter = None
     self.log_buffer = []
     self.__force_debug = False
@@ -609,11 +611,42 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     """Create the activity log view with a stable automation target."""
     log_view = QTextEdit()
     log_view.setObjectName("logView")
+    log_view.setAccessibleName("Activity log output")
     log_view.setReadOnly(True)
-    log_view.setStyleSheet(self._current_stylesheet)
     log_view.setMinimumHeight(120)
     log_view.setFont(QFont("Courier New"))
     return log_view
+
+  def _create_dashboard_section_title(self, text: str, object_name: str, accessible_name: str) -> QLabel:
+    label = QLabel(text)
+    label.setObjectName(object_name)
+    label.setProperty("role", "dashboardSectionTitle")
+    label.setAccessibleName(accessible_name)
+    label.setFont(QFont("Segoe UI", 10, QFont.DemiBold))
+    label.setMinimumHeight(24)
+    return label
+
+  def _create_activity_log_panel(self) -> QWidget:
+    """Create the titled activity-log panel while preserving ``self.logView``."""
+    panel = QWidget()
+    panel.setObjectName("activityLogPanel")
+    panel.setProperty("role", "activityLogPanel")
+
+    layout = QVBoxLayout(panel)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(4)
+
+    self.activity_log_title = self._create_dashboard_section_title(
+      "Activity Log",
+      "activityLogTitle",
+      "Activity log section",
+    )
+    layout.addWidget(self.activity_log_title)
+
+    self.logView = self._create_activity_log_view()
+    layout.addWidget(self.logView)
+
+    return panel
 
   def _flush_log_buffer_to_view(self) -> None:
     if not self.log_buffer or self.logView is None:
@@ -647,9 +680,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.dashboard_splitter.setHandleWidth(8)
 
     self.graphView = self._create_metrics_graph_grid()
-    self.logView = self._create_activity_log_view()
+    self.activityLogPanel = self._create_activity_log_panel()
     self.dashboard_splitter.addWidget(self.graphView)
-    self.dashboard_splitter.addWidget(self.logView)
+    self.dashboard_splitter.addWidget(self.activityLogPanel)
     self.dashboard_splitter.setStretchFactor(0, 4)
     self.dashboard_splitter.setStretchFactor(1, 1)
     self.dashboard_splitter.setSizes(self._dashboard_splitter_initial_sizes())

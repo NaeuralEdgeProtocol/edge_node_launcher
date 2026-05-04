@@ -1443,17 +1443,28 @@ def test_main_window_log_view_has_stable_identity_and_dimensions(qtbot, monkeypa
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
     dashboard_panel = launcher.findChild(QWidget, "dashboardPanel")
     dashboard_splitter = launcher.findChild(QSplitter, "dashboardSplitter")
+    activity_log_panel = launcher.findChild(QWidget, "activityLogPanel")
 
     assert dashboard_panel is not None
     assert dashboard_splitter is not None
+    assert activity_log_panel is launcher.activityLogPanel
+    assert launcher.activity_log_title.objectName() == "activityLogTitle"
+    assert launcher.activity_log_title.text() == "Activity Log"
+    assert launcher.activity_log_title.property("role") == "dashboardSectionTitle"
+    assert launcher.activity_log_title.accessibleName() == "Activity log section"
+    assert launcher.activity_log_title.font().family() != "Courier New"
     assert dashboard_splitter.orientation() == Qt.Vertical
     assert dashboard_splitter.count() == 2
     assert dashboard_panel.layout().indexOf(dashboard_splitter) >= 0
     assert dashboard_splitter.widget(0) is launcher.graphView
-    assert dashboard_splitter.widget(1) is launcher.logView
+    assert dashboard_splitter.widget(1) is launcher.activityLogPanel
     assert not dashboard_splitter.childrenCollapsible()
     assert launcher.logView.objectName() == "logView"
+    assert launcher.logView.accessibleName() == "Activity log output"
     assert launcher.findChild(QTextEdit, "logView") is launcher.logView
+    assert activity_log_panel.findChild(QTextEdit, "logView") is launcher.logView
+    assert activity_log_panel.layout().indexOf(launcher.activity_log_title) >= 0
+    assert activity_log_panel.layout().indexOf(launcher.logView) >= 0
     assert launcher.logView.isReadOnly()
     assert launcher.logView.minimumHeight() == 120
     assert launcher.logView.maximumHeight() > 150
