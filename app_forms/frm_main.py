@@ -5,7 +5,7 @@ import os
 import json
 import dataclasses
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from html import escape
 from time import time
 from typing import Optional
@@ -840,7 +840,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     checked_at = metadata.get("last_status_checked_at")
     if checked_at:
-      rows.append(("Last check", str(checked_at)))
+      rows.append(("Last check", self._format_app_detail_timestamp(checked_at)))
 
     last_error = metadata.get("last_error")
     if last_error:
@@ -940,6 +940,18 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         suffix = "s" if key == "vcs_poll_interval" else ""
         parts.append(f"{label}: {value}{suffix}")
     return ", ".join(parts)
+
+  def _format_app_detail_timestamp(self, value) -> str:
+    text = str(value or "").strip()
+    if not text:
+      return ""
+    try:
+      parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+      return text
+    if parsed.tzinfo is not None:
+      return parsed.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    return parsed.strftime("%Y-%m-%d %H:%M:%S")
 
   def _log_app_event(self, message: str, *, color: str = "blue", debug: bool = False) -> None:
     self.add_log(message, debug=debug, color=color)
