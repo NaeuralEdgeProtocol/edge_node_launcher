@@ -4,6 +4,7 @@ import webbrowser
 from PyQt5.QtWidgets import QApplication, QComboBox, QDialog, QLabel, QLineEdit, QProgressBar, QPushButton, QScrollArea, QWidget
 
 import tools.run_smoke_e2e as smoke
+from services.app_deployment_models import ContainerAppSpec
 from widgets.ToastWidget import NotificationType, ToastWidget
 
 
@@ -207,6 +208,43 @@ def test_click_visible_button_rejects_hidden_buttons():
         assert "copy node address button is not visible" in str(exc)
     else:
         raise AssertionError("hidden smoke buttons should fail fast")
+
+
+def test_smoke_fake_sdk_client_maps_launch_refresh_and_stop_without_secrets():
+    client = smoke.FakeSdkDeploymentClient()
+    spec = ContainerAppSpec(
+        app_name="smoke_car",
+        node_address=smoke.SMOKE_VALID_NODE_ADDRESS,
+        image="nginx:alpine",
+        registry_password=smoke.SMOKE_CONTAINER_APP_SECRET,
+    )
+
+    result = client.launch_container_app(spec)
+    statuses = client.list_node_apps(smoke.SMOKE_VALID_NODE_ADDRESS)
+    client.stop_app(result.node_address, result.pipeline_name)
+    stopped_statuses = client.list_node_apps(smoke.SMOKE_VALID_NODE_ADDRESS)
+
+    assert result.app_url == "https://smoke-car.example.test"
+    assert statuses[0].status == "online"
+    assert stopped_statuses[0].status == "stopped"
+    assert smoke.SMOKE_CONTAINER_APP_SECRET not in repr(client.events)
+    assert client.events[0]["has_registry_password"] is True
+
+
+def test_secret_line_edit_snapshot_reports_password_echo_without_raw_secret(qtbot):
+    line_edit = QLineEdit()
+    line_edit.setObjectName("secretInput")
+    line_edit.setAccessibleName("Secret")
+    line_edit.setEchoMode(QLineEdit.Password)
+    line_edit.setText(smoke.SMOKE_CONTAINER_APP_SECRET)
+    qtbot.addWidget(line_edit)
+
+    snapshot = smoke.secret_line_edit_snapshot(line_edit, smoke.SMOKE_CONTAINER_APP_SECRET)
+
+    assert snapshot["object_name"] == "secretInput"
+    assert snapshot["uses_password_echo"] is True
+    assert snapshot["raw_secret_visible"] is False
+    assert "display_text" not in snapshot
 
 
 def test_dialog_visual_snapshot_records_dialog_content(qtbot):

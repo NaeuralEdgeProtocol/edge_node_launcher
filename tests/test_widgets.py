@@ -312,6 +312,21 @@ def test_apps_page_launch_reports_missing_preflight_container(qtbot, tmp_path):
     assert fake_client.container_specs == []
 
 
+def test_apps_page_clears_stale_status_when_form_changes(qtbot, tmp_path):
+    page = AppsPage(app_registry=AppRegistry(tmp_path / "apps.json"))
+    qtbot.addWidget(page)
+    page.show()
+    qtbot.waitUntil(page.isVisible)
+
+    page._show_message("Stopped", error=False)
+    assert page.validation_message.isVisible()
+
+    page.app_name_input.setText("next_app")
+
+    assert page.validation_message.text() == ""
+    assert not page.validation_message.isVisible()
+
+
 def test_apps_page_refresh_status_uses_sdk_client_for_existing_records(qtbot, tmp_path):
     fake_client = FakeAppDeploymentClient()
     registry = AppRegistry(tmp_path / "apps.json")

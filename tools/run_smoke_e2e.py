@@ -27,6 +27,9 @@ SMOKE_CONTAINER = "r1nodesmoke"
 SMOKE_VOLUME = "r1volsmoke"
 SMOKE_SECONDARY_CONTAINER = "r1nodesmoke2"
 SMOKE_SECONDARY_VOLUME = "r1volsmoke2"
+SMOKE_VALID_NODE_ADDRESS = "0xai_smokeprimary123"
+SMOKE_CONTAINER_APP_SECRET = "smoke-registry-secret"
+SMOKE_WORKER_APP_SECRET = "smoke-github-token"
 
 
 class FakeDockerHandler:
@@ -69,6 +72,98 @@ class FakeDockerHandler:
     def pull_image(self, callback, error_callback, output_callback=None):
         if error_callback:
             error_callback("Smoke runner does not pull images")
+
+
+class FakeSdkDeploymentClient:
+    """Deterministic SDK boundary for visible smoke app-management scenarios."""
+
+    def __init__(self):
+        self.events = []
+        self.deployed = {}
+        self.stopped = set()
+
+    def launch_container_app(self, spec):
+        self.events.append(
+            {
+                "operation": "launch_container",
+                "app_name": spec.app_name,
+                "pipeline_name": spec.pipeline_name,
+                "has_registry_password": bool(spec.registry_password),
+            }
+        )
+        return self._result_for_spec(spec, "https://smoke-car.example.test")
+
+    def launch_worker_app(self, spec):
+        self.events.append(
+            {
+                "operation": "launch_worker",
+                "app_name": spec.app_name,
+                "pipeline_name": spec.pipeline_name,
+                "has_github_token": bool(spec.github_token),
+            }
+        )
+        return self._result_for_spec(spec, "https://smoke-war.example.test")
+
+    def list_node_apps(self, node_address):
+        from services.app_deployment_models import SdkAppStatus
+
+        self.events.append({"operation": "list_node_apps", "node_address": node_address})
+        statuses = []
+        for result in self.deployed.values():
+            if result.node_address != node_address:
+                continue
+            stopped_key = (result.node_address, result.pipeline_name)
+            statuses.append(
+                SdkAppStatus(
+                    node_address=result.node_address,
+                    app_name=result.app_name,
+                    plugin_signature=result.plugin_signature,
+                    instance_id=result.instance_id,
+                    status="stopped" if stopped_key in self.stopped else "online",
+                    url=result.app_url,
+                )
+            )
+        return statuses
+
+    def stop_app(self, node_address, pipeline_name):
+        self.events.append(
+            {
+                "operation": "stop_app",
+                "node_address": node_address,
+                "pipeline_name": pipeline_name,
+            }
+        )
+        self.stopped.add((node_address, pipeline_name))
+        return True
+
+    def _result_for_spec(self, spec, url):
+        from services.app_deployment_models import DeploymentResult
+
+        result = DeploymentResult(
+            app_id=f"{spec.node_address}:{spec.pipeline_name}:{spec.app_type}",
+            app_name=spec.app_name,
+            app_type=spec.app_type,
+            node_address=spec.node_address,
+            pipeline_name=spec.pipeline_name,
+            plugin_signature=spec.plugin_signature,
+            instance_id=f"smoke-{spec.pipeline_name}",
+            app_url=url,
+            status="deployed",
+        )
+        self.deployed[result.app_id] = result
+        self.stopped.discard((result.node_address, result.pipeline_name))
+        return result
+
+
+class FakeAppLaunchPreflight:
+    def __init__(self):
+        self.calls = []
+
+    def prepare(self, container_name):
+        if not container_name:
+            raise ValueError("Target container is required for SDK allow-list setup.")
+        self.calls.append(container_name)
+        return SimpleNamespace(container_name=container_name)
 
 
 def write_log(log, output_path):
@@ -468,6 +563,50 @@ def click_visible_button(app, button, label):
     return click_button(app, button, label)
 
 
+def set_line_edit_value(app, line_edit, value):
+    line_edit.setFocus()
+    line_edit.clear()
+    line_edit.setText(value)
+    app.processEvents()
+
+
+def set_plain_text_value(app, plain_text_edit, value):
+    plain_text_edit.setFocus()
+    plain_text_edit.setPlainText(value)
+    app.processEvents()
+
+
+def app_table_snapshot(apps_page):
+    rows = []
+    for row in range(apps_page.apps_table.rowCount()):
+        rows.append(
+            {
+                "name": _table_text(apps_page.apps_table, row, 0),
+                "type": _table_text(apps_page.apps_table, row, 1),
+                "status": _table_text(apps_page.apps_table, row, 2),
+            }
+        )
+    return rows
+
+
+def secret_line_edit_snapshot(line_edit, raw_secret):
+    from PyQt5.QtWidgets import QLineEdit
+
+    display_text = line_edit.displayText()
+    return {
+        "object_name": line_edit.objectName(),
+        "accessible_name": line_edit.accessibleName(),
+        "uses_password_echo": line_edit.echoMode() == QLineEdit.Password,
+        "display_text_length": len(display_text),
+        "raw_secret_visible": bool(raw_secret and raw_secret in display_text),
+    }
+
+
+def _table_text(table, row, column):
+    item = table.item(row, column)
+    return item.text() if item is not None else ""
+
+
 def show_launcher_page(app, launcher, page_name):
     panel = getattr(launcher, "sidebar_panel", None)
     if panel is None or not hasattr(panel, "show_page"):
@@ -520,6 +659,227 @@ def install_browser_recorder(log):
     return restore
 
 
+def run_mocked_sdk_apps_scenario(
+    app,
+    launcher,
+    log,
+    output_path,
+    screenshot_dir,
+    timeout,
+    fake_sdk_client,
+    fake_preflight,
+    app_registry,
+):
+    apps_page = launcher.apps_page
+    if getattr(launcher, "toast", None) is not None:
+        launcher.toast.hide()
+    apps_page.deployment_client = fake_sdk_client
+    apps_page.set_launch_preflight_service(fake_preflight)
+    apps_page.set_target_node(node_address=SMOKE_VALID_NODE_ADDRESS, container_name=SMOKE_CONTAINER)
+    set_line_edit_value(app, apps_page.node_address_input, SMOKE_VALID_NODE_ADDRESS)
+
+    show_launcher_page(app, launcher, "apps")
+    scroll_sidebar_to(launcher, "top")
+    app.processEvents()
+    record_step(log, output_path, {"step": "show apps page for mocked SDK app E2E"})
+
+    set_line_edit_value(app, apps_page.app_name_input, "smoke_car")
+    set_line_edit_value(app, apps_page.car_image_input, "nginx:alpine")
+    set_line_edit_value(app, apps_page.car_port_input, "8080")
+    set_line_edit_value(app, apps_page.car_registry_input, "docker.io")
+    set_line_edit_value(app, apps_page.car_registry_user_input, "smoke-user")
+    set_line_edit_value(app, apps_page.car_registry_password_input, SMOKE_CONTAINER_APP_SECRET)
+    set_plain_text_value(app, apps_page.env_input, "SMOKE_MODE=mock\nPUBLIC_VALUE=visible")
+
+    scroll_sidebar_to(launcher, "bottom")
+    app.processEvents()
+    if getattr(launcher, "toast", None) is not None:
+        launcher.toast.hide()
+    container_secret_visual = capture_visual_evidence(launcher, screenshot_dir, "apps_container_secret_fields")
+    container_secret_snapshot = secret_line_edit_snapshot(
+        apps_page.car_registry_password_input,
+        SMOKE_CONTAINER_APP_SECRET,
+    )
+    if not container_secret_snapshot["uses_password_echo"] or container_secret_snapshot["raw_secret_visible"]:
+        raise AssertionError("container registry password is visible in the Apps page")
+    record_step(
+        log,
+        output_path,
+        {
+            "step": "captured container app secret-field visual evidence",
+            "visual": container_secret_visual,
+            "secret_field": container_secret_snapshot,
+        },
+    )
+
+    scroll_sidebar_to(launcher, "top")
+    app.processEvents()
+    record_step(log, output_path, {"step": click_visible_button(app, apps_page.validate_button, "validate container app")})
+    wait_until(
+        app,
+        lambda: apps_page.validation_message.isVisible() and apps_page.validation_message.text() == "Ready",
+        timeout,
+        "container app validation",
+    )
+    record_step(
+        log,
+        output_path,
+        {
+            "step": click_visible_button(app, apps_page.launch_button, "launch container app"),
+            "preflight_calls_before_wait": len(fake_preflight.calls),
+        },
+    )
+    wait_until(
+        app,
+        lambda: apps_page.apps_table.rowCount() >= 1 and apps_page.validation_message.text() == "Launched",
+        timeout,
+        "container app launch",
+    )
+    registry_payload = app_registry.registry_file.read_text(encoding="utf-8")
+    if SMOKE_CONTAINER_APP_SECRET in registry_payload:
+        raise AssertionError("container app secret was written to the app registry")
+    record_step(
+        log,
+        output_path,
+        {
+            "step": "container app launched through mocked SDK",
+            "table": app_table_snapshot(apps_page),
+            "preflight_calls": list(fake_preflight.calls),
+            "registry_secret_redacted": "***REDACTED***" in registry_payload,
+            "events": list(fake_sdk_client.events),
+        },
+    )
+
+    apps_page.apps_table.selectRow(0)
+    app.processEvents()
+    record_step(log, output_path, {"step": "select container app row"})
+    record_step(log, output_path, {"step": click_visible_button(app, apps_page.refresh_button, "refresh container app status")})
+    wait_until(
+        app,
+        lambda: _table_text(apps_page.apps_table, 0, 2) == "online",
+        timeout,
+        "container app status refresh",
+    )
+    record_step(
+        log,
+        output_path,
+        {"step": "container app status refreshed", "table": app_table_snapshot(apps_page)},
+    )
+    record_step(
+        log,
+        output_path,
+        {
+            "step": click_visible_button(app, apps_page.copy_url_button, "copy container app URL"),
+            "clipboard": app.clipboard().text(),
+        },
+    )
+    if app.clipboard().text() != "https://smoke-car.example.test":
+        raise AssertionError("container app URL copy used an unexpected value")
+    record_step(log, output_path, {"step": click_visible_button(app, apps_page.stop_button, "stop container app")})
+    wait_until(
+        app,
+        lambda: _table_text(apps_page.apps_table, 0, 2) == "stopped",
+        timeout,
+        "container app stop",
+    )
+
+    apps_page.runner_type_combo.setCurrentIndex(1)
+    app.processEvents()
+    set_line_edit_value(app, apps_page.app_name_input, "smoke_war")
+    set_line_edit_value(app, apps_page.node_address_input, SMOKE_VALID_NODE_ADDRESS)
+    set_line_edit_value(app, apps_page.worker_repo_input, "https://github.com/ratio1/smoke-app")
+    set_line_edit_value(app, apps_page.worker_branch_input, "main")
+    set_line_edit_value(app, apps_page.worker_image_input, "node:22")
+    set_line_edit_value(app, apps_page.worker_port_input, "4173")
+    set_line_edit_value(app, apps_page.worker_github_user_input, "smoke-user")
+    set_line_edit_value(app, apps_page.worker_github_token_input, SMOKE_WORKER_APP_SECRET)
+    set_plain_text_value(app, apps_page.worker_commands_input, "npm install\nnpm run build\nnpm run start")
+    set_plain_text_value(app, apps_page.env_input, "SMOKE_MODE=mock\nPUBLIC_VALUE=worker")
+
+    scroll_sidebar_to(launcher, "bottom")
+    app.processEvents()
+    if getattr(launcher, "toast", None) is not None:
+        launcher.toast.hide()
+    worker_secret_visual = capture_visual_evidence(launcher, screenshot_dir, "apps_worker_secret_fields")
+    worker_secret_snapshot = secret_line_edit_snapshot(
+        apps_page.worker_github_token_input,
+        SMOKE_WORKER_APP_SECRET,
+    )
+    if not worker_secret_snapshot["uses_password_echo"] or worker_secret_snapshot["raw_secret_visible"]:
+        raise AssertionError("worker GitHub token is visible in the Apps page")
+    record_step(
+        log,
+        output_path,
+        {
+            "step": "captured worker app secret-field visual evidence",
+            "visual": worker_secret_visual,
+            "secret_field": worker_secret_snapshot,
+        },
+    )
+
+    scroll_sidebar_to(launcher, "top")
+    app.processEvents()
+    record_step(log, output_path, {"step": click_visible_button(app, apps_page.validate_button, "validate worker app")})
+    wait_until(
+        app,
+        lambda: apps_page.validation_message.isVisible() and apps_page.validation_message.text() == "Ready",
+        timeout,
+        "worker app validation",
+    )
+    record_step(log, output_path, {"step": click_visible_button(app, apps_page.launch_button, "launch worker app")})
+    wait_until(
+        app,
+        lambda: apps_page.apps_table.rowCount() >= 2 and apps_page.validation_message.text() == "Launched",
+        timeout,
+        "worker app launch",
+    )
+    registry_payload = app_registry.registry_file.read_text(encoding="utf-8")
+    if SMOKE_WORKER_APP_SECRET in registry_payload:
+        raise AssertionError("worker app secret was written to the app registry")
+    apps_page.apps_table.selectRow(1)
+    app.processEvents()
+    record_step(log, output_path, {"step": "select worker app row"})
+    record_step(log, output_path, {"step": click_visible_button(app, apps_page.refresh_button, "refresh worker app status")})
+    wait_until(
+        app,
+        lambda: _table_text(apps_page.apps_table, 1, 2) == "online",
+        timeout,
+        "worker app status refresh",
+    )
+    record_step(
+        log,
+        output_path,
+        {
+            "step": click_visible_button(app, apps_page.copy_url_button, "copy worker app URL"),
+            "clipboard": app.clipboard().text(),
+        },
+    )
+    if app.clipboard().text() != "https://smoke-war.example.test":
+        raise AssertionError("worker app URL copy used an unexpected value")
+    record_step(log, output_path, {"step": click_visible_button(app, apps_page.stop_button, "stop worker app")})
+    wait_until(
+        app,
+        lambda: _table_text(apps_page.apps_table, 1, 2) == "stopped",
+        timeout,
+        "worker app stop",
+    )
+    scroll_sidebar_to(launcher, "top")
+    app.processEvents()
+    final_visual = capture_visual_evidence(launcher, screenshot_dir, "apps_mocked_final")
+    record_step(
+        log,
+        output_path,
+        {
+            "step": "mocked SDK app E2E completed",
+            "table": app_table_snapshot(apps_page),
+            "visual": final_visual,
+            "preflight_calls": list(fake_preflight.calls),
+            "events": list(fake_sdk_client.events),
+            "registry_path": str(app_registry.registry_file),
+        },
+    )
+
+
 def run_scenarios(args):
     os.chdir(REPO_ROOT)
     sys.path.insert(0, str(REPO_ROOT))
@@ -528,6 +888,8 @@ def run_scenarios(args):
     from PyQt5.QtWidgets import QApplication
 
     import app_forms.frm_main as frm_main
+    import widgets.app_widgets.sidebar_panel as sidebar_panel
+    from services.app_registry import AppRegistry
     from utils.config_manager import ConfigManager, ContainerConfig
     from widgets.dialogs.AuthorizedAddressedDialog import AuthorizedAddressesDialog
     from widgets.dialogs.DockerCheckDialog import DockerCheckDialog
@@ -547,6 +909,9 @@ def run_scenarios(args):
     restore_browser = install_browser_recorder(log)
 
     temp_root = Path(tempfile.mkdtemp(prefix="r1-launcher-smoke-"))
+    app_registry = AppRegistry(temp_root / "sdk-apps" / "apps.json")
+    fake_sdk_client = FakeSdkDeploymentClient()
+    fake_preflight = FakeAppLaunchPreflight()
     config_manager = ConfigManager(str(temp_root / "config"))
     config_manager.add_container(
         ContainerConfig(
@@ -575,9 +940,12 @@ def run_scenarios(args):
     frm_main.EdgeNodeLauncher.docker_initialize = lambda self: None
     frm_main.EdgeNodeLauncher.check_for_updates = lambda self, verbose=False: None
     frm_main.EdgeNodeLauncher.container_exists_in_docker = lambda self, name: False
+    sidebar_panel.AppRegistry = lambda: app_registry
+    sidebar_panel.Ratio1SdkDeploymentClient = lambda app_registry=None: fake_sdk_client
 
     app = QApplication.instance() or QApplication(sys.argv)
     launcher = frm_main.EdgeNodeLauncher()
+    launcher.apps_page.set_launch_preflight_service(fake_preflight)
     launcher.check_ram_for_new_node = lambda existing_node_count=0: {
         "can_add_node": True,
         "total_ram_gb": 128.0,
@@ -660,6 +1028,18 @@ def run_scenarios(args):
             )
             if not page_visual["sidebar"]["passed"]:
                 raise AssertionError("; ".join(page_visual["sidebar"]["issues"]))
+
+        run_mocked_sdk_apps_scenario(
+            app,
+            launcher,
+            log,
+            args.output,
+            args.screenshot_dir,
+            args.timeout,
+            fake_sdk_client,
+            fake_preflight,
+            app_registry,
+        )
 
         docker_check_dialog = DockerCheckDialog(launcher)
         show_and_capture_dialog(

@@ -172,6 +172,7 @@ class AppsPage(QWidget):
         layout.addWidget(self.env_input)
         layout.addStretch(1)
         self._sync_runner_stack()
+        self._connect_form_message_reset()
 
     def _create_container_fields(self) -> QWidget:
         page = QWidget()
@@ -488,6 +489,32 @@ class AppsPage(QWidget):
 
     def _sync_runner_stack(self) -> None:
         self.runner_stack.setCurrentIndex(0 if self.runner_type_combo.currentData() == APP_TYPE_CONTAINER else 1)
+
+    def _connect_form_message_reset(self) -> None:
+        self.runner_type_combo.currentIndexChanged.connect(lambda *_args: self._clear_message())
+        for widget in (
+            self.app_name_input,
+            self.node_address_input,
+            self.car_image_input,
+            self.car_port_input,
+            self.car_registry_input,
+            self.car_registry_user_input,
+            self.car_registry_password_input,
+            self.worker_repo_input,
+            self.worker_branch_input,
+            self.worker_image_input,
+            self.worker_port_input,
+            self.worker_github_user_input,
+            self.worker_github_token_input,
+        ):
+            widget.textChanged.connect(lambda *_args: self._clear_message())
+        self.env_input.textChanged.connect(self._clear_message)
+        self.worker_commands_input.textChanged.connect(self._clear_message)
+
+    def _clear_message(self) -> None:
+        if self.validation_message.text() in {"Launching...", "Refreshing...", "Stopping..."}:
+            return
+        self._show_message("", error=False)
 
     def _show_message(self, text: str, *, error: bool) -> None:
         self.validation_message.setText(text)
