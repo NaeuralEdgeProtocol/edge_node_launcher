@@ -295,6 +295,46 @@ def wait_for_active_workers(app, page, timeout_seconds: float) -> dict[str, obje
     return active_worker_snapshot(page)
 
 
+def cleanup_active_workers(
+    app,
+    page,
+    *,
+    wait_timeout_seconds: float,
+    terminate_timeout_seconds: float,
+) -> dict[str, object]:
+    before = active_worker_snapshot(page)
+    after_wait = wait_for_active_workers(app, page, wait_timeout_seconds)
+    terminated = []
+    if after_wait["running_count"] > 0:
+        for worker in list(getattr(page, "_active_workers", [])):
+            try:
+                running = bool(worker.isRunning()) if hasattr(worker, "isRunning") else False
+            except RuntimeError:
+                running = False
+            if not running:
+                continue
+
+            operation_name = getattr(worker, "operation_name", "")
+            try:
+                if hasattr(worker, "requestInterruption"):
+                    worker.requestInterruption()
+                if hasattr(worker, "terminate"):
+                    worker.terminate()
+                if hasattr(worker, "wait"):
+                    worker.wait(int(max(0.0, terminate_timeout_seconds) * 1000))
+                terminated.append(operation_name)
+            except RuntimeError as exc:
+                terminated.append(f"{operation_name}: {exc}")
+        app.processEvents()
+
+    return {
+        "before": before,
+        "after_wait": after_wait,
+        "after_cleanup": active_worker_snapshot(page),
+        "terminated": terminated,
+    }
+
+
 def size_evidence_page(app, page) -> None:
     width = 760
     height = 900
@@ -407,7 +447,12 @@ def run_real_e2e(args):
         raise
     finally:
         CreateAppDialog.exec_ = original_create_dialog_exec
-        log["worker_cleanup"] = wait_for_active_workers(app, page, args.worker_cleanup_timeout)
+        log["worker_cleanup"] = cleanup_active_workers(
+            app,
+            page,
+            wait_timeout_seconds=args.worker_cleanup_timeout,
+            terminate_timeout_seconds=args.worker_terminate_timeout,
+        )
         page.close()
         app.processEvents()
         log["finished_at"] = datetime.now().isoformat()
@@ -430,7 +475,15 @@ def _run_real_car(app, page, log, args, opened_create_dialogs):
         page.car_registry_password_input,
         os.environ.get(REAL_REGISTRY_PASSWORD_ENV, ""),
     )
-    record_step(log, args.output, {"step": "real CAR form prepared", "secret_field": secret_snapshot})
+    record_step(
+        log,
+        args.output,
+        {
+            "step": "real CAR form prepared",
+            "secret_field": secret_snapshot,
+            "screenshot": screenshot(page._active_create_dialog or page, args.screenshot_dir, "real_car_form_prepared"),
+        },
+    )
     _click_validate_launch_refresh_copy_stop(app, page, log, args, "CAR")
 
 
@@ -438,6 +491,10 @@ def _run_real_war(app, page, log, args, opened_create_dialogs):
     open_create_dialog(app, page, log, args, opened_create_dialogs, "open real WAR deploy app")
     page.runner_type_combo.setCurrentIndex(1)
     app.processEvents()
+    if args.disable_tunnel:
+        page.app_tunnel_enabled_checkbox.setChecked(False)
+        page.advanced_options_toggle.setChecked(True)
+        app.processEvents()
     app_name = args.war_app_name or f"launcher_e2e_war_{int(time.time())}"
     set_line_edit_value(app, page.app_name_input, app_name)
     set_line_edit_value(app, page.worker_repo_input, args.war_repo or os.environ[REAL_WAR_REPO_ENV])
@@ -453,7 +510,17 @@ def _run_real_war(app, page, log, args, opened_create_dialogs):
         page.worker_github_token_input,
         os.environ.get(REAL_GITHUB_TOKEN_ENV, ""),
     )
-    record_step(log, args.output, {"step": "real WAR form prepared", "secret_field": secret_snapshot})
+    record_step(
+        log,
+        args.output,
+        {
+            "step": "real WAR form prepared",
+            "secret_field": secret_snapshot,
+            "tunnel_enabled": page.app_tunnel_enabled_checkbox.isChecked(),
+            "tunnel_engine": page.app_tunnel_engine_combo.currentText(),
+            "screenshot": screenshot(page._active_create_dialog or page, args.screenshot_dir, "real_war_form_prepared"),
+        },
+    )
     _click_validate_launch_refresh_copy_stop(app, page, log, args, "WAR")
 
 
@@ -526,9 +593,11 @@ def build_parser():
     parser.add_argument("--war-port", type=int, default=4173)
     parser.add_argument("--war-commands", default="npm install\nnpm run build\nnpm run start")
     parser.add_argument("--github-user", default="")
+    parser.add_argument("--disable-tunnel", action="store_true")
     parser.add_argument("--fail-on-skip", action="store_true")
     parser.add_argument("--sdk-log-dir", default="")
-    parser.add_argument("--worker-cleanup-timeout", type=float, default=5.0)
+    parser.add_argument("--worker-cleanup-timeout", type=float, default=30.0)
+    parser.add_argument("--worker-terminate-timeout", type=float, default=5.0)
     return parser
 
 

@@ -182,6 +182,11 @@ class WorkerAppSpec:
     def pipeline_name(self) -> str:
         return pipeline_name_from_app_name(self.app_name)
 
+    def effective_env(self) -> dict[str, str]:
+        env = dict(self.env)
+        env.setdefault("PORT", str(self.port))
+        return env
+
     def to_sdk_kwargs(self) -> dict[str, Any]:
         owner, repo_name = parse_github_repo_owner_name(self.repo_url)
         kwargs = {
@@ -204,7 +209,7 @@ class WorkerAppSpec:
                 "USERNAME": self.registry_username or None,
                 "PASSWORD": self.registry_password or None,
             },
-            "env": dict(self.env),
+            "env": self.effective_env(),
             "dynamic_env": dict(self.dynamic_env),
             "port": self.port,
             "endpoint_url": self.endpoint_url,
@@ -236,7 +241,7 @@ class WorkerAppSpec:
                 "registry_server": self.registry_server,
                 "registry_username": self.registry_username,
                 "registry_password": self.registry_password,
-                "env": self.env,
+                "env": self.effective_env(),
                 "volumes": self.volumes,
                 "file_volumes": _file_volumes_to_metadata(self.file_volumes),
                 "resources": self.resources.to_sdk_dict(),

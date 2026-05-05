@@ -50,6 +50,13 @@ def test_real_sdk_e2e_parser_defaults_to_devnet_edge_image():
     assert args.edge_image == real_e2e.DEVNET_EDGE_NODE_IMAGE
 
 
+def test_real_sdk_e2e_parser_can_disable_tunnel_for_local_war_runs():
+    parser = real_e2e.build_parser()
+    args = parser.parse_args(["--disable-tunnel"])
+
+    assert args.disable_tunnel is True
+
+
 def test_wait_until_page_state_reports_current_ui_state(monkeypatch):
     page = SimpleNamespace(
         validation_message=SimpleNamespace(text=lambda: "Launching secret-value"),
@@ -138,3 +145,87 @@ def test_size_evidence_page_uses_readable_default_when_screen_is_unavailable():
     real_e2e.size_evidence_page(app, page)
 
     assert resized_to == [(760, 900)]
+
+
+def test_cleanup_active_workers_terminates_workers_that_outlive_cleanup_timeout():
+    class FakeApp:
+        def __init__(self):
+            self.process_events_calls = 0
+
+        def processEvents(self):
+            self.process_events_calls += 1
+
+    class FakeWorker:
+        operation_name = "launch"
+
+        def __init__(self):
+            self.running = True
+            self.interruption_requested = False
+            self.terminated = False
+            self.waited_ms = None
+
+        def isRunning(self):
+            return self.running
+
+        def requestInterruption(self):
+            self.interruption_requested = True
+
+        def terminate(self):
+            self.terminated = True
+            self.running = False
+
+        def wait(self, timeout_ms):
+            self.waited_ms = timeout_ms
+            return True
+
+    worker = FakeWorker()
+    app = FakeApp()
+    page = SimpleNamespace(_active_workers=[worker])
+
+    cleanup = real_e2e.cleanup_active_workers(
+        app,
+        page,
+        wait_timeout_seconds=0,
+        terminate_timeout_seconds=1.5,
+    )
+
+    assert cleanup["before"]["running_count"] == 1
+    assert cleanup["after_wait"]["running_count"] == 1
+    assert cleanup["after_cleanup"]["running_count"] == 0
+    assert cleanup["terminated"] == ["launch"]
+    assert worker.interruption_requested is True
+    assert worker.terminated is True
+    assert worker.waited_ms == 1500
+    assert app.process_events_calls >= 2
+
+
+def test_cleanup_active_workers_does_not_terminate_completed_workers():
+    class FakeApp:
+        def processEvents(self):
+            pass
+
+    class FakeWorker:
+        operation_name = "refresh"
+
+        def __init__(self):
+            self.terminated = False
+
+        def isRunning(self):
+            return False
+
+        def terminate(self):
+            self.terminated = True
+
+    worker = FakeWorker()
+    page = SimpleNamespace(_active_workers=[worker])
+
+    cleanup = real_e2e.cleanup_active_workers(
+        FakeApp(),
+        page,
+        wait_timeout_seconds=0,
+        terminate_timeout_seconds=1,
+    )
+
+    assert cleanup["before"]["running_count"] == 0
+    assert cleanup["terminated"] == []
+    assert worker.terminated is False

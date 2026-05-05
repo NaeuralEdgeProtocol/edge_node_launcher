@@ -76,5 +76,21 @@ def test_worker_app_spec_maps_github_repo_and_secret_fields():
     }
     assert kwargs["cr_data"]["PASSWORD"] == "registry-secret"
     assert kwargs["build_and_run_commands"][-1] == "npm run serve"
+    assert kwargs["env"]["PORT"] == "4173"
+    assert metadata["env"]["PORT"] == "4173"
     assert metadata["github_token"] == REDACTED_SECRET
     assert metadata["registry_password"] == REDACTED_SECRET
+
+
+def test_worker_app_spec_preserves_explicit_port_environment_value():
+    spec = WorkerAppSpec(
+        app_name="worker_runner",
+        node_address=NODE_ADDRESS,
+        repo_url="https://github.com/Ratio1/example-app",
+        port=4173,
+        env={"PORT": "3000"},
+    )
+
+    kwargs = spec.to_sdk_kwargs()
+
+    assert kwargs["env"]["PORT"] == "3000"

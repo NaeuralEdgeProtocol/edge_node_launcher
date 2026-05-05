@@ -3,6 +3,7 @@ from __future__ import annotations
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QDialog,
     QGridLayout,
@@ -722,6 +723,15 @@ class AppsPage(QWidget):
         self.app_restart_policy_combo.addItems(["always", "on-failure", "never"])
         self.app_pull_policy_combo = self._create_combo("appImagePullPolicyCombo", "Image pull policy")
         self.app_pull_policy_combo.addItems(["always", "if-not-present", "never"])
+        self.app_tunnel_engine_combo = self._create_combo("appTunnelEngineCombo", "Tunnel engine")
+        self.app_tunnel_engine_combo.addItems(["cloudflare", "ngrok"])
+        self.app_tunnel_enabled_checkbox = QCheckBox("Expose through tunnel")
+        self.app_tunnel_enabled_checkbox.setObjectName("appTunnelEnabledCheckbox")
+        self.app_tunnel_enabled_checkbox.setAccessibleName("Expose app through tunnel")
+        self.app_tunnel_enabled_checkbox.setProperty("role", "appToggle")
+        self.app_tunnel_enabled_checkbox.setChecked(True)
+        self.app_tunnel_enabled_checkbox.setMinimumHeight(34)
+        self.app_tunnel_enabled_checkbox.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self._add_grid_field(layout, 0, 0, "CPU", "appCpuLabel", self.app_cpu_input)
         self._add_grid_field(layout, 0, 1, "Memory", "appMemoryLabel", self.app_memory_input)
@@ -741,7 +751,9 @@ class AppsPage(QWidget):
             "appImagePullPolicyLabel",
             self.app_pull_policy_combo,
         )
-        layout.setRowStretch(2, 1)
+        self._add_grid_field(layout, 2, 0, "Tunnel engine", "appTunnelEngineLabel", self.app_tunnel_engine_combo)
+        self._add_grid_field(layout, 2, 1, "Tunnel", "appTunnelEnabledLabel", self.app_tunnel_enabled_checkbox)
+        layout.setRowStretch(6, 1)
         return panel
 
     def _create_runtime_options_tab(self) -> QWidget:
@@ -1153,10 +1165,15 @@ class AppsPage(QWidget):
     def _handle_access_check_success(self, result, target_container_name: str) -> None:
         allowlist = getattr(result, "allowlist", None)
         changed = bool(getattr(allowlist, "changed", False))
-        message = "SDK access added" if changed else "SDK access ready"
+        target_label = target_container_name or "target node"
+        message = (
+            f"SDK access added to {target_label}"
+            if changed
+            else f"SDK access ready for {target_label}"
+        )
         self._show_message(message, error=False)
         self._log_event(
-            f"SDK Apps access check complete: container={target_container_name} changed={changed}",
+            f"SDK Apps access check complete: container={target_label} changed={changed}",
             color="green",
         )
 
@@ -1282,6 +1299,8 @@ class AppsPage(QWidget):
                     volumes=volumes,
                     file_volumes=file_volumes,
                     resources=resources,
+                    tunnel_engine_enabled=self.app_tunnel_enabled_checkbox.isChecked(),
+                    tunnel_engine=self.app_tunnel_engine_combo.currentText(),
                     restart_policy=self.app_restart_policy_combo.currentText(),
                     image_pull_policy=self.app_pull_policy_combo.currentText(),
                 )
@@ -1308,6 +1327,8 @@ class AppsPage(QWidget):
                 volumes=volumes,
                 file_volumes=file_volumes,
                 resources=resources,
+                tunnel_engine_enabled=self.app_tunnel_enabled_checkbox.isChecked(),
+                tunnel_engine=self.app_tunnel_engine_combo.currentText(),
                 restart_policy=self.app_restart_policy_combo.currentText(),
                 image_pull_policy=self.app_pull_policy_combo.currentText(),
                 vcs_poll_interval=_to_int(self.worker_vcs_poll_input.text()),
@@ -1628,7 +1649,13 @@ class AppsPage(QWidget):
         header.setStretchLastSection(True)
 
     def _sync_runner_stack(self) -> None:
-        self.runner_stack.setCurrentIndex(0 if self.runner_type_combo.currentData() == APP_TYPE_CONTAINER else 1)
+        is_container = self.runner_type_combo.currentData() == APP_TYPE_CONTAINER
+        self.runner_stack.setCurrentIndex(0 if is_container else 1)
+        if hasattr(self, "app_tunnel_engine_combo"):
+            default_engine = "ngrok" if is_container else "cloudflare"
+            index = self.app_tunnel_engine_combo.findText(default_engine)
+            if index >= 0:
+                self.app_tunnel_engine_combo.setCurrentIndex(index)
 
     def _connect_form_message_reset(self) -> None:
         self.runner_type_combo.currentIndexChanged.connect(lambda *_args: self._clear_message())
@@ -1664,6 +1691,8 @@ class AppsPage(QWidget):
         self.worker_commands_input.textChanged.connect(self._clear_message)
         self.app_restart_policy_combo.currentIndexChanged.connect(lambda *_args: self._clear_message())
         self.app_pull_policy_combo.currentIndexChanged.connect(lambda *_args: self._clear_message())
+        self.app_tunnel_engine_combo.currentIndexChanged.connect(lambda *_args: self._clear_message())
+        self.app_tunnel_enabled_checkbox.stateChanged.connect(lambda *_args: self._clear_message())
 
     def _clear_message(self) -> None:
         message_label = self._message_label()

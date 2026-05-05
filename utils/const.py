@@ -1033,7 +1033,8 @@ COMMON_STYLESHEET_TEMPLATE = """
     color: {toggle_button_disabled_text};
     border: 1px solid {toggle_button_disabled_border};
   }}
-  QCheckBox[role="settingsToggle"] {{
+  QCheckBox[role="settingsToggle"],
+  QCheckBox[role="appToggle"] {{
     color: {utility_action_text};
     background-color: transparent;
     border-radius: 6px;
@@ -1045,24 +1046,29 @@ COMMON_STYLESHEET_TEMPLATE = """
     margin: 4px 6px 0px 6px;
     min-height: 28px;
   }}
-  QCheckBox[role="settingsToggle"]:hover {{
+  QCheckBox[role="settingsToggle"]:hover,
+  QCheckBox[role="appToggle"]:hover {{
     background-color: {utility_action_hover};
   }}
-  QCheckBox[role="settingsToggle"]::indicator {{
+  QCheckBox[role="settingsToggle"]::indicator,
+  QCheckBox[role="appToggle"]::indicator {{
     width: 16px;
     height: 16px;
     border-radius: 4px;
     border: 1px solid {utility_action_border};
     background-color: {secondary_action_bg};
   }}
-  QCheckBox[role="settingsToggle"]::indicator:unchecked:hover {{
+  QCheckBox[role="settingsToggle"]::indicator:unchecked:hover,
+  QCheckBox[role="appToggle"]::indicator:unchecked:hover {{
     border-color: {combo_hover_border};
   }}
-  QCheckBox[role="settingsToggle"]::indicator:checked {{
+  QCheckBox[role="settingsToggle"]::indicator:checked,
+  QCheckBox[role="appToggle"]::indicator:checked {{
     background-color: {primary_action_bg};
     border-color: {primary_action_bg};
   }}
-  QCheckBox[role="settingsToggle"]::indicator:checked:hover {{
+  QCheckBox[role="settingsToggle"]::indicator:checked:hover,
+  QCheckBox[role="appToggle"]::indicator:checked:hover {{
     background-color: {primary_action_hover};
     border-color: {primary_action_hover};
   }}

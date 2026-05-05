@@ -85,6 +85,8 @@ def test_apps_page_controls_use_semantic_styles():
         assert 'QLineEdit[role="appTextInput"]' in stylesheet
         assert 'QPlainTextEdit[role="appTextInput"]' in stylesheet
         assert 'QComboBox[role="appCombo"]' in stylesheet
+        assert 'QCheckBox[role="appToggle"]' in stylesheet
+        assert 'QCheckBox[role="appToggle"]::indicator' in stylesheet
         assert 'QToolButton[role="appDisclosureButton"]' in stylesheet
         assert 'QLabel[role="appFormLabel"]' in stylesheet
         assert 'QLabel[role="appValidationMessage"]' in stylesheet

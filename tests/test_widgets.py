@@ -5,6 +5,7 @@ from PyQt5.QtCore import QRect, Qt
 from PyQt5.QtGui import QColor, QShowEvent
 from PyQt5.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -230,6 +231,8 @@ def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path, monkeypatc
     assert page.findChild(QLineEdit, "carImageInput").accessibleName() == "nginx:alpine"
     assert page.findChild(QLineEdit, "workerRepoInput").accessibleName() == "https://github.com/org/repo"
     assert page.findChild(QPlainTextEdit, "workerCommandsInput").property("role") == "appTextInput"
+    assert page.findChild(QComboBox, "appTunnelEngineCombo").accessibleName() == "Tunnel engine"
+    assert page.findChild(QCheckBox, "appTunnelEnabledCheckbox").property("role") == "appToggle"
     advanced_toggle = page.findChild(QToolButton, "appAdvancedOptionsToggle")
     advanced_panel = page.findChild(QWidget, "appAdvancedOptionsPanel")
     assert advanced_toggle.property("role") == "appDisclosureButton"
@@ -501,9 +504,33 @@ def test_apps_page_worker_mode_validates_payload(qtbot, tmp_path, monkeypatch):
     assert fake_client.worker_specs[0].registry_username == "registry-user"
     assert fake_client.worker_specs[0].registry_password == "registry-secret"
     assert fake_client.worker_specs[0].vcs_poll_interval == 120
+    assert fake_client.worker_specs[0].tunnel_engine == "cloudflare"
+    assert fake_client.worker_specs[0].tunnel_engine_enabled is True
     assert fake_client.worker_specs[0].volumes == {"worker_cache": "/workspace/cache"}
     assert fake_client.worker_specs[0].file_volumes["worker_env"].mounting_point == "/workspace/.env"
     assert page.apps_table.item(0, 1).text() == "WAR"
+
+
+def test_apps_page_worker_mode_allows_disabling_tunnel(qtbot, tmp_path, monkeypatch):
+    fake_client = FakeAppDeploymentClient()
+    page = AppsPage(
+        app_registry=AppRegistry(tmp_path / "apps.json"),
+        deployment_client=fake_client,
+    )
+    qtbot.addWidget(page)
+    _open_create_app_dialog_for_test(page, qtbot, monkeypatch)
+
+    page.runner_type_combo.setCurrentIndex(1)
+    page.app_name_input.setText("worker_runner")
+    page.node_address_input.setText(APP_TEST_NODE)
+    page.worker_repo_input.setText("https://github.com/Ratio1/example-app")
+    page.app_tunnel_enabled_checkbox.setChecked(False)
+
+    qtbot.mouseClick(page.findChild(QPushButton, "appLaunchButton"), Qt.LeftButton)
+    qtbot.waitUntil(lambda: len(fake_client.worker_specs) == 1, timeout=1000)
+
+    assert fake_client.worker_specs[0].tunnel_engine == "cloudflare"
+    assert fake_client.worker_specs[0].tunnel_engine_enabled is False
 
 
 def test_apps_page_rejects_invalid_volume_rows(qtbot, tmp_path, monkeypatch):
@@ -725,7 +752,22 @@ def test_apps_page_check_sdk_access_runs_preflight_without_launch(qtbot, tmp_pat
     assert fake_client.container_specs == []
     assert fake_client.worker_specs == []
     assert events == ["preflight"]
-    assert page.validation_message.text() == "SDK access added"
+    assert page.validation_message.text() == "SDK access added to r1devnode"
+
+
+def test_apps_page_check_sdk_access_reports_existing_allowlist_entry(qtbot, tmp_path):
+    fake_preflight = FakeLaunchPreflight(changed=False)
+    page = AppsPage(
+        app_registry=AppRegistry(tmp_path / "apps.json"),
+        launch_preflight_service=fake_preflight,
+    )
+    qtbot.addWidget(page)
+    page.set_target_node(node_address=APP_TEST_NODE, container_name="r1devnode")
+
+    qtbot.mouseClick(page.findChild(QPushButton, "appCheckSdkAccessButton"), Qt.LeftButton)
+    qtbot.waitUntil(lambda: fake_preflight.calls == ["r1devnode"], timeout=1000)
+
+    assert page.validation_message.text() == "SDK access ready for r1devnode"
 
 
 def test_apps_page_launch_reports_missing_preflight_container(qtbot, tmp_path, monkeypatch):
