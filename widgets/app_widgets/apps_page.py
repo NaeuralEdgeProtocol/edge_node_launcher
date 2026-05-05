@@ -100,6 +100,16 @@ class AppsPage(QWidget):
         self.apps_table.itemSelectionChanged.connect(self._emit_selected_record_changed)
         layout.addWidget(self.apps_table)
 
+        self.apps_empty_state = QLabel("No launcher-owned apps yet")
+        self.apps_empty_state.setObjectName("appsEmptyStateLabel")
+        self.apps_empty_state.setAccessibleName("No launcher-owned apps")
+        self.apps_empty_state.setProperty("role", "appsEmptyState")
+        self.apps_empty_state.setAlignment(Qt.AlignCenter)
+        self.apps_empty_state.setWordWrap(True)
+        self.apps_empty_state.setMinimumHeight(72)
+        self.apps_empty_state.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        layout.addWidget(self.apps_empty_state)
+
         app_actions = QWidget()
         app_actions.setObjectName("appManagementActionBar")
         app_actions.setAccessibleName("App management actions")
@@ -617,6 +627,7 @@ class AppsPage(QWidget):
         records = self.app_registry.list_apps()
         self._records_by_row = {}
         self.apps_table.setRowCount(len(records))
+        self._sync_apps_empty_state(bool(records))
         selected_row = None
         for row, record in enumerate(records):
             self._records_by_row[row] = record
@@ -637,6 +648,10 @@ class AppsPage(QWidget):
         else:
             self.apps_table.clearSelection()
         self._emit_selected_record_changed()
+
+    def _sync_apps_empty_state(self, has_records: bool) -> None:
+        self.apps_table.setVisible(has_records)
+        self.apps_empty_state.setVisible(not has_records)
 
     def stop_selected_app(self) -> None:
         record = self._selected_record()

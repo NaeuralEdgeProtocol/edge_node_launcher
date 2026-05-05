@@ -156,6 +156,11 @@ def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
     assert apps_table.horizontalHeader().sectionResizeMode(0) == QHeaderView.Stretch
     assert apps_table.horizontalHeader().sectionResizeMode(3) == QHeaderView.Stretch
     assert apps_table.minimumHeight() >= 136
+    empty_state = page.findChild(QLabel, "appsEmptyStateLabel")
+    assert empty_state.text() == "No launcher-owned apps yet"
+    assert empty_state.property("role") == "appsEmptyState"
+    assert apps_table.isHidden()
+    assert not empty_state.isHidden()
     assert page.findChild(QWidget, "appManagementActionBar").property("role") == "appActionBar"
     assert page.findChild(QWidget, "appLaunchActionBar").property("role") == "appActionBar"
     assert page.findChild(QWidget, "appDeploymentPanel").property("role") == "appDeploymentPanel"
@@ -257,6 +262,8 @@ def test_apps_page_validates_and_launches_container_with_fake_sdk(qtbot, tmp_pat
     assert fake_client.container_specs[0].restart_policy == "on-failure"
     assert fake_client.container_specs[0].image_pull_policy == "if-not-present"
     assert page.apps_table.rowCount() == 1
+    assert not page.apps_table.isHidden()
+    assert page.apps_empty_state.isHidden()
     assert page.apps_table.item(0, 0).text() == "car_runner"
     assert page.apps_table.item(0, 2).text() == "deployed"
 

@@ -568,6 +568,16 @@ COMMON_STYLESHEET_TEMPLATE = """
     padding: 5px 7px;
     margin: 2px 6px;
   }}
+  QLabel[role="appsEmptyState"] {{
+    color: {section_label_text};
+    background-color: {info_box_bg};
+    border: 1px solid {info_box_border};
+    border-radius: 7px;
+    font-family: "Segoe UI";
+    font-size: 9pt;
+    font-weight: 600;
+    padding: 12px;
+  }}
   QWidget[role="appActionBar"] {{
     background-color: transparent;
   }}

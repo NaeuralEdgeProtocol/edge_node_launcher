@@ -81,6 +81,7 @@ def test_apps_page_controls_use_semantic_styles():
         assert 'QToolButton[role="appDisclosureButton"]' in stylesheet
         assert 'QLabel[role="appFormLabel"]' in stylesheet
         assert 'QLabel[role="appValidationMessage"]' in stylesheet
+        assert 'QLabel[role="appsEmptyState"]' in stylesheet
         assert "QTableWidget#appsTable" in stylesheet
         assert "QTableWidget#appVolumesTable" in stylesheet
 
