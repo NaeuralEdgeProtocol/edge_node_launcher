@@ -13,6 +13,7 @@ def test_status_panels_are_styled_by_semantic_role():
         assert 'QLabel[role="sidebarCardTitle"]' in stylesheet
         assert 'QLabel[role="edgeImageBadge"]' in stylesheet
         assert 'QLabel[role="nodeLifecycleState"]' in stylesheet
+        assert 'QLabel[role="nodeRuntimePolicy"]' in stylesheet
         assert "border-radius: 8px;" in stylesheet
         assert "#infoBox {" not in stylesheet
         assert "#resourcesBox {" not in stylesheet

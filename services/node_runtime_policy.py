@@ -48,6 +48,12 @@ class NodeLaunchPlan:
     gpu_reason: str
 
 
+@dataclass(frozen=True)
+class NodeRuntimePolicyDisplay:
+    text: str
+    tooltip: str
+
+
 def evaluate_node_capacity(total_ram_gb: float, existing_node_count: int) -> NodeCapacityDecision:
     safe_total_ram_gb = max(0.0, float(total_ram_gb))
     safe_existing_count = max(0, int(existing_node_count))
@@ -81,6 +87,25 @@ def _normalized_gpu_assignments(container_names: Iterable[str] | None) -> set[st
 
 def is_primary_node_container(container_name: str, image_config: EdgeNodeImageConfig) -> bool:
     return container_name == image_config.default_container_name
+
+
+def runtime_policy_display(container_name: str, image_config: EdgeNodeImageConfig) -> NodeRuntimePolicyDisplay:
+    if is_primary_node_container(container_name, image_config):
+        return NodeRuntimePolicyDisplay(
+            text="Runtime: GPU eligible",
+            tooltip=(
+                "The primary node can use the GPU image when an NVIDIA GPU is detected. "
+                f"CPU image: {image_config.image}. GPU image: {image_config.gpu_image}."
+            ),
+        )
+
+    return NodeRuntimePolicyDisplay(
+        text="Runtime: CPU-only",
+        tooltip=(
+            f"GPU is reserved for the primary node {image_config.default_container_name} "
+            f"in this launcher version. This node uses {image_config.image}."
+        ),
+    )
 
 
 def plan_node_launch(

@@ -652,6 +652,7 @@ def test_status_card_runtime_labels_use_consistent_copy(qtbot, monkeypatch):
     assert launcher.node_epoch_avail.text() == "Epoch availability: 25.0%"
     assert launcher.node_version.text() == "Version: 1.2.3"
     assert launcher.node_lifecycle_state.text() == "Status: Running"
+    assert launcher.node_runtime_policy.text() == "Runtime: GPU eligible"
 
 
 def test_status_card_initial_metadata_uses_placeholders(qtbot, monkeypatch):
@@ -662,6 +663,27 @@ def test_status_card_initial_metadata_uses_placeholders(qtbot, monkeypatch):
     assert launcher.node_epoch_avail.text() == "Epoch availability: -"
     assert launcher.node_version.text() == "Version: -"
     assert launcher.node_lifecycle_state.text() == "Status: Stopped"
+    assert launcher.node_runtime_policy.text() == "Runtime: GPU eligible"
+    assert "ratio1/edge_node_gpu:mainnet" in launcher.node_runtime_policy.toolTip()
+
+
+def test_status_card_runtime_policy_updates_for_secondary_node(qtbot, monkeypatch):
+    launcher, fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+    fake_config.add_container(
+        ContainerConfig(
+            name="r1node2",
+            volume="r1vol2",
+            node_alias="beta",
+        )
+    )
+    launcher.refresh_container_list()
+    launcher.container_exists_in_docker = lambda _name: False
+
+    assert launcher._select_container_by_name("r1node2")
+    launcher._on_container_selected("beta")
+
+    assert launcher.node_runtime_policy.text() == "Runtime: CPU-only"
+    assert "GPU is reserved for the primary node r1node" in launcher.node_runtime_policy.toolTip()
 
 
 def test_status_card_refreshes_when_epoch_changes_without_uptime_change(qtbot, monkeypatch):

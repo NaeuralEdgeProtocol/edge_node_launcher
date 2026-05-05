@@ -95,6 +95,7 @@ from services.node_status_service import (
   NodeRuntimeStateDecision,
   NodeStatusService,
 )
+from services.node_runtime_policy import runtime_policy_display
 from widgets.app_widgets.lifecycle_dialog_presenter import LifecycleDialogPresenter
 from widgets.app_widgets.lifecycle_controls import (
   LIFECYCLE_BUSY_TOOLTIP,
@@ -820,6 +821,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.node_status_title = node_panel.node_status_title
     self.edgeImageBadge = node_panel.edgeImageBadge
     self.node_lifecycle_state = node_panel.node_lifecycle_state
+    self.node_runtime_policy = node_panel.node_runtime_policy
     self.loading_indicator = node_panel.loading_indicator
     self.addressDisplay = node_panel.addressDisplay
     self.copyAddrButton = node_panel.copyAddrButton
@@ -836,6 +838,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.vcpusDisplay = resource_panel.vcpusDisplay
     self.storageDisplay = resource_panel.storageDisplay
     self._update_edge_image_badge()
+    self._update_node_runtime_policy_label(self.default_container_name)
 
   def _update_edge_image_badge(self) -> None:
     if not hasattr(self, "edgeImageBadge"):
@@ -851,6 +854,20 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       "Packaged production runs use mainnet only."
     )
     self.edgeImageBadge.show()
+
+  def _update_node_runtime_policy_label(self, container_name: str = None) -> None:
+    if not hasattr(self, "node_runtime_policy"):
+      return
+
+    target_container = (
+      container_name
+      or self._selected_container_name()
+      or getattr(self.docker_handler, "container_name", None)
+      or self.default_container_name
+    )
+    display = runtime_policy_display(target_container, self.edge_image_config)
+    self.node_runtime_policy.setText(display.text)
+    self.node_runtime_policy.setToolTip(display.tooltip)
 
   def initUI(self):
     self.setWindowTitle(WINDOW_TITLE)
@@ -3097,6 +3114,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         # Update both docker handler and mixin container name with the Docker id, not the alias.
         self.docker_handler.set_container_name(actual_container_name)
         self.docker_container_name = actual_container_name
+        self._update_node_runtime_policy_label(actual_container_name)
         self.add_log(f"Updated container name to: {actual_container_name}", debug=True)
         
         # Check if container exists in Docker
@@ -3253,6 +3271,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.refresh_container_list()
     self._select_container_by_name(container_name)
     self.docker_handler.set_container_name(container_name)
+    self._update_node_runtime_policy_label(container_name)
     return container_config
 
   def launch_container(self, volume_name: str = None):

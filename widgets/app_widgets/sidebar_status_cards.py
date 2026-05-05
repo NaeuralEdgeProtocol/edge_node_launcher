@@ -103,6 +103,14 @@ class NodeStatusPanel(QGroupBox):
         self.node_lifecycle_state.setFont(QFont("Segoe UI", 9, QFont.DemiBold))
         _configure_sidebar_label(self.node_lifecycle_state)
 
+        self.node_runtime_policy = ElidedLabel("Runtime: GPU eligible")
+        self.node_runtime_policy.setObjectName("nodeRuntimePolicy")
+        self.node_runtime_policy.setAccessibleName("Node runtime policy")
+        self.node_runtime_policy.setProperty("statusField", "metadata")
+        self.node_runtime_policy.setProperty("role", "nodeRuntimePolicy")
+        self.node_runtime_policy.setFont(QFont("Segoe UI", 9, QFont.DemiBold))
+        _configure_sidebar_label(self.node_runtime_policy)
+
         self.loading_indicator = LoadingIndicator(size=30)
         self.loading_indicator.hide()
 
@@ -194,6 +202,7 @@ class NodeStatusPanel(QGroupBox):
         layout.addWidget(self.node_status_title)
         layout.addWidget(self.edgeImageBadge)
         layout.addWidget(self.node_lifecycle_state)
+        layout.addWidget(self.node_runtime_policy)
 
         loading_layout = QHBoxLayout()
         loading_layout.setContentsMargins(0, 0, 0, 0)

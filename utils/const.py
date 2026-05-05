@@ -874,7 +874,8 @@ COMMON_STYLESHEET_TEMPLATE = """
     padding: 2px 6px;
     margin: 0px 2px 4px 2px;
   }}
-  QGroupBox[role="statusPanel"] QLabel[role="nodeLifecycleState"] {{
+  QGroupBox[role="statusPanel"] QLabel[role="nodeLifecycleState"],
+  QGroupBox[role="statusPanel"] QLabel[role="nodeRuntimePolicy"] {{
     color: {section_label_text};
     background-color: {graph_bg};
     border: 1px solid {graph_border};

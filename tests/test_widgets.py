@@ -307,6 +307,10 @@ def test_sidebar_status_card_panels_expose_stable_controls(qtbot):
     assert node_panel.node_lifecycle_state.accessibleName() == "Node lifecycle status"
     assert node_panel.node_lifecycle_state.property("role") == "nodeLifecycleState"
     assert node_panel.node_lifecycle_state.text() == "Status: Stopped"
+    assert node_panel.node_runtime_policy.objectName() == "nodeRuntimePolicy"
+    assert node_panel.node_runtime_policy.accessibleName() == "Node runtime policy"
+    assert node_panel.node_runtime_policy.property("role") == "nodeRuntimePolicy"
+    assert node_panel.node_runtime_policy.text() == "Runtime: GPU eligible"
     assert node_panel.addressDisplay.objectName() == "nodeAddressDisplay"
     assert node_panel.addressDisplay.property("statusField") == "address"
     assert node_panel.addressDisplay.font().family() == "Courier New"
@@ -325,6 +329,7 @@ def test_sidebar_status_card_panels_expose_stable_controls(qtbot):
     for label in (
         node_panel.nameDisplay,
         node_panel.node_lifecycle_state,
+        node_panel.node_runtime_policy,
         node_panel.node_uptime,
         node_panel.node_epoch,
         node_panel.node_epoch_avail,

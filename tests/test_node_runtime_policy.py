@@ -8,6 +8,7 @@ from services.node_runtime_policy import (
     RECOMMENDED_NODE_RAM_GB,
     evaluate_node_capacity,
     plan_node_launch,
+    runtime_policy_display,
 )
 from utils.edge_image_config import (
     DEVNET_EDGE_NODE_IMAGE,
@@ -95,3 +96,31 @@ def test_gpu_policy_allows_only_one_assigned_node():
     assert plan.image == config.image
     assert plan.use_gpu is False
     assert plan.gpu_reason == GPU_REASON_ALREADY_ASSIGNED
+
+
+def test_runtime_policy_display_explains_primary_gpu_eligibility():
+    config = resolve_edge_node_image_config(
+        cli_image="devnet",
+        environ={},
+        production_mode=False,
+    )
+
+    display = runtime_policy_display("r1devnode", config)
+
+    assert display.text == "Runtime: GPU eligible"
+    assert config.image in display.tooltip
+    assert config.gpu_image in display.tooltip
+
+
+def test_runtime_policy_display_explains_secondary_cpu_only_policy():
+    config = resolve_edge_node_image_config(
+        cli_image="devnet",
+        environ={},
+        production_mode=False,
+    )
+
+    display = runtime_policy_display("r1devnode2", config)
+
+    assert display.text == "Runtime: CPU-only"
+    assert config.default_container_name in display.tooltip
+    assert config.image in display.tooltip
