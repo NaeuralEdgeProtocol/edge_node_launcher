@@ -197,6 +197,19 @@ def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
     assert not advanced_toggle.isChecked()
     assert advanced_panel.property("role") == "appAdvancedOptionsPanel"
     assert advanced_panel.isHidden()
+    advanced_tabs = page.findChild(QTabWidget, "appAdvancedOptionsTabs")
+    assert advanced_tabs.accessibleName() == "Advanced app option groups"
+    assert advanced_tabs.property("role") == "appAdvancedOptionsTabs"
+    assert advanced_tabs.documentMode()
+    assert advanced_tabs.count() == 3
+    assert [advanced_tabs.tabText(index) for index in range(advanced_tabs.count())] == [
+        "Runtime",
+        "Storage",
+        "Environment",
+    ]
+    assert page.findChild(QWidget, "appRuntimeOptionsTab").property("role") == "appAdvancedOptionsTabPage"
+    assert page.findChild(QWidget, "appStorageOptionsTab").property("role") == "appAdvancedOptionsTabPage"
+    assert page.findChild(QWidget, "appEnvironmentOptionsTab").property("role") == "appAdvancedOptionsTabPage"
     qtbot.mouseClick(advanced_toggle, Qt.LeftButton)
     assert advanced_toggle.isChecked()
     assert advanced_toggle.accessibleName() == "Hide advanced app options"
@@ -208,6 +221,7 @@ def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
     assert page.findChild(QWidget, "appRuntimePanel").property("role") == "appRuntimePanel"
     assert page.findChild(QLineEdit, "appCpuInput").text() == "1"
     assert page.findChild(QLineEdit, "appMemoryInput").text() == "512m"
+    advanced_tabs.setCurrentIndex(1)
     volume_editor = page.findChild(QWidget, "appVolumeEditor")
     volume_table = page.findChild(QTableWidget, "appVolumesTable")
     file_volume_editor = page.findChild(QWidget, "appFileVolumeEditor")
@@ -239,13 +253,17 @@ def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
     assert page.findChild(QPushButton, "appRemoveVolumeButton").property("actionRole") == "utility"
     assert page.findChild(QPushButton, "appAddFileVolumeButton").property("actionRole") == "secondary"
     assert page.findChild(QPushButton, "appRemoveFileVolumeButton").property("actionRole") == "utility"
+    page.advanced_options_toggle.setChecked(True)
+    advanced_tabs.setCurrentIndex(2)
+    assert advanced_tabs.currentWidget().objectName() == "appEnvironmentOptionsTab"
+    assert page.findChild(QPlainTextEdit, "appEnvInput").parent().objectName() == "appEnvironmentOptionsTab"
 
     requested = []
     page.sdk_settings_requested.connect(lambda: requested.append(True))
     qtbot.mouseClick(page.findChild(QPushButton, "appSdkSettingsButton"), Qt.LeftButton)
     assert requested == [True]
 
-    page.advanced_options_toggle.setChecked(True)
+    advanced_tabs.setCurrentIndex(1)
     page.app_volume_source_input.setText("cache")
     page.app_volume_mount_input.setText("/app/cache")
     qtbot.mouseClick(page.findChild(QPushButton, "appAddVolumeButton"), Qt.LeftButton)

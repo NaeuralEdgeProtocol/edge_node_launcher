@@ -587,6 +587,43 @@ COMMON_STYLESHEET_TEMPLATE = """
   QWidget[role="appAdvancedOptionsPanel"] {{
     background-color: transparent;
   }}
+  QTabWidget[role="appAdvancedOptionsTabs"] {{
+    background-color: transparent;
+    border: none;
+    font-family: "Segoe UI";
+    font-size: 9pt;
+  }}
+  QTabWidget[role="appAdvancedOptionsTabs"]::pane {{
+    background-color: transparent;
+    border: 1px solid {secondary_action_border};
+    border-radius: 7px;
+    top: -1px;
+  }}
+  QTabWidget[role="appAdvancedOptionsTabs"] QTabBar::tab {{
+    background-color: {utility_action_bg};
+    color: {utility_action_text};
+    border: 1px solid {utility_action_border};
+    border-bottom-color: {secondary_action_border};
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    min-width: 96px;
+    min-height: 28px;
+    padding: 4px 12px;
+    margin-right: 4px;
+    font-weight: 600;
+  }}
+  QTabWidget[role="appAdvancedOptionsTabs"] QTabBar::tab:hover {{
+    background-color: {utility_action_hover};
+  }}
+  QTabWidget[role="appAdvancedOptionsTabs"] QTabBar::tab:selected {{
+    background-color: {secondary_action_bg};
+    color: {secondary_action_text};
+    border-color: {combo_hover_border};
+    border-bottom-color: {secondary_action_bg};
+  }}
+  QWidget[role="appAdvancedOptionsTabPage"] {{
+    background-color: transparent;
+  }}
   QWidget[role="appVolumeEditor"] {{
     background-color: transparent;
   }}

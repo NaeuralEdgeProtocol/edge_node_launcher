@@ -73,6 +73,9 @@ def test_apps_page_controls_use_semantic_styles():
         assert 'QWidget[role="appActionBar"]' in stylesheet
         assert 'QWidget[role="appDeploymentPanel"]' in stylesheet
         assert 'QWidget[role="appAdvancedOptionsPanel"]' in stylesheet
+        assert 'QTabWidget[role="appAdvancedOptionsTabs"]' in stylesheet
+        assert 'QTabWidget[role="appAdvancedOptionsTabs"] QTabBar::tab:selected' in stylesheet
+        assert 'QWidget[role="appAdvancedOptionsTabPage"]' in stylesheet
         assert 'QWidget[role="appVolumeEditor"]' in stylesheet
         assert 'QWidget[role="appFileVolumeEditor"]' in stylesheet
         assert 'QWidget[role="appsDetailPanel"]' in stylesheet

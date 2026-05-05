@@ -600,6 +600,23 @@ def click_visible_button(app, button, label):
     return click_button(app, button, label)
 
 
+def click_tab(app, tab_widget, index, label):
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtTest import QTest
+
+    if not tab_widget.isVisible():
+        raise AssertionError(f"{label} tab group is not visible")
+    tab_bar = tab_widget.tabBar()
+    tab_rect = tab_bar.tabRect(index)
+    if not tab_rect.isValid():
+        raise AssertionError(f"{label} tab index {index} is not valid")
+    QTest.mouseClick(tab_bar, Qt.LeftButton, Qt.NoModifier, tab_rect.center())
+    app.processEvents()
+    if tab_widget.currentIndex() != index:
+        raise AssertionError(f"{label} tab did not become active")
+    return label
+
+
 def set_line_edit_value(app, line_edit, value):
     line_edit.setFocus()
     line_edit.clear()
@@ -768,7 +785,6 @@ def run_mocked_sdk_apps_scenario(
     set_line_edit_value(app, apps_page.car_registry_input, "docker.io")
     set_line_edit_value(app, apps_page.car_registry_user_input, "smoke-user")
     set_line_edit_value(app, apps_page.car_registry_password_input, SMOKE_CONTAINER_APP_SECRET)
-    set_plain_text_value(app, apps_page.env_input, "SMOKE_MODE=mock\nPUBLIC_VALUE=visible")
 
     if not apps_page.advanced_options_toggle.isChecked():
         record_step(
@@ -776,6 +792,17 @@ def run_mocked_sdk_apps_scenario(
             output_path,
             {"step": click_visible_button(app, apps_page.advanced_options_toggle, "show advanced app options")},
         )
+    record_step(
+        log,
+        output_path,
+        {"step": click_tab(app, apps_page.advanced_options_tabs, 2, "select environment app options")},
+    )
+    set_plain_text_value(app, apps_page.env_input, "SMOKE_MODE=mock\nPUBLIC_VALUE=visible")
+    record_step(
+        log,
+        output_path,
+        {"step": click_tab(app, apps_page.advanced_options_tabs, 1, "select storage app options")},
+    )
     set_line_edit_value(app, apps_page.app_volume_source_input, "smoke_car_cache")
     set_line_edit_value(app, apps_page.app_volume_mount_input, "/app/cache")
     record_step(
@@ -919,7 +946,17 @@ def run_mocked_sdk_apps_scenario(
     set_line_edit_value(app, apps_page.worker_github_user_input, "smoke-user")
     set_line_edit_value(app, apps_page.worker_github_token_input, SMOKE_WORKER_APP_SECRET)
     set_plain_text_value(app, apps_page.worker_commands_input, "npm install\nnpm run build\nnpm run start")
+    record_step(
+        log,
+        output_path,
+        {"step": click_tab(app, apps_page.advanced_options_tabs, 2, "select worker environment app options")},
+    )
     set_plain_text_value(app, apps_page.env_input, "SMOKE_MODE=mock\nPUBLIC_VALUE=worker")
+    record_step(
+        log,
+        output_path,
+        {"step": click_tab(app, apps_page.advanced_options_tabs, 1, "select worker storage app options")},
+    )
     set_line_edit_value(app, apps_page.app_volume_source_input, "smoke_worker_cache")
     set_line_edit_value(app, apps_page.app_volume_mount_input, "/workspace/cache")
     record_step(

@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QStackedWidget,
+    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QToolButton,
@@ -271,12 +272,17 @@ class AppsPage(QWidget):
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
-        layout.addWidget(create_sidebar_section_label("Runtime", "appRuntimeSectionLabel"))
-        layout.addWidget(self._create_runtime_fields())
-        self.env_input = self._create_plain_text("appEnvInput", "KEY=value")
-        self.env_input.setMaximumHeight(86)
-        layout.addWidget(self._label("Environment", "appEnvLabel"))
-        layout.addWidget(self.env_input)
+
+        self.advanced_options_tabs = QTabWidget()
+        self.advanced_options_tabs.setObjectName("appAdvancedOptionsTabs")
+        self.advanced_options_tabs.setAccessibleName("Advanced app option groups")
+        self.advanced_options_tabs.setProperty("role", "appAdvancedOptionsTabs")
+        self.advanced_options_tabs.setDocumentMode(True)
+        self.advanced_options_tabs.setTabPosition(QTabWidget.North)
+        self.advanced_options_tabs.addTab(self._create_runtime_options_tab(), "Runtime")
+        self.advanced_options_tabs.addTab(self._create_storage_options_tab(), "Storage")
+        self.advanced_options_tabs.addTab(self._create_environment_options_tab(), "Environment")
+        layout.addWidget(self.advanced_options_tabs)
         return panel
 
     def _sync_advanced_options_visibility(self, checked: bool) -> None:
@@ -434,12 +440,52 @@ class AppsPage(QWidget):
             "appImagePullPolicyLabel",
             self.app_pull_policy_combo,
         )
-        layout.addWidget(self._label("Volumes", "appVolumesLabel"), 4, 0, 1, 2)
-        layout.addWidget(self._create_volume_editor(), 5, 0, 1, 2)
-        layout.addWidget(self._label("Config files", "appFileVolumesLabel"), 6, 0, 1, 2)
-        layout.addWidget(self._create_file_volume_editor(), 7, 0, 1, 2)
-        layout.setRowStretch(8, 1)
+        layout.setRowStretch(2, 1)
         return panel
+
+    def _create_runtime_options_tab(self) -> QWidget:
+        page = QWidget()
+        page.setObjectName("appRuntimeOptionsTab")
+        page.setAccessibleName("Runtime options")
+        page.setProperty("role", "appAdvancedOptionsTabPage")
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+        layout.addWidget(create_sidebar_section_label("Runtime", "appRuntimeSectionLabel"))
+        layout.addWidget(self._create_runtime_fields())
+        layout.addStretch(1)
+        return page
+
+    def _create_storage_options_tab(self) -> QWidget:
+        page = QWidget()
+        page.setObjectName("appStorageOptionsTab")
+        page.setAccessibleName("Storage options")
+        page.setProperty("role", "appAdvancedOptionsTabPage")
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+        layout.addWidget(self._label("Volumes", "appVolumesLabel"))
+        layout.addWidget(self._create_volume_editor())
+        layout.addWidget(self._label("Config files", "appFileVolumesLabel"))
+        layout.addWidget(self._create_file_volume_editor())
+        layout.addStretch(1)
+        return page
+
+    def _create_environment_options_tab(self) -> QWidget:
+        page = QWidget()
+        page.setObjectName("appEnvironmentOptionsTab")
+        page.setAccessibleName("Environment options")
+        page.setProperty("role", "appAdvancedOptionsTabPage")
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+        self.env_input = self._create_plain_text("appEnvInput", "KEY=value")
+        self.env_input.setMinimumHeight(96)
+        self.env_input.setMaximumHeight(140)
+        layout.addWidget(self._label("Environment", "appEnvLabel"))
+        layout.addWidget(self.env_input)
+        layout.addStretch(1)
+        return page
 
     def _create_volume_editor(self) -> QWidget:
         panel = QWidget()
