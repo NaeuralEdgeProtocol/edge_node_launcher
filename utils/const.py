@@ -552,6 +552,12 @@ COMMON_STYLESHEET_TEMPLATE = """
     padding: 5px 7px;
     margin: 2px 6px;
   }}
+  QWidget[role="appActionBar"] {{
+    background-color: transparent;
+  }}
+  QWidget[role="appDeploymentPanel"] {{
+    background-color: transparent;
+  }}
   QWidget[role="appsWorkspace"] {{
     background-color: transparent;
   }}
@@ -572,6 +578,30 @@ COMMON_STYLESHEET_TEMPLATE = """
     background-color: transparent;
     border: none;
   }}
+  QScrollArea#appsWorkspaceScrollArea QScrollBar:vertical {{
+    background-color: transparent;
+    border: none;
+    width: 10px;
+    margin: 4px 2px 4px 0px;
+  }}
+  QScrollArea#appsWorkspaceScrollArea QScrollBar::handle:vertical {{
+    background-color: {section_label_border};
+    border-radius: 4px;
+    min-height: 32px;
+  }}
+  QScrollArea#appsWorkspaceScrollArea QScrollBar::handle:vertical:hover {{
+    background-color: {combo_hover_border};
+  }}
+  QScrollArea#appsWorkspaceScrollArea QScrollBar::add-line:vertical,
+  QScrollArea#appsWorkspaceScrollArea QScrollBar::sub-line:vertical {{
+    height: 0px;
+    border: none;
+    background: transparent;
+  }}
+  QScrollArea#appsWorkspaceScrollArea QScrollBar::add-page:vertical,
+  QScrollArea#appsWorkspaceScrollArea QScrollBar::sub-page:vertical {{
+    background: transparent;
+  }}
   QTableWidget#appsTable {{
     background-color: {info_box_bg};
     color: {info_box_text};
@@ -580,8 +610,8 @@ COMMON_STYLESHEET_TEMPLATE = """
     gridline-color: {graph_border};
     font-family: "Segoe UI";
     font-size: 8pt;
-    selection-background-color: {primary_action_bg};
-    selection-color: {primary_action_text};
+    selection-background-color: {secondary_action_hover};
+    selection-color: {secondary_action_text};
   }}
   QTableWidget#appsTable QScrollBar:horizontal {{
     height: 0px;

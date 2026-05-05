@@ -6,6 +6,7 @@ import json
 import dataclasses
 
 from datetime import datetime, timedelta
+from html import escape
 from time import time
 from typing import Optional
 import re
@@ -781,14 +782,14 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     apps_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
     apps_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
     apps_scroll.setFrameShape(QFrame.NoFrame)
-    apps_scroll.setMinimumWidth(440)
-    apps_scroll.setMaximumWidth(620)
-    apps_scroll.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+    apps_scroll.setMinimumWidth(540)
+    apps_scroll.setMaximumWidth(760)
+    apps_scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
     self.apps_page.setParent(None)
-    self.apps_page.setMinimumWidth(420)
+    self.apps_page.setMinimumWidth(520)
     self.apps_page.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
     apps_scroll.setWidget(self.apps_page)
-    layout.addWidget(apps_scroll, 0)
+    layout.addWidget(apps_scroll, 3)
 
     details_panel = QWidget()
     details_panel.setObjectName("appsDetailPanel")
@@ -806,32 +807,54 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.apps_detail_text.setProperty("role", "appsDetailText")
     self.apps_detail_text.setReadOnly(True)
     self.apps_detail_text.setOpenExternalLinks(False)
-    self.apps_detail_text.setText("No app selected")
+    self.apps_detail_text.setHtml(self._apps_empty_detail_html())
     details_layout.addWidget(self.apps_detail_title)
     details_layout.addWidget(self.apps_detail_text, 1)
-    layout.addWidget(details_panel, 1)
+    layout.addWidget(details_panel, 2)
 
-    self.apps_page.apps_table.itemSelectionChanged.connect(self._update_apps_workspace_details)
+    self.apps_page.selected_record_changed.connect(self._update_apps_workspace_details)
     return workspace
 
-  def _update_apps_workspace_details(self) -> None:
+  def _update_apps_workspace_details(self, record=None) -> None:
     if not hasattr(self, "apps_detail_text"):
       return
-    record = self.apps_page._selected_record()
     if record is None:
-      self.apps_detail_text.setText("No app selected")
+      record = self.apps_page._selected_record()
+    if record is None:
+      self.apps_detail_text.setHtml(self._apps_empty_detail_html())
       return
-    detail = "\n".join(
-      [
-        f"Name: {record.app_name}",
-        f"Type: {record.app_type}",
-        f"Status: {record.status}",
-        f"Node: {record.node_address}",
-        f"Pipeline: {record.pipeline_name}",
-        f"URL: {record.app_url or '-'}",
-        f"Last action: {record.last_action or '-'}",
-      ]
+    self.apps_detail_text.setHtml(
+      self._apps_detail_html(
+        [
+          ("Name", record.app_name),
+          ("Type", record.app_type),
+          ("Status", record.status),
+          ("Node", record.node_address),
+          ("Pipeline", record.pipeline_name),
+          ("URL", record.app_url or "-"),
+          ("Last action", record.last_action or "-"),
+        ]
+      )
     )
+
+  def _apps_empty_detail_html(self) -> str:
+    return (
+      '<div class="empty-state">'
+      '<p style="font-weight:600; margin:0 0 6px 0;">No app selected</p>'
+      '<p style="margin:0;">Select a launcher-owned app to inspect its node, pipeline, URL, and last action.</p>'
+      '</div>'
+    )
+
+  def _apps_detail_html(self, rows) -> str:
+    table_rows = []
+    for label, value in rows:
+      table_rows.append(
+        "<tr>"
+        f'<td style="padding:4px 16px 4px 0; font-weight:600;">{escape(str(label))}</td>'
+        f'<td style="padding:4px 0;">{escape(str(value))}</td>'
+        "</tr>"
+      )
+    return '<table cellspacing="0" cellpadding="0">' + "".join(table_rows) + "</table>"
     self.apps_detail_text.setText(detail)
 
   def _on_navigation_page_changed(self, page_name: str) -> None:

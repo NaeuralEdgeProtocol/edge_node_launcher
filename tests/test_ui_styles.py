@@ -67,9 +67,12 @@ def test_dialog_text_inputs_use_semantic_styles():
 def test_apps_page_controls_use_semantic_styles():
     for stylesheet in (DARK_STYLESHEET, LIGHT_STYLESHEET):
         assert 'QWidget[role="appsWorkspace"]' in stylesheet
+        assert 'QWidget[role="appActionBar"]' in stylesheet
+        assert 'QWidget[role="appDeploymentPanel"]' in stylesheet
         assert 'QWidget[role="appsDetailPanel"]' in stylesheet
         assert 'QTextBrowser[role="appsDetailText"]' in stylesheet
         assert "QScrollArea#appsWorkspaceScrollArea" in stylesheet
+        assert "QScrollArea#appsWorkspaceScrollArea QScrollBar:vertical" in stylesheet
         assert 'QLineEdit[role="appTextInput"]' in stylesheet
         assert 'QPlainTextEdit[role="appTextInput"]' in stylesheet
         assert 'QComboBox[role="appCombo"]' in stylesheet

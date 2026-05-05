@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QApplication,
     QComboBox,
+    QGridLayout,
     QHeaderView,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QPlainTextEdit,
@@ -40,7 +42,9 @@ from widgets.app_widgets.sidebar_controls import (
 
 
 class AppsPage(QWidget):
-    """Compact CAR/WAR app deployment and launcher-owned app registry page."""
+    """CAR/WAR app deployment and launcher-owned app registry page."""
+
+    selected_record_changed = pyqtSignal(object)
 
     def __init__(
         self,
@@ -69,27 +73,33 @@ class AppsPage(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignTop)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(5)
+        layout.setContentsMargins(0, 0, 4, 0)
+        layout.setSpacing(10)
         layout.addWidget(create_sidebar_section_label("Apps", "appsPageSectionLabel"))
 
-        self.apps_table = QTableWidget(0, 3)
+        self.apps_table = QTableWidget(0, 4)
         self.apps_table.setObjectName("appsTable")
         self.apps_table.setAccessibleName("Launcher-owned apps")
-        self.apps_table.setHorizontalHeaderLabels(["Name", "Type", "Status"])
+        self.apps_table.setHorizontalHeaderLabels(["Name", "Type", "Status", "Node"])
         self.apps_table.verticalHeader().hide()
         self.apps_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.apps_table.setSelectionMode(QTableWidget.SingleSelection)
         self.apps_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.apps_table.setAlternatingRowColors(False)
         self.apps_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.apps_table.setMinimumHeight(104)
-        self.apps_table.setMaximumHeight(122)
-        self.apps_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        self.apps_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self.apps_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        self.apps_table.horizontalHeader().setStretchLastSection(True)
+        self.apps_table.setMinimumHeight(136)
+        self.apps_table.setMaximumHeight(180)
+        self._configure_apps_table_columns()
+        self.apps_table.itemSelectionChanged.connect(self._emit_selected_record_changed)
         layout.addWidget(self.apps_table)
+
+        app_actions = QWidget()
+        app_actions.setObjectName("appManagementActionBar")
+        app_actions.setAccessibleName("App management actions")
+        app_actions.setProperty("role", "appActionBar")
+        actions_layout = QHBoxLayout(app_actions)
+        actions_layout.setContentsMargins(0, 0, 0, 0)
+        actions_layout.setSpacing(8)
 
         self.refresh_button = create_sidebar_action_button(
             "Refresh Apps",
@@ -98,7 +108,8 @@ class AppsPage(QWidget):
             "Refresh launcher-owned app list",
             self.refresh_app_statuses,
         )
-        layout.addWidget(self.refresh_button)
+        self._set_workspace_button_size(self.refresh_button, 40)
+        actions_layout.addWidget(self.refresh_button)
 
         self.stop_button = create_sidebar_action_button(
             "Stop Selected",
@@ -107,7 +118,8 @@ class AppsPage(QWidget):
             "Stop selected launcher-owned app",
             self.stop_selected_app,
         )
-        layout.addWidget(self.stop_button)
+        self._set_workspace_button_size(self.stop_button, 40)
+        actions_layout.addWidget(self.stop_button)
 
         self.copy_url_button = create_sidebar_action_button(
             "Copy URL",
@@ -116,21 +128,38 @@ class AppsPage(QWidget):
             "Copy selected app URL",
             self.copy_selected_url,
         )
-        layout.addWidget(self.copy_url_button)
+        self._set_workspace_button_size(self.copy_url_button, 40)
+        actions_layout.addWidget(self.copy_url_button)
+        layout.addWidget(app_actions)
+
+        layout.addWidget(create_sidebar_section_label("Deployment", "appDeploymentSectionLabel"))
+
+        deployment_panel = QWidget()
+        deployment_panel.setObjectName("appDeploymentPanel")
+        deployment_panel.setAccessibleName("App deployment form")
+        deployment_panel.setProperty("role", "appDeploymentPanel")
+        deployment_layout = QVBoxLayout(deployment_panel)
+        deployment_layout.setContentsMargins(0, 0, 0, 0)
+        deployment_layout.setSpacing(8)
+
+        core_grid = QGridLayout()
+        core_grid.setContentsMargins(0, 0, 0, 0)
+        core_grid.setHorizontalSpacing(10)
+        core_grid.setVerticalSpacing(5)
+        core_grid.setColumnStretch(0, 1)
+        core_grid.setColumnStretch(1, 1)
 
         self.runner_type_combo = self._create_combo("appRunnerTypeCombo", "App runner type")
         self.runner_type_combo.addItem("Container", APP_TYPE_CONTAINER)
         self.runner_type_combo.addItem("Worker", APP_TYPE_WORKER)
-        layout.addWidget(self._label("Runner", "appRunnerTypeLabel"))
-        layout.addWidget(self.runner_type_combo)
+        self._add_grid_field(core_grid, 0, 0, "Runner", "appRunnerTypeLabel", self.runner_type_combo)
 
         self.app_name_input = self._create_line_edit("appNameInput", "App name")
-        layout.addWidget(self._label("App name", "appNameLabel"))
-        layout.addWidget(self.app_name_input)
+        self._add_grid_field(core_grid, 0, 1, "App name", "appNameLabel", self.app_name_input)
 
         self.node_address_input = self._create_line_edit("appNodeAddressInput", "0xai_...")
-        layout.addWidget(self._label("Target node", "appNodeAddressLabel"))
-        layout.addWidget(self.node_address_input)
+        self._add_grid_field(core_grid, 1, 0, "Target node", "appNodeAddressLabel", self.node_address_input, 2)
+        deployment_layout.addLayout(core_grid)
 
         self.validation_message = QLabel("")
         self.validation_message.setObjectName("appValidationMessageLabel")
@@ -138,7 +167,15 @@ class AppsPage(QWidget):
         self.validation_message.setProperty("role", "appValidationMessage")
         self.validation_message.setWordWrap(True)
         self.validation_message.hide()
-        layout.addWidget(self.validation_message)
+        deployment_layout.addWidget(self.validation_message)
+
+        launch_actions = QWidget()
+        launch_actions.setObjectName("appLaunchActionBar")
+        launch_actions.setAccessibleName("App launch actions")
+        launch_actions.setProperty("role", "appActionBar")
+        launch_actions_layout = QHBoxLayout(launch_actions)
+        launch_actions_layout.setContentsMargins(0, 0, 0, 0)
+        launch_actions_layout.setSpacing(8)
 
         self.validate_button = create_sidebar_action_button(
             "Validate",
@@ -147,7 +184,8 @@ class AppsPage(QWidget):
             "Validate app deployment fields",
             self.validate_current_form,
         )
-        layout.addWidget(self.validate_button)
+        self._set_workspace_button_size(self.validate_button, 40)
+        launch_actions_layout.addWidget(self.validate_button, 1)
 
         self.launch_button = create_sidebar_action_button(
             "Launch App",
@@ -156,20 +194,23 @@ class AppsPage(QWidget):
             "Launch selected app through the Ratio1 SDK",
             self.launch_current_app,
         )
-        layout.addWidget(self.launch_button)
+        self._set_workspace_button_size(self.launch_button, 44)
+        launch_actions_layout.addWidget(self.launch_button, 2)
+        deployment_layout.addWidget(launch_actions)
 
         self.runner_stack = QStackedWidget()
         self.runner_stack.setObjectName("appRunnerStack")
         self.runner_stack.setAccessibleName("App runner form fields")
         self.runner_stack.addWidget(self._create_container_fields())
         self.runner_stack.addWidget(self._create_worker_fields())
-        layout.addWidget(self.runner_stack)
+        deployment_layout.addWidget(self.runner_stack)
         self.runner_type_combo.currentIndexChanged.connect(self._sync_runner_stack)
 
         self.env_input = self._create_plain_text("appEnvInput", "KEY=value")
-        self.env_input.setMaximumHeight(72)
-        layout.addWidget(self._label("Environment", "appEnvLabel"))
-        layout.addWidget(self.env_input)
+        self.env_input.setMaximumHeight(86)
+        deployment_layout.addWidget(self._label("Environment", "appEnvLabel"))
+        deployment_layout.addWidget(self.env_input)
+        layout.addWidget(deployment_panel)
         layout.addStretch(1)
         self._sync_runner_stack()
         self._connect_form_message_reset()
@@ -178,9 +219,12 @@ class AppsPage(QWidget):
         page = QWidget()
         page.setObjectName("containerAppFields")
         page.setAccessibleName("Container app fields")
-        layout = QVBoxLayout(page)
+        layout = QGridLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(5)
+        layout.setHorizontalSpacing(10)
+        layout.setVerticalSpacing(5)
+        layout.setColumnStretch(0, 1)
+        layout.setColumnStretch(1, 1)
 
         self.car_image_input = self._create_line_edit("carImageInput", "nginx:alpine")
         self.car_port_input = self._create_line_edit("carPortInput", "5000")
@@ -193,15 +237,18 @@ class AppsPage(QWidget):
         )
         self.car_registry_password_input.setEchoMode(QLineEdit.Password)
 
-        for text, name, widget in (
-            ("Image", "carImageLabel", self.car_image_input),
-            ("Port", "carPortLabel", self.car_port_input),
-            ("Registry", "carRegistryLabel", self.car_registry_input),
-            ("Registry user", "carRegistryUserLabel", self.car_registry_user_input),
-            ("Registry password", "carRegistryPasswordLabel", self.car_registry_password_input),
-        ):
-            layout.addWidget(self._label(text, name))
-            layout.addWidget(widget)
+        self._add_grid_field(layout, 0, 0, "Image", "carImageLabel", self.car_image_input, 2)
+        self._add_grid_field(layout, 1, 0, "Port", "carPortLabel", self.car_port_input)
+        self._add_grid_field(layout, 1, 1, "Registry", "carRegistryLabel", self.car_registry_input)
+        self._add_grid_field(layout, 2, 0, "Registry user", "carRegistryUserLabel", self.car_registry_user_input)
+        self._add_grid_field(
+            layout,
+            2,
+            1,
+            "Registry password",
+            "carRegistryPasswordLabel",
+            self.car_registry_password_input,
+        )
 
         return page
 
@@ -209,9 +256,12 @@ class AppsPage(QWidget):
         page = QWidget()
         page.setObjectName("workerAppFields")
         page.setAccessibleName("Worker app fields")
-        layout = QVBoxLayout(page)
+        layout = QGridLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(5)
+        layout.setHorizontalSpacing(10)
+        layout.setVerticalSpacing(5)
+        layout.setColumnStretch(0, 1)
+        layout.setColumnStretch(1, 1)
 
         self.worker_repo_input = self._create_line_edit(
             "workerRepoInput",
@@ -236,17 +286,13 @@ class AppsPage(QWidget):
         self.worker_commands_input.setPlainText("npm install\nnpm run build\nnpm run start")
         self.worker_commands_input.setMaximumHeight(88)
 
-        for text, name, widget in (
-            ("GitHub repo", "workerRepoLabel", self.worker_repo_input),
-            ("Branch", "workerBranchLabel", self.worker_branch_input),
-            ("Base image", "workerImageLabel", self.worker_image_input),
-            ("Port", "workerPortLabel", self.worker_port_input),
-            ("GitHub user", "workerGithubUserLabel", self.worker_github_user_input),
-            ("GitHub token", "workerGithubTokenLabel", self.worker_github_token_input),
-            ("Commands", "workerCommandsLabel", self.worker_commands_input),
-        ):
-            layout.addWidget(self._label(text, name))
-            layout.addWidget(widget)
+        self._add_grid_field(layout, 0, 0, "GitHub repo", "workerRepoLabel", self.worker_repo_input, 2)
+        self._add_grid_field(layout, 1, 0, "Branch", "workerBranchLabel", self.worker_branch_input)
+        self._add_grid_field(layout, 1, 1, "Base image", "workerImageLabel", self.worker_image_input)
+        self._add_grid_field(layout, 2, 0, "Port", "workerPortLabel", self.worker_port_input)
+        self._add_grid_field(layout, 2, 1, "GitHub user", "workerGithubUserLabel", self.worker_github_user_input)
+        self._add_grid_field(layout, 3, 0, "GitHub token", "workerGithubTokenLabel", self.worker_github_token_input, 2)
+        self._add_grid_field(layout, 4, 0, "Commands", "workerCommandsLabel", self.worker_commands_input, 2)
 
         return page
 
@@ -317,12 +363,18 @@ class AppsPage(QWidget):
             "Refreshing...",
         )
 
-    def refresh_apps(self) -> None:
+    def refresh_apps(self, selected_app_id: str | None = None) -> None:
+        if selected_app_id is None:
+            selected = self._selected_record()
+            selected_app_id = selected.app_id if selected is not None else None
         records = self.app_registry.list_apps()
         self._records_by_row = {}
         self.apps_table.setRowCount(len(records))
+        selected_row = None
         for row, record in enumerate(records):
             self._records_by_row[row] = record
+            if selected_app_id and record.app_id == selected_app_id:
+                selected_row = row
             details = (
                 f"Node: {record.node_address}\n"
                 f"Pipeline: {record.pipeline_name}\n"
@@ -331,7 +383,13 @@ class AppsPage(QWidget):
             self._set_table_item(row, 0, record.app_name, details)
             self._set_table_item(row, 1, record.app_type)
             self._set_table_item(row, 2, record.status)
-        self.apps_table.resizeColumnsToContents()
+            self._set_table_item(row, 3, _short_node_address(record.node_address), record.node_address)
+        self._configure_apps_table_columns()
+        if selected_row is not None:
+            self.apps_table.selectRow(selected_row)
+        else:
+            self.apps_table.clearSelection()
+        self._emit_selected_record_changed()
 
     def stop_selected_app(self) -> None:
         record = self._selected_record()
@@ -352,7 +410,7 @@ class AppsPage(QWidget):
         record.status = "stopped"
         record.last_action = "stopped"
         self.app_registry.upsert(record)
-        self.refresh_apps()
+        self.refresh_apps(selected_app_id=record.app_id)
         self._show_message("Stopped", error=False)
 
     def copy_selected_url(self) -> None:
@@ -420,10 +478,12 @@ class AppsPage(QWidget):
 
     def _handle_launch_success(self, result: DeploymentResult, spec) -> None:
         self._persist_result_if_needed(result, spec)
-        self.refresh_apps()
+        self.refresh_apps(selected_app_id=result.app_id)
         self._show_message("Launched", error=False)
 
     def _handle_refresh_success(self, statuses: list[SdkAppStatus]) -> None:
+        selected = self._selected_record()
+        selected_app_id = selected.app_id if selected is not None else None
         records = self.app_registry.list_apps()
         changed = False
         for record in records:
@@ -435,7 +495,7 @@ class AppsPage(QWidget):
                 record.app_url = status.url
             self.app_registry.upsert(record)
             changed = True
-        self.refresh_apps()
+        self.refresh_apps(selected_app_id=selected_app_id)
         self._show_message("Status updated" if changed else "No launcher-owned status changes", error=False)
 
     def _start_sdk_operation(self, operation_name: str, operation, on_success, message: str) -> None:
@@ -482,10 +542,21 @@ class AppsPage(QWidget):
             return None
         return self._records_by_row.get(selected[0].row())
 
+    def _emit_selected_record_changed(self) -> None:
+        self.selected_record_changed.emit(self._selected_record())
+
     def _set_table_item(self, row: int, column: int, value: str, tooltip: str = "") -> None:
         item = QTableWidgetItem(value or "-")
         item.setToolTip(tooltip or value or "")
         self.apps_table.setItem(row, column, item)
+
+    def _configure_apps_table_columns(self) -> None:
+        header = self.apps_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.Stretch)
+        header.setStretchLastSection(True)
 
     def _sync_runner_stack(self) -> None:
         self.runner_stack.setCurrentIndex(0 if self.runner_type_combo.currentData() == APP_TYPE_CONTAINER else 1)
@@ -552,12 +623,31 @@ class AppsPage(QWidget):
         widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         return widget
 
+    def _add_grid_field(
+        self,
+        layout: QGridLayout,
+        row: int,
+        column: int,
+        text: str,
+        object_name: str,
+        widget: QWidget,
+        column_span: int = 1,
+    ) -> None:
+        label_row = row * 2
+        layout.addWidget(self._label(text, object_name), label_row, column, 1, column_span)
+        layout.addWidget(widget, label_row + 1, column, 1, column_span)
+
     def _label(self, text: str, object_name: str) -> QLabel:
         label = QLabel(text)
         label.setObjectName(object_name)
         label.setAccessibleName(text)
         label.setProperty("role", "appFormLabel")
         return label
+
+    def _set_workspace_button_size(self, button: QPushButton, height: int) -> None:
+        button.setMinimumHeight(height)
+        button.setMaximumHeight(height)
+        button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
 
 def _to_int(value: str) -> int:
@@ -578,3 +668,10 @@ def _matching_status(record: ManagedAppRecord, statuses: list[SdkAppStatus]) -> 
             continue
         return status
     return None
+
+
+def _short_node_address(value: str) -> str:
+    normalized = (value or "").strip()
+    if len(normalized) <= 24:
+        return normalized or "-"
+    return f"{normalized[:8]}...{normalized[-6:]}"

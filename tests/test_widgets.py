@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QGridLayout,
+    QHeaderView,
     QLabel,
     QProgressBar,
     QPushButton,
@@ -145,7 +146,16 @@ def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
     assert page.objectName() == "appsPage"
     assert page.accessibleName() == "Apps page"
     assert page.property("role") == "navigationPage"
-    assert page.findChild(QTableWidget, "appsTable").accessibleName() == "Launcher-owned apps"
+    apps_table = page.findChild(QTableWidget, "appsTable")
+    assert apps_table.accessibleName() == "Launcher-owned apps"
+    assert apps_table.columnCount() == 4
+    assert apps_table.horizontalHeaderItem(3).text() == "Node"
+    assert apps_table.horizontalHeader().sectionResizeMode(0) == QHeaderView.Stretch
+    assert apps_table.horizontalHeader().sectionResizeMode(3) == QHeaderView.Stretch
+    assert apps_table.minimumHeight() >= 136
+    assert page.findChild(QWidget, "appManagementActionBar").property("role") == "appActionBar"
+    assert page.findChild(QWidget, "appLaunchActionBar").property("role") == "appActionBar"
+    assert page.findChild(QWidget, "appDeploymentPanel").property("role") == "appDeploymentPanel"
     assert page.findChild(QComboBox, "appRunnerTypeCombo").currentData() == "CAR"
     assert page.findChild(QLineEdit, "appNameInput").property("role") == "appTextInput"
     assert page.findChild(QLineEdit, "appNodeAddressInput").property("role") == "appTextInput"
@@ -243,6 +253,34 @@ def test_apps_page_refreshes_registry_records_and_reports_missing_selection(qtbo
     page.apps_table.clearSelection()
     qtbot.mouseClick(page.findChild(QPushButton, "appStopButton"), Qt.LeftButton)
     assert page.validation_message.text() == "Select an app first"
+
+
+def test_apps_page_preserves_selection_and_emits_updated_record_after_stop(qtbot, tmp_path):
+    registry = AppRegistry(tmp_path / "apps.json")
+    record = ManagedAppRecord(
+        app_id=f"{APP_TEST_NODE}:known:CAR",
+        app_name="known",
+        app_type="CAR",
+        node_address=APP_TEST_NODE,
+        pipeline_name="known",
+        plugin_signature="CONTAINER_APP_RUNNER",
+        app_url="https://known.example",
+        status="deployed",
+        last_action="deployed",
+    )
+    registry.upsert(record)
+    page = AppsPage(app_registry=registry)
+    qtbot.addWidget(page)
+    emitted = []
+    page.selected_record_changed.connect(emitted.append)
+
+    page.apps_table.selectRow(0)
+    qtbot.mouseClick(page.findChild(QPushButton, "appStopButton"), Qt.LeftButton)
+
+    assert page.apps_table.item(0, 2).text() == "stopped"
+    assert page._selected_record().app_id == record.app_id
+    assert page._selected_record().status == "stopped"
+    assert emitted[-1].status == "stopped"
 
 
 def test_apps_page_sdk_operations_run_with_busy_state(qtbot, tmp_path):

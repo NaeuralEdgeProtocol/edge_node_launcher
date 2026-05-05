@@ -11,6 +11,8 @@ import app_forms.frm_main as frm_main
 from models.ContainerStats import ContainerStats
 from models.NodeHistory import NodeHistory
 from models.NodeInfo import NodeInfo
+from services.app_deployment_models import ManagedAppRecord
+from services.app_registry import AppRegistry
 from utils.config_manager import ContainerConfig
 from utils.edge_image_config import DEVNET_EDGE_NODE_IMAGE, configure_edge_node_image
 from widgets.DockerPullDialog import DOCKER_PULL_DIALOG_STYLE_COLORS, DockerPullDialog
@@ -3203,6 +3205,39 @@ def test_navigation_rail_switches_contextual_control_pages(qtbot, monkeypatch):
             assert launcher.main_workspace_stack.currentWidget() is launcher.apps_workspace
         else:
             assert launcher.main_workspace_stack.currentWidget() is launcher.graphView
+
+
+def test_apps_workspace_details_follow_updated_selection(qtbot, monkeypatch, tmp_path):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+    registry = AppRegistry(tmp_path / "apps.json")
+    registry.upsert(
+        ManagedAppRecord(
+            app_id="0xai_node123:known:CAR",
+            app_name="known",
+            app_type="CAR",
+            node_address="0xai_node123",
+            pipeline_name="known",
+            plugin_signature="CONTAINER_APP_RUNNER",
+            app_url="https://known.example",
+            status="deployed",
+            last_action="deployed",
+        )
+    )
+    launcher.apps_page.app_registry = registry
+    launcher.apps_page.deployment_client = None
+    launcher.apps_page.refresh_apps()
+    launcher.sidebar_panel.show_page("apps")
+
+    launcher.apps_page.apps_table.selectRow(0)
+    assert "deployed" in launcher.apps_detail_text.toPlainText()
+
+    qtbot.mouseClick(launcher.apps_page.stop_button, Qt.LeftButton)
+
+    detail_text = launcher.apps_detail_text.toPlainText()
+    assert launcher.apps_page.apps_table.item(0, 2).text() == "stopped"
+    assert "Status" in detail_text
+    assert "stopped" in detail_text
+    assert "deployed" not in detail_text
 
 
 def test_rename_action_lives_with_node_controls(qtbot, monkeypatch):
