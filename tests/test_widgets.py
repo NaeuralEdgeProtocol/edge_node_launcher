@@ -1,3 +1,5 @@
+import time
+
 from PyQt5.QtCore import QRect, Qt
 from PyQt5.QtGui import QColor, QShowEvent
 from PyQt5.QtWidgets import (
@@ -23,6 +25,7 @@ from PyQt5.QtWidgets import (
 from models.NodeHistory import NodeHistory
 from models.NodeInfo import NodeInfo
 from services.app_deployment_models import DeploymentResult, ManagedAppRecord
+from services.app_deployment_models import SdkAppStatus
 from services.app_registry import AppRegistry
 from widgets.DockerPullDialog import DOCKER_PULL_DIALOG_STYLE_COLORS, DockerPullDialog
 from widgets.LoadingDialog import LoadingDialog
@@ -63,8 +66,12 @@ class FakeAppDeploymentClient:
         self.container_specs = []
         self.worker_specs = []
         self.stop_calls = []
+        self.list_calls = []
+        self.delay_seconds = 0
 
     def launch_container_app(self, spec):
+        if self.delay_seconds:
+            time.sleep(self.delay_seconds)
         self.container_specs.append(spec)
         return DeploymentResult(
             app_id=f"{spec.node_address}:{spec.pipeline_name}:{spec.app_type}",
@@ -79,6 +86,8 @@ class FakeAppDeploymentClient:
         )
 
     def launch_worker_app(self, spec):
+        if self.delay_seconds:
+            time.sleep(self.delay_seconds)
         self.worker_specs.append(spec)
         return DeploymentResult(
             app_id=f"{spec.node_address}:{spec.pipeline_name}:{spec.app_type}",
@@ -93,7 +102,22 @@ class FakeAppDeploymentClient:
         )
 
     def stop_app(self, node_address, pipeline_name):
+        if self.delay_seconds:
+            time.sleep(self.delay_seconds)
         self.stop_calls.append((node_address, pipeline_name))
+
+    def list_node_apps(self, node_address):
+        self.list_calls.append(node_address)
+        return [
+            SdkAppStatus(
+                node_address=node_address,
+                app_name="known",
+                plugin_signature="CONTAINER_APP_RUNNER",
+                instance_id="instance-known",
+                status="online",
+                url="https://known-live.example",
+            )
+        ]
 
 
 def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
@@ -135,6 +159,7 @@ def test_apps_page_validates_and_launches_container_with_fake_sdk(qtbot, tmp_pat
     assert page.validation_message.text() == "Ready"
 
     qtbot.mouseClick(page.findChild(QPushButton, "appLaunchButton"), Qt.LeftButton)
+    qtbot.waitUntil(lambda: len(fake_client.container_specs) == 1, timeout=1000)
 
     assert fake_client.container_specs[0].image == "nginx:alpine"
     assert page.apps_table.rowCount() == 1
@@ -146,6 +171,7 @@ def test_apps_page_validates_and_launches_container_with_fake_sdk(qtbot, tmp_pat
     assert QApplication.clipboard().text() == "https://car.example"
 
     qtbot.mouseClick(page.findChild(QPushButton, "appStopButton"), Qt.LeftButton)
+    qtbot.waitUntil(lambda: len(fake_client.stop_calls) == 1, timeout=1000)
     assert fake_client.stop_calls == [(APP_TEST_NODE, "car_runner")]
     assert page.apps_table.item(0, 2).text() == "stopped"
 
@@ -167,6 +193,7 @@ def test_apps_page_worker_mode_validates_payload(qtbot, tmp_path):
     assert page.runner_stack.currentIndex() == 1
 
     qtbot.mouseClick(page.findChild(QPushButton, "appLaunchButton"), Qt.LeftButton)
+    qtbot.waitUntil(lambda: len(fake_client.worker_specs) == 1, timeout=1000)
 
     assert fake_client.worker_specs[0].repo_url == "https://github.com/Ratio1/example-app"
     assert fake_client.worker_specs[0].commands == ["npm install", "npm run build", "npm run start"]
@@ -198,6 +225,54 @@ def test_apps_page_refreshes_registry_records_and_reports_missing_selection(qtbo
     page.apps_table.clearSelection()
     qtbot.mouseClick(page.findChild(QPushButton, "appStopButton"), Qt.LeftButton)
     assert page.validation_message.text() == "Select an app first"
+
+
+def test_apps_page_sdk_operations_run_with_busy_state(qtbot, tmp_path):
+    fake_client = FakeAppDeploymentClient()
+    fake_client.delay_seconds = 0.05
+    page = AppsPage(
+        app_registry=AppRegistry(tmp_path / "apps.json"),
+        deployment_client=fake_client,
+    )
+    qtbot.addWidget(page)
+    page.app_name_input.setText("car_runner")
+    page.node_address_input.setText(APP_TEST_NODE)
+    page.car_image_input.setText("nginx:alpine")
+    page.car_port_input.setText("8080")
+
+    qtbot.mouseClick(page.findChild(QPushButton, "appLaunchButton"), Qt.LeftButton)
+
+    assert page.launch_button.isEnabled() is False
+    assert page.validation_message.text() == "Launching..."
+
+    qtbot.waitUntil(lambda: page.launch_button.isEnabled(), timeout=1000)
+    assert page.apps_table.rowCount() == 1
+
+
+def test_apps_page_refresh_status_uses_sdk_client_for_existing_records(qtbot, tmp_path):
+    fake_client = FakeAppDeploymentClient()
+    registry = AppRegistry(tmp_path / "apps.json")
+    registry.upsert(
+        ManagedAppRecord(
+            app_id=f"{APP_TEST_NODE}:known:CAR",
+            app_name="known",
+            app_type="CAR",
+            node_address=APP_TEST_NODE,
+            pipeline_name="known",
+            plugin_signature="CONTAINER_APP_RUNNER",
+            status="deployed",
+        )
+    )
+    page = AppsPage(app_registry=registry, deployment_client=fake_client)
+    qtbot.addWidget(page)
+    page.node_address_input.setText(APP_TEST_NODE)
+
+    qtbot.mouseClick(page.findChild(QPushButton, "appRefreshButton"), Qt.LeftButton)
+    qtbot.waitUntil(lambda: page.apps_table.item(0, 2).text() == "online", timeout=1000)
+
+    assert fake_client.list_calls == [APP_TEST_NODE]
+    assert page.apps_table.item(0, 2).text() == "online"
+    assert registry.get(f"{APP_TEST_NODE}:known:CAR").app_url == "https://known-live.example"
 
 
 def test_container_list_updates_selection_and_emits_toggle(qtbot):

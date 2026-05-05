@@ -15,6 +15,8 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from services.app_registry import AppRegistry
+from services.sdk_deployment_service import Ratio1SdkDeploymentClient
 from utils.const import (
     ADD_NODE_TOOLTIP,
     DAPP_BUTTON_TEXT,
@@ -297,7 +299,13 @@ class SidebarPanel(QWidget):
         return page
 
     def _create_apps_page(self) -> QWidget:
-        self.apps_page = AppsPage(parent=self)
+        app_registry = AppRegistry()
+        deployment_client = Ratio1SdkDeploymentClient(app_registry=None)
+        self.apps_page = AppsPage(
+            app_registry=app_registry,
+            deployment_client=deployment_client,
+            parent=self,
+        )
         return self.apps_page
 
     def _create_settings_page(self) -> QWidget:

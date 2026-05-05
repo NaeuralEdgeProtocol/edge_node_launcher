@@ -23,6 +23,7 @@ from services.app_deployment_models import (
     ContainerAppSpec,
     DeploymentResult,
     ManagedAppRecord,
+    SdkAppStatus,
     WorkerAppSpec,
 )
 from services.app_deployment_validation import (
@@ -31,6 +32,7 @@ from services.app_deployment_validation import (
     validate_worker_spec,
 )
 from services.app_registry import AppRegistry
+from services.sdk_operation_worker import SdkOperationThread
 from widgets.app_widgets.sidebar_controls import (
     create_sidebar_action_button,
     create_sidebar_section_label,
@@ -45,6 +47,7 @@ class AppsPage(QWidget):
         self.app_registry = app_registry or AppRegistry()
         self.deployment_client = deployment_client
         self._records_by_row: dict[int, ManagedAppRecord] = {}
+        self._active_workers: list[SdkOperationThread] = []
 
         self._init_layout()
         self.refresh_apps()
@@ -84,7 +87,7 @@ class AppsPage(QWidget):
             "appRefreshButton",
             "secondary",
             "Refresh launcher-owned app list",
-            self.refresh_apps,
+            self.refresh_app_statuses,
         )
         layout.addWidget(self.refresh_button)
 
@@ -256,16 +259,33 @@ class AppsPage(QWidget):
         if self.deployment_client is None:
             self._show_message("SDK launch worker pending", error=True)
             return
-        try:
-            if spec.app_type == APP_TYPE_CONTAINER:
-                result = self.deployment_client.launch_container_app(spec)
-            else:
-                result = self.deployment_client.launch_worker_app(spec)
-            self._persist_result_if_needed(result, spec)
+        if spec.app_type == APP_TYPE_CONTAINER:
+            operation = lambda: self.deployment_client.launch_container_app(spec)
+        else:
+            operation = lambda: self.deployment_client.launch_worker_app(spec)
+        self._start_sdk_operation(
+            "launch",
+            operation,
+            lambda result: self._handle_launch_success(result, spec),
+            "Launching...",
+        )
+
+    def refresh_app_statuses(self) -> None:
+        if self.deployment_client is None:
             self.refresh_apps()
-            self._show_message("Launched", error=False)
-        except Exception as exc:
-            self._show_message(str(exc), error=True)
+            self._show_message("Refreshed", error=False)
+            return
+        node_address = self.node_address_input.text().strip()
+        if not node_address:
+            self.refresh_apps()
+            self._show_message("Target node is required", error=True)
+            return
+        self._start_sdk_operation(
+            "refresh",
+            lambda: self.deployment_client.list_node_apps(node_address),
+            self._handle_refresh_success,
+            "Refreshing...",
+        )
 
     def refresh_apps(self) -> None:
         records = self.app_registry.list_apps()
@@ -289,11 +309,16 @@ class AppsPage(QWidget):
             self._show_message("Select an app first", error=True)
             return
         if self.deployment_client is not None:
-            try:
-                self.deployment_client.stop_app(record.node_address, record.pipeline_name)
-            except Exception as exc:
-                self._show_message(str(exc), error=True)
-                return
+            self._start_sdk_operation(
+                "stop",
+                lambda: self.deployment_client.stop_app(record.node_address, record.pipeline_name),
+                lambda _result: self._mark_record_stopped(record),
+                "Stopping...",
+            )
+            return
+        self._mark_record_stopped(record)
+
+    def _mark_record_stopped(self, record: ManagedAppRecord) -> None:
         record.status = "stopped"
         record.last_action = "stopped"
         self.app_registry.upsert(record)
@@ -363,6 +388,64 @@ class AppsPage(QWidget):
             return
         self.app_registry.upsert(result.to_record(metadata=spec.to_record_metadata()))
 
+    def _handle_launch_success(self, result: DeploymentResult, spec) -> None:
+        self._persist_result_if_needed(result, spec)
+        self.refresh_apps()
+        self._show_message("Launched", error=False)
+
+    def _handle_refresh_success(self, statuses: list[SdkAppStatus]) -> None:
+        records = self.app_registry.list_apps()
+        changed = False
+        for record in records:
+            status = _matching_status(record, statuses)
+            if status is None:
+                continue
+            record.status = status.status
+            if status.url:
+                record.app_url = status.url
+            self.app_registry.upsert(record)
+            changed = True
+        self.refresh_apps()
+        self._show_message("Status updated" if changed else "No launcher-owned status changes", error=False)
+
+    def _start_sdk_operation(self, operation_name: str, operation, on_success, message: str) -> None:
+        self._set_busy(True, message)
+        worker = SdkOperationThread(operation_name, operation, parent=self)
+        self._active_workers.append(worker)
+        worker.operation_finished.connect(
+            lambda _name, result, item=worker: self._finish_sdk_operation(item, on_success, result)
+        )
+        worker.operation_failed.connect(
+            lambda _name, error, item=worker: self._fail_sdk_operation(item, error)
+        )
+        worker.finished.connect(lambda item=worker: self._cleanup_worker(item))
+        worker.start()
+
+    def _finish_sdk_operation(self, worker: SdkOperationThread, on_success, result) -> None:
+        self._set_busy(False)
+        on_success(result)
+
+    def _fail_sdk_operation(self, worker: SdkOperationThread, error: str) -> None:
+        self._set_busy(False)
+        self._show_message(error, error=True)
+
+    def _cleanup_worker(self, worker: SdkOperationThread) -> None:
+        if worker in self._active_workers:
+            self._active_workers.remove(worker)
+        worker.deleteLater()
+
+    def _set_busy(self, busy: bool, message: str = "") -> None:
+        for button in (
+            self.launch_button,
+            self.refresh_button,
+            self.stop_button,
+            self.copy_url_button,
+            self.validate_button,
+        ):
+            button.setEnabled(not busy)
+        if message:
+            self._show_message(message, error=False)
+
     def _selected_record(self) -> ManagedAppRecord | None:
         selected = self.apps_table.selectionModel().selectedRows()
         if not selected:
@@ -427,3 +510,15 @@ def _to_int(value: str) -> int:
 
 def _format_issue(issue: ValidationIssue) -> str:
     return f"{issue.field}: {issue.message}"
+
+
+def _matching_status(record: ManagedAppRecord, statuses: list[SdkAppStatus]) -> SdkAppStatus | None:
+    for status in statuses or []:
+        if status.node_address and status.node_address != record.node_address:
+            continue
+        if status.app_name and status.app_name != record.app_name:
+            continue
+        if status.plugin_signature and status.plugin_signature != record.plugin_signature:
+            continue
+        return status
+    return None
