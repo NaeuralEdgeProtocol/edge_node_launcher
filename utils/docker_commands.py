@@ -30,6 +30,7 @@ DEFAULT_TIMEOUT = 90  # Default timeout for commands in seconds
 THREAD_JOIN_TIMEOUT = 2  # Timeout for thread joining in seconds
 DOCKER_STATUS_TIMEOUT = 10  # Short timeout for UI refresh/status checks
 GPU_CHECK_TIMEOUT = 5  # Short timeout for nvidia-smi availability probes
+NODE_INFO_TIMEOUT = 20  # Bounded read-only node-info probe timeout
 NODE_HISTORY_TIMEOUT = 20  # Bounded telemetry-history probe timeout
 
 @dataclass
@@ -632,7 +633,12 @@ class DockerCommandHandler:
             except Exception as e:
                 error_callback(f"Failed to process node info: {str(e)}")
 
-        self._execute_threaded('get_node_info', process_node_info, error_callback)
+        self._execute_threaded(
+            'get_node_info',
+            process_node_info,
+            error_callback,
+            timeout=NODE_INFO_TIMEOUT,
+        )
 
     def get_node_history(self, callback, error_callback) -> None:
         """Get node history metrics.

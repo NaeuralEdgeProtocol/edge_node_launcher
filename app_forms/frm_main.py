@@ -269,11 +269,12 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       startup_grace_seconds=NODE_STARTUP_GRACE_PERIOD_SECONDS,
     )
 
-    # Initialize container list
-    self.refresh_container_list()
-
     # Set initial container status
     self.container_last_run_status = False
+    self._container_running_cache = {}
+
+    # Initialize container list
+    self.refresh_container_list()
     
     # Track if user intentionally stopped the container to prevent auto-restart
     self.user_stopped_container = False
@@ -1422,16 +1423,17 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       return
 
     self.user_stopped_container = True
+    self._remember_container_running(container_name, False)
     self._lifecycle_dialogs.update_progress(
       "toggle_dialog",
       "Container stopped, updating UI...",
       require_visible=True,
     )
 
-    self.update_toggle_button_text()
-    self.refresh_node_info()
-    self.maybe_refresh_uptime()
-    self.plot_data()
+    self.update_toggle_button_text(assume_running=False)
+    self._update_ui_container_not_running(container_name)
+    self.maybe_refresh_uptime(assume_running=False)
+    self.plot_data(assume_running=False)
 
     self.loading_indicator.stop()
     self._lifecycle_dialogs.update_progress(
@@ -2874,6 +2876,24 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   def _apply_toggle_button_state(self, is_running: bool, *, enabled: bool = True) -> None:
     self._lifecycle_controls.apply_toggle_state(is_running, enabled=enabled)
 
+  def _remember_container_running(self, container_name: str, is_running: bool) -> None:
+    if not container_name:
+      return
+    self._container_running_cache[container_name] = is_running
+    if container_name == self._selected_container_name():
+      self.container_last_run_status = is_running
+
+  def _cached_container_running(
+    self,
+    container_name: Optional[str] = None,
+    *,
+    default: bool = False,
+  ) -> bool:
+    container = container_name or self._selected_container_name()
+    if not container:
+      return default
+    return self._container_running_cache.get(container, default)
+
   def _sync_lifecycle_control_state(self, *, use_operation_text: bool = True) -> bool:
     return self._lifecycle_controls.sync(use_operation_text=use_operation_text)
 
@@ -2905,25 +2925,10 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.docker_handler.set_container_name(container_name)
 
     if assume_running is None:
-        # Check if container exists in Docker
-        container_exists = self.container_exists_in_docker(container_name)
-
-        # If container doesn't exist in Docker but exists in config, show launch button
-        if not container_exists:
-            config_container = self.config_manager.get_container(container_name)
-            if config_container:
-                # Only update if state changed
-                if current_text != LAUNCH_CONTAINER_BUTTON_TEXT or not current_enabled:
-                    self.toggleButton.setText(LAUNCH_CONTAINER_BUTTON_TEXT)
-                    self.toggleButton.setAccessibleName(LAUNCH_CONTAINER_BUTTON_TEXT)
-                    self.apply_button_style(self.toggleButton, 'toggle_start')
-                    self.toggleButton.setEnabled(True)
-                return
-
-        # Check if the container is running using docker_handler directly
-        is_running = self.docker_handler.is_container_running()
+        is_running = self._cached_container_running(container_name, default=False)
     else:
         is_running = assume_running
+        self._remember_container_running(container_name, is_running)
     
     self._apply_toggle_button_state(is_running, enabled=not lifecycle_controls_busy)
   
@@ -3358,6 +3363,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         # If container doesn't exist in Docker but exists in config, show a message
         if not container_exists:
             if config_container:
+                self._remember_container_running(actual_container_name, False)
                 self.add_log(f"Container {actual_container_name} exists in config but not in Docker. It will be recreated when launched.", debug=True)
 
                 self._display_cached_container_data(config_container)
@@ -3368,13 +3374,16 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
                 if config_container.node_alias:
                     self.add_log(f"Displaying saved node alias for {actual_container_name}", debug=True)
                 
+                self.update_toggle_button_text(assume_running=False)
                 return
         
         # Update UI elements
         self.update_toggle_button_text()
         
         # If container is running, update all information displays
-        if self.is_container_running():
+        is_running = self.is_container_running()
+        self.update_toggle_button_text(assume_running=is_running)
+        if is_running:
             self.post_launch_setup()
             self.refresh_node_info()  # Updates address displays with cached data
             self.plot_data()  # Updates graphs and metrics
@@ -3947,6 +3956,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.container_combo.setCurrentIndex(0)
 
     self.add_log(f'Displayed {self.container_combo.count()} containers in dropdown', debug=True)
+    self._sync_apps_target_nodes()
 
   def is_container_running(self):
     """Check if the currently selected container is running.
@@ -3965,6 +3975,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         
         # Use the docker_handler's is_container_running method directly
         is_running = self.docker_handler.is_container_running()
+        self._remember_container_running(container_name, is_running)
         
         # Log status changes for debugging
         if hasattr(self, 'container_last_run_status') and self.container_last_run_status != is_running:
@@ -3975,6 +3986,24 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     except Exception as e:
         self.add_log(f"Error checking if container is running: {str(e)}", debug=True, color="red")
         return False
+
+  def _sync_apps_target_nodes(self) -> None:
+    if not hasattr(self, "apps_page"):
+      return
+    nodes = []
+    for container in self._containers_for_current_environment(self.config_manager.get_all_containers()):
+      node_address = getattr(container, "node_address", "") or ""
+      if not node_address:
+        continue
+      label = getattr(container, "node_alias", "") or getattr(container, "name", "") or node_address
+      nodes.append(
+        {
+          "label": label,
+          "node_address": node_address,
+          "container_name": getattr(container, "name", ""),
+        }
+      )
+    self.apps_page.set_target_node_options(nodes)
 
 
   def container_exists_in_docker(self, container_name: str) -> bool:

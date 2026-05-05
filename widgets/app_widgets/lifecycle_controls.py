@@ -56,10 +56,9 @@ class LifecycleControlsPresenter:
             _FALLBACK_BUSY_TEXT,
         }
         if self._launcher.toggleButton.text() in busy_texts:
-            try:
-                is_running = self._launcher.docker_handler.is_container_running()
-            except Exception:
-                is_running = getattr(ended_operation, "operation", None) != "stop"
+            is_running = self._launcher._cached_container_running(
+                default=getattr(ended_operation, "operation", None) != "stop",
+            )
             self.apply_toggle_state(is_running, enabled=True)
             return
 
@@ -134,7 +133,4 @@ class LifecycleControlsPresenter:
         if active_operation is None or active_operation.get("operation") != "stop":
             return False
 
-        try:
-            return not self._launcher.is_container_running()
-        except Exception:
-            return False
+        return not self._launcher._cached_container_running(default=True)

@@ -295,6 +295,26 @@ def test_get_node_history_uses_short_telemetry_timeout(monkeypatch):
     ]
 
 
+def test_get_node_info_uses_short_telemetry_timeout(monkeypatch):
+    handler = make_handler(monkeypatch, container_name="r1devnode")
+    calls = []
+
+    def fake_execute_threaded(command, callback, error_callback, input_data=None, timeout=None):
+        calls.append((command, input_data, timeout))
+
+    monkeypatch.setattr(handler, "_execute_threaded", fake_execute_threaded)
+
+    handler.get_node_info(lambda info: None, lambda error: None)
+
+    assert calls == [
+        (
+            "get_node_info",
+            None,
+            docker_commands.NODE_INFO_TIMEOUT,
+        )
+    ]
+
+
 def test_docker_command_thread_uses_custom_timeout(monkeypatch):
     calls = []
     thread = docker_commands.DockerCommandThread("r1node", "get_node_history", timeout=7)

@@ -190,7 +190,10 @@ def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
     assert page.findChild(QWidget, "appDeploymentPanel").property("role") == "appDeploymentPanel"
     assert page.findChild(QComboBox, "appRunnerTypeCombo").currentData() == "CAR"
     assert page.findChild(QLineEdit, "appNameInput").property("role") == "appTextInput"
+    assert page.findChild(QWidget, "appTargetNodeField").property("role") == "appTargetNodeField"
+    assert page.findChild(QComboBox, "appNodeAddressCombo").itemText(0) == "Other..."
     assert page.findChild(QLineEdit, "appNodeAddressInput").property("role") == "appTextInput"
+    assert page.findChild(QLineEdit, "appNodeAddressInput").accessibleName() == "Custom node address"
     assert page.findChild(QLineEdit, "carImageInput").accessibleName() == "nginx:alpine"
     assert page.findChild(QLineEdit, "workerRepoInput").accessibleName() == "https://github.com/org/repo"
     assert page.findChild(QPlainTextEdit, "workerCommandsInput").property("role") == "appTextInput"
@@ -291,6 +294,54 @@ def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
     file_volume_table.selectRow(0)
     qtbot.mouseClick(page.findChild(QPushButton, "appRemoveFileVolumeButton"), Qt.LeftButton)
     assert file_volume_table.rowCount() == 0
+
+
+def test_apps_page_target_node_picker_supports_known_nodes_and_manual_other(qtbot, tmp_path):
+    page = AppsPage(app_registry=AppRegistry(tmp_path / "apps.json"))
+    qtbot.addWidget(page)
+    page.show()
+
+    other_node = "0xai_BBBBBBBBCCCCCCCCDDDDDDDD"
+    page.set_target_node_options(
+        [
+            {
+                "label": "alpha",
+                "node_address": APP_TEST_NODE,
+                "container_name": "r1node",
+            },
+            {
+                "label": "beta",
+                "node_address": other_node,
+                "container_name": "r1node2",
+            },
+        ]
+    )
+
+    combo = page.findChild(QComboBox, "appNodeAddressCombo")
+    assert combo.count() == 3
+    assert combo.itemText(0).startswith("alpha")
+    assert combo.itemText(1).startswith("beta")
+    assert combo.itemText(2) == "Other..."
+
+    combo.setCurrentIndex(0)
+    assert page._target_node_address() == APP_TEST_NODE
+    assert page.target_container_name == "r1node"
+    assert page.node_address_input.isHidden()
+
+    combo.setCurrentIndex(2)
+    assert page.target_container_name == ""
+    assert page.node_address_input.isVisible()
+    page.node_address_input.setText(other_node)
+    assert page._target_node_address() == other_node
+
+    refreshed_address = "0xai_CCCCCCCCDDDDDDDDEEEEEEEE"
+    page.set_target_node(node_address=refreshed_address, container_name="r1node")
+
+    assert combo.count() == 3
+    assert combo.currentIndex() == 0
+    assert combo.itemData(0)["address"] == refreshed_address
+    assert page._target_node_address() == refreshed_address
+    assert page.node_address_input.isHidden()
 
 
 def test_apps_page_validates_and_launches_container_with_fake_sdk(qtbot, tmp_path):

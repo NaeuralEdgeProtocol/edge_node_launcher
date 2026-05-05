@@ -48,6 +48,8 @@ from widgets.app_widgets.sidebar_controls import (
     create_sidebar_section_label,
 )
 
+OTHER_NODE_OPTION = "__other_node__"
+
 
 class AppsPage(QWidget):
     """CAR/WAR app deployment and launcher-owned app registry page."""
@@ -198,8 +200,8 @@ class AppsPage(QWidget):
         self.app_name_input = self._create_line_edit("appNameInput", "App name")
         self._add_grid_field(core_grid, 0, 1, "App name", "appNameLabel", self.app_name_input)
 
-        self.node_address_input = self._create_line_edit("appNodeAddressInput", "0xai_...")
-        self._add_grid_field(core_grid, 1, 0, "Target node", "appNodeAddressLabel", self.node_address_input, 2)
+        target_node_field = self._create_target_node_field()
+        self._add_grid_field(core_grid, 1, 0, "Target node", "appNodeAddressLabel", target_node_field, 2)
         deployment_layout.addLayout(core_grid)
 
         self.runner_stack = QStackedWidget()
@@ -258,6 +260,79 @@ class AppsPage(QWidget):
         layout.addStretch(1)
         self._sync_runner_stack()
         self._connect_form_message_reset()
+
+    def _create_target_node_field(self) -> QWidget:
+        field = QWidget()
+        field.setObjectName("appTargetNodeField")
+        field.setAccessibleName("Target node picker")
+        field.setProperty("role", "appTargetNodeField")
+        layout = QVBoxLayout(field)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        self.node_address_combo = self._create_combo("appNodeAddressCombo", "Target node")
+        self.node_address_combo.addItem("Other...", OTHER_NODE_OPTION)
+        self.node_address_combo.currentIndexChanged.connect(self._sync_target_node_choice)
+        layout.addWidget(self.node_address_combo)
+
+        self.node_address_input = self._create_line_edit("appNodeAddressInput", "0xai_...")
+        self.node_address_input.setAccessibleName("Custom node address")
+        layout.addWidget(self.node_address_input)
+        self._sync_target_node_choice()
+        return field
+
+    def _target_node_address(self) -> str:
+        data = self.node_address_combo.currentData()
+        if isinstance(data, dict):
+            return str(data.get("address") or "").strip()
+        return self.node_address_input.text().strip()
+
+    def _sync_target_node_choice(self) -> None:
+        data = self.node_address_combo.currentData()
+        use_manual_address = not isinstance(data, dict)
+        self.node_address_input.setVisible(use_manual_address)
+        if isinstance(data, dict):
+            self.target_container_name = str(data.get("container_name") or "")
+        else:
+            self.target_container_name = ""
+
+    def _upsert_target_node_option(
+        self,
+        *,
+        label: str,
+        node_address: str,
+        container_name: str | None,
+        select: bool = False,
+    ) -> None:
+        node_address = (node_address or "").strip()
+        if not node_address:
+            return
+
+        insert_index = max(0, self.node_address_combo.count() - 1)
+        for index in range(self.node_address_combo.count()):
+            data = self.node_address_combo.itemData(index)
+            same_address = isinstance(data, dict) and data.get("address") == node_address
+            same_container = (
+                isinstance(data, dict)
+                and container_name
+                and data.get("container_name") == container_name
+            )
+            if same_address or same_container:
+                self.node_address_combo.setItemText(index, f"{label} ({_short_node_address(node_address)})")
+                data["address"] = node_address
+                data["container_name"] = container_name or ""
+                self.node_address_combo.setItemData(index, data)
+                if select:
+                    self.node_address_combo.setCurrentIndex(index)
+                return
+
+        self.node_address_combo.insertItem(
+            insert_index,
+            f"{label} ({_short_node_address(node_address)})",
+            {"address": node_address, "container_name": container_name or ""},
+        )
+        if select:
+            self.node_address_combo.setCurrentIndex(insert_index)
 
     def _create_advanced_options_toggle(self) -> QToolButton:
         button = QToolButton()
@@ -710,8 +785,54 @@ class AppsPage(QWidget):
     def set_target_node(self, *, node_address: str = "", container_name: str | None = None) -> None:
         if container_name is not None:
             self.target_container_name = container_name
-        if node_address and not self.node_address_input.text().strip():
-            self.node_address_input.setText(node_address)
+        if node_address:
+            self._upsert_target_node_option(
+                label=container_name or _short_node_address(node_address),
+                node_address=node_address,
+                container_name=container_name if container_name is not None else self.target_container_name,
+                select=True,
+            )
+            if not self.node_address_input.text().strip():
+                self.node_address_input.setText(node_address)
+            self._sync_target_node_choice()
+
+    def set_target_node_options(self, nodes: list[dict]) -> None:
+        current_address = self._target_node_address()
+        manual_text = self.node_address_input.text().strip() or current_address
+
+        self.node_address_combo.blockSignals(True)
+        self.node_address_combo.clear()
+        seen_addresses = set()
+        selected_index = -1
+        for node in nodes:
+            node_address = str(node.get("node_address") or node.get("address") or "").strip()
+            if not node_address or node_address in seen_addresses:
+                continue
+            seen_addresses.add(node_address)
+            label = str(
+                node.get("label")
+                or node.get("node_alias")
+                or node.get("container_name")
+                or _short_node_address(node_address)
+            ).strip()
+            container_name = str(node.get("container_name") or "").strip()
+            item_label = f"{label} ({_short_node_address(node_address)})"
+            self.node_address_combo.addItem(
+                item_label,
+                {"address": node_address, "container_name": container_name},
+            )
+            if node_address == current_address:
+                selected_index = self.node_address_combo.count() - 1
+
+        self.node_address_combo.addItem("Other...", OTHER_NODE_OPTION)
+        if selected_index >= 0:
+            self.node_address_combo.setCurrentIndex(selected_index)
+        else:
+            self.node_address_combo.setCurrentIndex(self.node_address_combo.count() - 1)
+            if manual_text:
+                self.node_address_input.setText(manual_text)
+        self.node_address_combo.blockSignals(False)
+        self._sync_target_node_choice()
 
     def validate_current_form(self):
         spec, issues = self._build_current_spec()
@@ -802,7 +923,7 @@ class AppsPage(QWidget):
             self._show_message("Refreshed", error=False)
             self._log_event("SDK Apps refresh used local registry because deployment client is not configured", color="blue")
             return
-        node_address = self.node_address_input.text().strip()
+        node_address = self._target_node_address()
         if not node_address:
             self.refresh_apps()
             self._show_message("Target node is required", error=True)
@@ -908,7 +1029,7 @@ class AppsPage(QWidget):
             if self.runner_type_combo.currentData() == APP_TYPE_CONTAINER:
                 spec = ContainerAppSpec(
                     app_name=self.app_name_input.text().strip(),
-                    node_address=self.node_address_input.text().strip(),
+                    node_address=self._target_node_address(),
                     image=self.car_image_input.text().strip(),
                     port=_to_int(self.car_port_input.text()),
                     registry_server=self.car_registry_input.text().strip() or "docker.io",
@@ -925,7 +1046,7 @@ class AppsPage(QWidget):
 
             spec = WorkerAppSpec(
                 app_name=self.app_name_input.text().strip(),
-                node_address=self.node_address_input.text().strip(),
+                node_address=self._target_node_address(),
                 repo_url=self.worker_repo_input.text().strip(),
                 branch=self.worker_branch_input.text().strip() or "main",
                 image=self.worker_image_input.text().strip() or "node:22",
@@ -1262,6 +1383,7 @@ class AppsPage(QWidget):
 
     def _connect_form_message_reset(self) -> None:
         self.runner_type_combo.currentIndexChanged.connect(lambda *_args: self._clear_message())
+        self.node_address_combo.currentIndexChanged.connect(lambda *_args: self._clear_message())
         for widget in (
             self.app_name_input,
             self.node_address_input,

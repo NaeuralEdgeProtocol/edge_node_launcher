@@ -786,6 +786,38 @@ def run_mocked_sdk_apps_scenario(
     scroll_apps_workspace_to(launcher, "top")
     app.processEvents()
     record_step(log, output_path, {"step": "returned to apps page after SDK settings shortcut"})
+
+    target_index = apps_page.node_address_combo.currentIndex()
+    record_step(
+        log,
+        output_path,
+        {
+            "step": "captured app target-node picker visual evidence",
+            "visual": capture_combo_popup_visual_evidence(
+                app,
+                apps_page.node_address_combo,
+                screenshot_dir,
+                "app_target_node_picker",
+            ),
+        },
+    )
+    apps_page.node_address_combo.setCurrentIndex(apps_page.node_address_combo.count() - 1)
+    app.processEvents()
+    other_visual = capture_visual_evidence(launcher, screenshot_dir, "apps_target_node_other")
+    record_step(
+        log,
+        output_path,
+        {
+            "step": "captured app target-node manual address visual evidence",
+            "visual": other_visual,
+            "manual_input_visible": apps_page.node_address_input.isVisible(),
+        },
+    )
+    if not apps_page.node_address_input.isVisible():
+        raise AssertionError("manual target node address input did not appear for Other")
+    apps_page.node_address_combo.setCurrentIndex(target_index)
+    app.processEvents()
+
     record_step(
         log,
         output_path,

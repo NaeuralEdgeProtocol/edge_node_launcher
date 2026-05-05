@@ -5,7 +5,7 @@ from pathlib import Path
 from PyQt5 import sip
 from PyQt5.QtCore import QRect, Qt
 from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QApplication, QDialog, QGroupBox, QLabel, QLineEdit, QPushButton, QScrollArea, QSizePolicy, QSplitter, QTextEdit, QToolButton, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QApplication, QComboBox, QDialog, QGroupBox, QLabel, QLineEdit, QPushButton, QScrollArea, QSizePolicy, QSplitter, QTextEdit, QToolButton, QVBoxLayout, QWidget
 
 import app_forms.frm_main as frm_main
 from models.ContainerStats import ContainerStats
@@ -287,7 +287,7 @@ def _build_launcher(monkeypatch, qtbot, running=False, config_setup=None):
     monkeypatch.setattr(frm_main.EdgeNodeLauncher, "update_resources_display", lambda self: None)
     monkeypatch.setattr(frm_main.EdgeNodeLauncher, "plot_graphs", lambda self: None)
     monkeypatch.setattr(frm_main.EdgeNodeLauncher, "plot_data", lambda self, *args, **kwargs: None)
-    monkeypatch.setattr(frm_main.EdgeNodeLauncher, "maybe_refresh_uptime", lambda self: None)
+    monkeypatch.setattr(frm_main.EdgeNodeLauncher, "maybe_refresh_uptime", lambda self, *args, **kwargs: None)
     monkeypatch.setattr(frm_main.EdgeNodeLauncher, "refresh_node_info", lambda self: None)
     monkeypatch.setattr(frm_main.EdgeNodeLauncher, "post_launch_setup", lambda self: None)
     monkeypatch.setattr(frm_main.EdgeNodeLauncher, "show_initial_window", lambda self: self.show())
@@ -981,10 +981,18 @@ def test_stop_success_callback_updates_ui_and_clears_lifecycle(qtbot, monkeypatc
     launcher._lifecycle_dialogs.show_stop_loading("alpha")
     launcher._begin_lifecycle_operation("stop", "r1node")
     launcher.loading_indicator.start()
-    launcher.update_toggle_button_text = lambda: ui_calls.append("toggle")
-    launcher.refresh_node_info = lambda: ui_calls.append("node_info")
-    launcher.maybe_refresh_uptime = lambda: ui_calls.append("uptime")
-    launcher.plot_data = lambda: ui_calls.append("plot")
+    launcher.update_toggle_button_text = lambda *args, **kwargs: ui_calls.append(
+        ("toggle", kwargs.get("assume_running"))
+    )
+    launcher._update_ui_container_not_running = lambda container_name: ui_calls.append(
+        ("not_running", container_name)
+    )
+    launcher.maybe_refresh_uptime = lambda *args, **kwargs: ui_calls.append(
+        ("uptime", kwargs.get("assume_running"))
+    )
+    launcher.plot_data = lambda *args, **kwargs: ui_calls.append(
+        ("plot", kwargs.get("assume_running"))
+    )
     launcher._queue_ui_refresh = lambda *args, **_kwargs: ui_calls.append("queue")
     launcher._lifecycle_dialogs.update_progress = (
         lambda dialog_attr, message, **kwargs: progress_messages.append(message)
@@ -1000,7 +1008,13 @@ def test_stop_success_callback_updates_ui_and_clears_lifecycle(qtbot, monkeypatc
         "Container stopped, updating UI...",
         "Container stopped successfully!",
     ]
-    assert ui_calls == ["toggle", "node_info", "uptime", "plot", "queue"]
+    assert ui_calls == [
+        ("toggle", False),
+        ("not_running", "r1node"),
+        ("uptime", False),
+        ("plot", False),
+        "queue",
+    ]
     assert launcher.user_stopped_container is True
     assert launcher.toggle_dialog is None
     assert not launcher.loading_indicator.timer.isActive()
@@ -1907,6 +1921,20 @@ def test_toggle_state_targets_selected_container_id_not_display_alias(qtbot, mon
 
     assert "alpha" not in fake_handler.container_names
     assert fake_handler.container_names[-1] == "r1node"
+
+
+def test_toggle_state_uses_cached_status_without_sync_docker_probe(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    fake_handler.is_container_running = lambda: (_ for _ in ()).throw(
+        AssertionError("toggle repaint must not call Docker synchronously")
+    )
+    launcher.container_exists_in_docker = lambda _name: (_ for _ in ()).throw(
+        AssertionError("toggle repaint must not check Docker existence synchronously")
+    )
+
+    launcher.update_toggle_button_text()
+
+    assert launcher.toggleButton.text() == frm_main.STOP_CONTAINER_BUTTON_TEXT
 
 
 def test_container_selection_checks_docker_with_container_id_not_display_alias(qtbot, monkeypatch):
@@ -3272,6 +3300,7 @@ def test_apps_workspace_logs_sdk_events_to_activity_log(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
     launcher.sidebar_panel.show_page("apps")
     launcher.apps_page.app_name_input.setText("car_runner")
+    launcher.apps_page.node_address_combo.setCurrentIndex(launcher.apps_page.node_address_combo.count() - 1)
     launcher.apps_page.node_address_input.setText(APP_TEST_NODE)
     launcher.apps_page.car_image_input.setText("nginx:alpine")
     launcher.apps_page.car_port_input.setText("8080")
@@ -3279,6 +3308,17 @@ def test_apps_workspace_logs_sdk_events_to_activity_log(qtbot, monkeypatch):
     qtbot.mouseClick(launcher.apps_page.validate_button, Qt.LeftButton)
 
     assert "SDK Apps validation ready:" in launcher.logView.toPlainText()
+
+
+def test_apps_workspace_target_picker_lists_configured_nodes(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+    combo = launcher.apps_page.findChild(QComboBox, "appNodeAddressCombo")
+
+    assert combo.count() == 2
+    assert combo.itemText(0).startswith("alpha")
+    assert combo.itemData(0)["address"] == "0xnodeaddress"
+    assert combo.itemData(0)["container_name"] == "r1node"
+    assert combo.itemText(1) == "Other..."
 
 
 def test_apps_sdk_settings_action_switches_to_network_context(qtbot, monkeypatch):

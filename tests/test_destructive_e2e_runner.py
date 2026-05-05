@@ -174,6 +174,35 @@ def test_run_command_returns_timeout_diagnostics(monkeypatch):
     assert result["stderr"] == "partial stderr"
 
 
+def test_wait_for_node_command_bounds_poll_timeout_and_processes_events(monkeypatch):
+    class CountingApp(FakeApp):
+        def __init__(self):
+            self.process_event_calls = 0
+
+        def processEvents(self):
+            self.process_event_calls += 1
+
+    app = CountingApp()
+    calls = []
+
+    def fake_run_command(command, timeout=120, check=False):
+        calls.append((command, timeout, check))
+        if len(calls) == 1:
+            return {"returncode": 1, "stdout": "", "stderr": "starting"}
+        return {"returncode": 0, "stdout": "node ready", "stderr": ""}
+
+    monkeypatch.setattr(e2e, "run_command", fake_run_command)
+    monkeypatch.setattr(e2e, "docker_running", lambda _container_name: True)
+    monkeypatch.setattr(e2e.time, "sleep", lambda _seconds: None)
+
+    result = e2e.wait_for_node_command(app, e2e.PRIMARY_CONTAINER, timeout=30)
+
+    assert result["stdout"] == "node ready"
+    assert [timeout for _command, timeout, _check in calls] == [5, 5]
+    assert calls[0][0] == ["docker", "exec", e2e.PRIMARY_CONTAINER, "get_node_info"]
+    assert app.process_event_calls >= 4
+
+
 def test_launcher_lifecycle_diagnostics_uses_public_helper():
     class DiagnosticLauncher(FakeLauncher):
         def lifecycle_diagnostics(self):

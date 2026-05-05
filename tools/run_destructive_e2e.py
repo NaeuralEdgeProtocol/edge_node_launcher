@@ -486,16 +486,20 @@ def click_dialog_button(app, dialog, object_name=None, title=None):
     click_button(app, button, button.objectName() or button.text())
 
 
-def wait_for_node_command(container_name, timeout=300):
+def wait_for_node_command(app, container_name, timeout=300):
     deadline = time.monotonic() + timeout
     last = None
     while time.monotonic() < deadline:
-        last = run_command(["docker", "exec", container_name, "get_node_info"], timeout=45)
+        app.processEvents()
+        command_timeout = min(5, max(1, int(deadline - time.monotonic())))
+        last = run_command(["docker", "exec", container_name, "get_node_info"], timeout=command_timeout)
+        app.processEvents()
         if last["returncode"] == 0 and last["stdout"]:
             return last
         if not docker_running(container_name):
             return last
         time.sleep(5)
+        app.processEvents()
     return last
 
 
@@ -650,7 +654,7 @@ def run_scenarios(args):
         )
         record_step(log, args.output, {"step": "primary container running", "container": PRIMARY_CONTAINER})
 
-        node_info_result = wait_for_node_command(PRIMARY_CONTAINER, timeout=args.node_ready_timeout)
+        node_info_result = wait_for_node_command(app, PRIMARY_CONTAINER, timeout=args.node_ready_timeout)
         record_step(
             log,
             args.output,
