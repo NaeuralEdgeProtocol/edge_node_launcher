@@ -48,6 +48,16 @@ def test_launcher_failure_message_detects_unexpected_argument():
     assert e2e.launcher_failure_message(launcher) == "failed to launch container"
 
 
+def test_destructive_e2e_uses_devnet_scoped_resources_by_default():
+    assert e2e.DEFAULT_DOCKER_IMAGE == e2e.DEVNET_EDGE_NODE_IMAGE
+    assert e2e.PRIMARY_CONTAINER.startswith("r1devnode")
+    assert e2e.SECOND_CONTAINER.startswith("r1devnode")
+    assert e2e.PRIMARY_VOLUME.startswith("r1devvol")
+    assert e2e.SECOND_VOLUME.startswith("r1devvol")
+    assert "r1node" not in {e2e.PRIMARY_CONTAINER, e2e.SECOND_CONTAINER}
+    assert "r1vol" not in {e2e.PRIMARY_VOLUME, e2e.SECOND_VOLUME}
+
+
 def test_wait_for_container_running_fails_fast_on_stale_main_window(monkeypatch, tmp_path):
     output_path = tmp_path / "result.json"
     log = {"steps": []}

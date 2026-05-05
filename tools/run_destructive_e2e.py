@@ -29,13 +29,13 @@ from tools.e2e_visual import (
     rect_snapshot,
     window_snapshot,
 )
-from utils.edge_image_config import DEVNET_EDGE_NODE_IMAGE, PRODUCTION_EDGE_NODE_IMAGE, configure_edge_node_image
+from utils.edge_image_config import DEVNET_EDGE_NODE_IMAGE, configure_edge_node_image
 
-PRIMARY_CONTAINER = "r1nodee2e"
-SECOND_CONTAINER = "r1nodee2e2"
-PRIMARY_VOLUME = "r1vole2e"
-SECOND_VOLUME = "r1vole2e2"
-DEFAULT_DOCKER_IMAGE = PRODUCTION_EDGE_NODE_IMAGE
+PRIMARY_CONTAINER = "r1devnodee2e"
+SECOND_CONTAINER = "r1devnodee2e2"
+PRIMARY_VOLUME = "r1devvole2e"
+SECOND_VOLUME = "r1devvole2e2"
+DEFAULT_DOCKER_IMAGE = DEVNET_EDGE_NODE_IMAGE
 DEFAULT_STARTUP_TEMPLATE = REPO_ROOT.parent / "edge_node" / ".config_startup.json"
 RENAME_DIALOG_TITLES = ("Rename Node", "Change Node Name")
 

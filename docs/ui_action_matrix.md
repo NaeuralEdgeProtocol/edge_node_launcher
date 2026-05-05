@@ -66,7 +66,7 @@ object name near construction.
 - Every stable action ID must appear in this matrix and in source.
 - Workflow tests should be added before changing behavior behind an action.
 - Destructive Docker scenarios live outside the default pytest suite in
-  `tools/run_destructive_e2e.py`; they use dedicated `r1nodee2e*` containers
-  and `r1vole2e*` volumes and write JSON evidence for each run.
+  `tools/run_destructive_e2e.py`; they default to the devnet image and use
+  dedicated `r1devnodee2e*` containers and `r1devvole2e*` volumes.
 - Visual redesigns should preserve these IDs unless the action is intentionally removed
   and this matrix plus tests are updated in the same commit.

@@ -20,11 +20,11 @@ The launcher is not the edge node runtime itself. The production runtime is the 
 ## Docker And Edge Node Integration
 
 - `utils/docker_commands.py` is the primary Docker command layer used by the UI.
-- The default image is `ratio1/edge_node:mainnet`; local source and E2E runs resolve the active image through `utils/edge_image_config.py`.
+- The default production image is `ratio1/edge_node:mainnet`; local source and E2E runs resolve the active image through `utils/edge_image_config.py`. Destructive E2E defaults to `ratio1/edge_node:devnet` so test containers do not look like mainnet resources.
 - Container launch builds a `docker run` command with detached mode, privileged mode, restart policy, optional GPU support, optional ARM platform override, cgroup settings on non-macOS platforms, and an optional named volume mounted to the edge-node local cache path.
 - Node information is fetched through container exec commands such as `get_node_info`, `get_node_history`, `get_allowed`, `get_startup_config`, `get_config_app`, `reset_address`, and `change_alias`.
 - Docker work is executed through Qt threads to avoid blocking the UI.
-- Destructive E2E supports `--devnet-real-data`, which selects `ratio1/edge_node:devnet` and disables offline startup-config injection. Use `--no-cleanup` only for manual real-data/license sessions where the dedicated E2E volume should remain available afterward.
+- Destructive E2E supports `--devnet-real-data`, which selects `ratio1/edge_node:devnet` and disables offline startup-config injection. It uses dedicated `r1devnodee2e*` containers and `r1devvole2e*` volumes. Use `--no-cleanup` only for manual real-data/license sessions where the dedicated E2E volume should remain available afterward.
 - Environment-scoped naming is implemented in `utils/edge_image_config.py` and `utils/docker_utils.py`; UI flows in `app_forms/frm_main.py` use those helpers instead of hard-coded dev/test names.
 
 ## Local State
