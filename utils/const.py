@@ -552,6 +552,26 @@ COMMON_STYLESHEET_TEMPLATE = """
     padding: 5px 7px;
     margin: 2px 6px;
   }}
+  QWidget[role="appsWorkspace"] {{
+    background-color: transparent;
+  }}
+  QWidget[role="appsDetailPanel"] {{
+    background-color: {info_box_bg};
+    border: 1px solid {info_box_border};
+    border-radius: 8px;
+  }}
+  QTextBrowser[role="appsDetailText"] {{
+    background-color: transparent;
+    color: {info_box_text};
+    border: none;
+    font-family: "Segoe UI";
+    font-size: 9pt;
+    padding: 2px;
+  }}
+  QScrollArea#appsWorkspaceScrollArea {{
+    background-color: transparent;
+    border: none;
+  }}
   QTableWidget#appsTable {{
     background-color: {info_box_bg};
     color: {info_box_text};
@@ -699,6 +719,14 @@ COMMON_STYLESHEET_TEMPLATE = """
     font-weight: 600;
     padding: 8px 8px 3px 8px;
     margin: 8px 6px 1px 6px;
+  }}
+  QLabel[role="sidebarMutedText"] {{
+    color: {section_label_text};
+    background-color: transparent;
+    font-family: "Segoe UI";
+    font-size: 9pt;
+    font-weight: 500;
+    padding: 4px 6px;
   }}
   QScrollArea#sidebarScrollArea {{
     background-color: transparent;

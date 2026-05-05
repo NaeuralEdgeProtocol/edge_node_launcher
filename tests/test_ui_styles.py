@@ -30,6 +30,7 @@ def test_sidebar_action_buttons_are_styled_by_hierarchy_role():
 def test_sidebar_section_labels_use_ui_typography():
     for stylesheet in (DARK_STYLESHEET, LIGHT_STYLESHEET):
         assert 'QLabel[role="sidebarSection"]' in stylesheet
+        assert 'QLabel[role="sidebarMutedText"]' in stylesheet
         assert 'font-family: "Segoe UI";' in stylesheet
         assert "font-size: 9pt;" in stylesheet
 
@@ -65,6 +66,10 @@ def test_dialog_text_inputs_use_semantic_styles():
 
 def test_apps_page_controls_use_semantic_styles():
     for stylesheet in (DARK_STYLESHEET, LIGHT_STYLESHEET):
+        assert 'QWidget[role="appsWorkspace"]' in stylesheet
+        assert 'QWidget[role="appsDetailPanel"]' in stylesheet
+        assert 'QTextBrowser[role="appsDetailText"]' in stylesheet
+        assert "QScrollArea#appsWorkspaceScrollArea" in stylesheet
         assert 'QLineEdit[role="appTextInput"]' in stylesheet
         assert 'QPlainTextEdit[role="appTextInput"]' in stylesheet
         assert 'QComboBox[role="appCombo"]' in stylesheet

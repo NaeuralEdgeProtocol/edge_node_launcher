@@ -757,7 +757,9 @@ def test_sidebar_panel_exposes_stable_launcher_controls(qtbot):
     panel.show_page("docker")
     qtbot.mouseClick(panel.docker_download_button, Qt.LeftButton)
     panel.show_page("apps")
-    assert panel.page_stack.sizeHint().height() == panel.apps_page.sizeHint().height()
+    apps_sidebar_page = panel.findChild(QWidget, "appsSidebarPage")
+    assert panel.page_stack.sizeHint().height() == apps_sidebar_page.sizeHint().height()
+    assert panel.findChild(QLabel, "appsWorkspaceSidebarLabel").text() == "Deployment workspace"
     panel.show_page("network")
     qtbot.mouseClick(panel.dapp_button, Qt.LeftButton)
     qtbot.mouseClick(panel.explorer_button, Qt.LeftButton)

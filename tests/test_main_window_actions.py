@@ -3032,7 +3032,11 @@ def test_main_window_log_view_has_stable_identity_and_dimensions(qtbot, monkeypa
     assert dashboard_splitter.orientation() == Qt.Vertical
     assert dashboard_splitter.count() == 2
     assert dashboard_panel.layout().indexOf(dashboard_splitter) >= 0
-    assert dashboard_splitter.widget(0) is launcher.graphView
+    assert dashboard_splitter.widget(0) is launcher.main_workspace_stack
+    assert launcher.main_workspace_stack.objectName() == "mainWorkspaceStack"
+    assert launcher.main_workspace_stack.widget(0) is launcher.graphView
+    assert launcher.main_workspace_stack.widget(1) is launcher.apps_workspace
+    assert launcher.main_workspace_stack.currentWidget() is launcher.graphView
     assert dashboard_splitter.widget(1) is launcher.activityLogPanel
     assert not dashboard_splitter.childrenCollapsible()
     assert launcher.logView.objectName() == "logView"
@@ -3172,7 +3176,7 @@ def test_navigation_rail_switches_contextual_control_pages(qtbot, monkeypatch):
 
     pages = {
         "nodes": ("navNodesButton", "nodesPage", launcher.toggleButton),
-        "apps": ("navAppsButton", "appsPage", launcher.findChild(QPushButton, "appLaunchButton")),
+        "apps": ("navAppsButton", "appsSidebarPage", launcher.findChild(QPushButton, "appLaunchButton")),
         "logs": ("navLogsButton", "logsPage", launcher.findChild(QLabel, "logsPagePlaceholderLabel")),
         "docker": ("navDockerButton", "dockerPage", launcher.docker_download_button),
         "settings": ("navSettingsButton", "settingsPage", launcher.themeToggleButton),
@@ -3195,6 +3199,10 @@ def test_navigation_rail_switches_contextual_control_pages(qtbot, monkeypatch):
         assert launcher.navigation_page_stack.currentWidget() is page
         assert nav_button.isChecked()
         assert expected_visible_widget.isVisible()
+        if page_name == "apps":
+            assert launcher.main_workspace_stack.currentWidget() is launcher.apps_workspace
+        else:
+            assert launcher.main_workspace_stack.currentWidget() is launcher.graphView
 
 
 def test_rename_action_lives_with_node_controls(qtbot, monkeypatch):

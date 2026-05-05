@@ -304,6 +304,24 @@ def scroll_sidebar_to(launcher, position):
     return original_value
 
 
+def scroll_apps_workspace_to(launcher, position):
+    from PyQt5.QtWidgets import QScrollArea
+
+    apps_scroll = launcher.findChild(QScrollArea, "appsWorkspaceScrollArea")
+    if apps_scroll is None:
+        return scroll_sidebar_to(launcher, position)
+
+    scrollbar = apps_scroll.verticalScrollBar()
+    original_value = scrollbar.value()
+    if position == "bottom":
+        scrollbar.setValue(scrollbar.maximum())
+    elif position == "top":
+        scrollbar.setValue(scrollbar.minimum())
+    else:
+        scrollbar.setValue(int(position))
+    return original_value
+
+
 def save_widget_screenshot(widget, screenshot_dir, filename):
     if not screenshot_dir:
         return ""
@@ -679,7 +697,7 @@ def run_mocked_sdk_apps_scenario(
     set_line_edit_value(app, apps_page.node_address_input, SMOKE_VALID_NODE_ADDRESS)
 
     show_launcher_page(app, launcher, "apps")
-    scroll_sidebar_to(launcher, "top")
+    scroll_apps_workspace_to(launcher, "top")
     app.processEvents()
     record_step(log, output_path, {"step": "show apps page for mocked SDK app E2E"})
 
@@ -691,7 +709,7 @@ def run_mocked_sdk_apps_scenario(
     set_line_edit_value(app, apps_page.car_registry_password_input, SMOKE_CONTAINER_APP_SECRET)
     set_plain_text_value(app, apps_page.env_input, "SMOKE_MODE=mock\nPUBLIC_VALUE=visible")
 
-    scroll_sidebar_to(launcher, "bottom")
+    scroll_apps_workspace_to(launcher, "bottom")
     app.processEvents()
     if getattr(launcher, "toast", None) is not None:
         launcher.toast.hide()
@@ -712,7 +730,7 @@ def run_mocked_sdk_apps_scenario(
         },
     )
 
-    scroll_sidebar_to(launcher, "top")
+    scroll_apps_workspace_to(launcher, "top")
     app.processEvents()
     record_step(log, output_path, {"step": click_visible_button(app, apps_page.validate_button, "validate container app")})
     wait_until(
@@ -796,7 +814,7 @@ def run_mocked_sdk_apps_scenario(
     set_plain_text_value(app, apps_page.worker_commands_input, "npm install\nnpm run build\nnpm run start")
     set_plain_text_value(app, apps_page.env_input, "SMOKE_MODE=mock\nPUBLIC_VALUE=worker")
 
-    scroll_sidebar_to(launcher, "bottom")
+    scroll_apps_workspace_to(launcher, "bottom")
     app.processEvents()
     if getattr(launcher, "toast", None) is not None:
         launcher.toast.hide()
@@ -817,7 +835,7 @@ def run_mocked_sdk_apps_scenario(
         },
     )
 
-    scroll_sidebar_to(launcher, "top")
+    scroll_apps_workspace_to(launcher, "top")
     app.processEvents()
     record_step(log, output_path, {"step": click_visible_button(app, apps_page.validate_button, "validate worker app")})
     wait_until(
@@ -863,7 +881,7 @@ def run_mocked_sdk_apps_scenario(
         timeout,
         "worker app stop",
     )
-    scroll_sidebar_to(launcher, "top")
+    scroll_apps_workspace_to(launcher, "top")
     app.processEvents()
     final_visual = capture_visual_evidence(launcher, screenshot_dir, "apps_mocked_final")
     record_step(

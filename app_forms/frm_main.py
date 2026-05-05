@@ -741,9 +741,16 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     """Create the right-side metrics and activity panel."""
     self.graphView = self._create_metrics_graph_grid()
     self._set_gpu_metric_availability(False)
+    self.apps_workspace = self._create_apps_workspace()
+    self.main_workspace_stack = QStackedWidget()
+    self.main_workspace_stack.setObjectName("mainWorkspaceStack")
+    self.main_workspace_stack.setAccessibleName("Main workspace")
+    self.main_workspace_stack.setProperty("role", "mainWorkspaceStack")
+    self.main_workspace_stack.addWidget(self.graphView)
+    self.main_workspace_stack.addWidget(self.apps_workspace)
     self.activityLogPanel = self._create_activity_log_panel()
     dashboard_panel = DashboardPanel(
-        self.graphView,
+        self.main_workspace_stack,
         self.activityLogPanel,
         self._dashboard_splitter_initial_sizes(),
         lambda _pos, _index: self._save_dashboard_splitter_sizes(),
@@ -751,8 +758,87 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     )
     self.dashboard_splitter = dashboard_panel.splitter
     self._flush_log_buffer_to_view()
+    self._on_navigation_page_changed(
+      self.sidebar_panel.current_page_name() if hasattr(self, "sidebar_panel") else "nodes"
+    )
 
     return dashboard_panel
+
+  def _create_apps_workspace(self) -> QWidget:
+    workspace = QWidget()
+    workspace.setObjectName("appsWorkspace")
+    workspace.setAccessibleName("Apps workspace")
+    workspace.setProperty("role", "appsWorkspace")
+
+    layout = QHBoxLayout(workspace)
+    layout.setContentsMargins(10, 0, 10, 0)
+    layout.setSpacing(12)
+
+    apps_scroll = QScrollArea()
+    apps_scroll.setObjectName("appsWorkspaceScrollArea")
+    apps_scroll.setAccessibleName("Apps deployment controls")
+    apps_scroll.setWidgetResizable(True)
+    apps_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    apps_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+    apps_scroll.setFrameShape(QFrame.NoFrame)
+    apps_scroll.setMinimumWidth(440)
+    apps_scroll.setMaximumWidth(620)
+    apps_scroll.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+    self.apps_page.setParent(None)
+    self.apps_page.setMinimumWidth(420)
+    self.apps_page.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+    apps_scroll.setWidget(self.apps_page)
+    layout.addWidget(apps_scroll, 0)
+
+    details_panel = QWidget()
+    details_panel.setObjectName("appsDetailPanel")
+    details_panel.setAccessibleName("App details")
+    details_panel.setProperty("role", "appsDetailPanel")
+    details_layout = QVBoxLayout(details_panel)
+    details_layout.setContentsMargins(14, 10, 14, 10)
+    details_layout.setSpacing(8)
+
+    self.apps_detail_title = build_sidebar_section_label("Details", "appsDetailTitle")
+    self.apps_detail_title.setProperty("role", "dashboardSectionTitle")
+    self.apps_detail_text = QTextBrowser()
+    self.apps_detail_text.setObjectName("appsDetailText")
+    self.apps_detail_text.setAccessibleName("Selected app details")
+    self.apps_detail_text.setProperty("role", "appsDetailText")
+    self.apps_detail_text.setReadOnly(True)
+    self.apps_detail_text.setOpenExternalLinks(False)
+    self.apps_detail_text.setText("No app selected")
+    details_layout.addWidget(self.apps_detail_title)
+    details_layout.addWidget(self.apps_detail_text, 1)
+    layout.addWidget(details_panel, 1)
+
+    self.apps_page.apps_table.itemSelectionChanged.connect(self._update_apps_workspace_details)
+    return workspace
+
+  def _update_apps_workspace_details(self) -> None:
+    if not hasattr(self, "apps_detail_text"):
+      return
+    record = self.apps_page._selected_record()
+    if record is None:
+      self.apps_detail_text.setText("No app selected")
+      return
+    detail = "\n".join(
+      [
+        f"Name: {record.app_name}",
+        f"Type: {record.app_type}",
+        f"Status: {record.status}",
+        f"Node: {record.node_address}",
+        f"Pipeline: {record.pipeline_name}",
+        f"URL: {record.app_url or '-'}",
+        f"Last action: {record.last_action or '-'}",
+      ]
+    )
+    self.apps_detail_text.setText(detail)
+
+  def _on_navigation_page_changed(self, page_name: str) -> None:
+    if not hasattr(self, "main_workspace_stack"):
+      return
+    target = self.apps_workspace if page_name == "apps" else self.graphView
+    self.main_workspace_stack.setCurrentWidget(target)
 
   def _create_right_dashboard_container(self) -> QWidget:
     right_container = QWidget()
@@ -798,6 +884,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         copy_eth_handler=self.copy_eth_address,
         theme_toggle_handler=self.toggle_theme,
         force_debug_handler=self.toggle_force_debug,
+        page_changed_handler=self._on_navigation_page_changed,
         parent=self,
     )
     self._bind_sidebar_panel_aliases(menu_widget)

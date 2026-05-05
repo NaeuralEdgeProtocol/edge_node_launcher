@@ -359,6 +359,25 @@ def test_scroll_sidebar_to_moves_and_restores_scroll_position(qtbot):
     assert scrollbar.value() == scrollbar.minimum()
 
 
+def test_scroll_apps_workspace_to_uses_workspace_scroll_area(qtbot):
+    parent = QDialog()
+    parent.resize(180, 140)
+    apps_scroll = QScrollArea(parent)
+    apps_scroll.setObjectName("appsWorkspaceScrollArea")
+    apps_scroll.setGeometry(0, 0, 160, 100)
+    content = QWidget()
+    content.setFixedSize(140, 360)
+    apps_scroll.setWidget(content)
+    qtbot.addWidget(parent)
+    parent.show()
+    qtbot.waitUntil(parent.isVisible)
+
+    original_position = smoke.scroll_apps_workspace_to(parent, "bottom")
+
+    assert original_position == 0
+    assert apps_scroll.verticalScrollBar().value() == apps_scroll.verticalScrollBar().maximum()
+
+
 def test_combo_popup_visual_evidence_records_items_and_hides_popup(qtbot):
     app = QApplication.instance()
     parent = QDialog()

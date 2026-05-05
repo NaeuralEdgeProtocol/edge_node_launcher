@@ -81,6 +81,7 @@ class SidebarPanel(QWidget):
         copy_eth_handler,
         theme_toggle_handler,
         force_debug_handler,
+        page_changed_handler=None,
         parent=None,
     ):
         super().__init__(parent)
@@ -98,6 +99,7 @@ class SidebarPanel(QWidget):
         self._copy_eth_handler = copy_eth_handler
         self._theme_toggle_handler = theme_toggle_handler
         self._force_debug_handler = force_debug_handler
+        self._page_changed_handler = page_changed_handler
         self._pages = {}
         self._nav_buttons = {}
 
@@ -183,6 +185,8 @@ class SidebarPanel(QWidget):
         button = self._nav_buttons.get(name)
         if button is not None:
             button.setChecked(True)
+        if self._page_changed_handler is not None:
+            self._page_changed_handler(name)
 
     def current_page_name(self) -> str:
         current = self.page_stack.currentWidget()
@@ -306,7 +310,22 @@ class SidebarPanel(QWidget):
             deployment_client=deployment_client,
             parent=self,
         )
-        return self.apps_page
+        page = self._create_page("appsSidebarPage")
+        layout = QVBoxLayout(page)
+        layout.setObjectName("appsSidebarPageLayout")
+        layout.setAlignment(Qt.AlignTop)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(5)
+        layout.addWidget(create_sidebar_section_label("Apps", "appsPageSectionLabel"))
+
+        self.apps_workspace_label = QLabel("Deployment workspace")
+        self.apps_workspace_label.setObjectName("appsWorkspaceSidebarLabel")
+        self.apps_workspace_label.setAccessibleName("Apps workspace")
+        self.apps_workspace_label.setProperty("role", "sidebarMutedText")
+        self.apps_workspace_label.setWordWrap(True)
+        layout.addWidget(self.apps_workspace_label)
+        layout.addStretch(1)
+        return page
 
     def _create_settings_page(self) -> QWidget:
         page = self._create_page("settingsPage")
