@@ -5,3 +5,4 @@ requests
 pyyaml
 psutil
 humanize
+ratio1>=3.5.30
