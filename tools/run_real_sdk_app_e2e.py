@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import tempfile
 import time
@@ -42,6 +43,9 @@ REAL_GITHUB_TOKEN_ENV = "R1_LAUNCHER_REAL_GITHUB_TOKEN"
 REAL_REGISTRY_PASSWORD_ENV = "R1_LAUNCHER_REAL_REGISTRY_PASSWORD"
 
 REQUIRED_REAL_ENV = (REAL_E2E_FLAG, REAL_NODE_ADDRESS_ENV, REAL_NODE_CONTAINER_ENV)
+DEFAULT_SDK_LOG_DIR = Path.home() / ".ratio1" / "edge_node_launcher" / "sdk" / "_logs"
+PEM_PATH_RE = re.compile(r"(?:[A-Za-z]:)?[\\/][^\s\"']*?\.pem")
+PEM_FILENAME_RE = re.compile(r"\b[\w.-]+\.pem\b")
 
 
 def real_e2e_guard(env: dict[str, str] | None = None) -> dict[str, object]:
@@ -94,6 +98,166 @@ def screenshot(page, screenshot_dir, label):
     return save_widget_screenshot(page, screenshot_dir, f"{label}.png")
 
 
+def active_worker_snapshot(page) -> dict[str, object]:
+    workers = []
+    for worker in list(getattr(page, "_active_workers", [])):
+        is_running = None
+        if hasattr(worker, "isRunning"):
+            try:
+                is_running = bool(worker.isRunning())
+            except RuntimeError:
+                is_running = None
+        workers.append(
+            {
+                "operation": getattr(worker, "operation_name", ""),
+                "running": is_running,
+            }
+        )
+    running_count = sum(1 for worker in workers if worker["running"] is True)
+    return {
+        "count": len(workers),
+        "running_count": running_count,
+        "workers": workers,
+    }
+
+
+def active_secrets(page) -> tuple[str, ...]:
+    secrets = []
+    for attr_name in ("car_registry_password_input", "worker_github_token_input"):
+        widget = getattr(page, attr_name, None)
+        if widget is None:
+            continue
+        try:
+            value = widget.text()
+        except RuntimeError:
+            value = ""
+        if value:
+            secrets.append(value)
+    for env_name in (REAL_REGISTRY_PASSWORD_ENV, REAL_GITHUB_TOKEN_ENV):
+        value = os.environ.get(env_name, "")
+        if value:
+            secrets.append(value)
+    return tuple(dict.fromkeys(secrets))
+
+
+def redact_values(text: str, secrets: tuple[str, ...]) -> str:
+    safe_text = str(text)
+    for secret in secrets:
+        if secret:
+            safe_text = safe_text.replace(secret, "<redacted>")
+    safe_text = PEM_PATH_RE.sub("<redacted-pem-path>", safe_text)
+    safe_text = PEM_FILENAME_RE.sub("<redacted-pem-file>", safe_text)
+    return safe_text
+
+
+def collect_sdk_log_tails(
+    *,
+    log_dir: Path | str | None,
+    since_epoch: float,
+    secrets: tuple[str, ...] = (),
+    max_files: int = 4,
+    max_lines: int = 30,
+) -> list[dict[str, object]]:
+    if not log_dir:
+        return []
+    target_dir = Path(log_dir)
+    if not target_dir.exists():
+        return []
+
+    candidates = []
+    for pattern in ("*_error_log.txt", "*_log.txt"):
+        candidates.extend(target_dir.glob(pattern))
+    unique_candidates = {path.resolve(): path for path in candidates}.values()
+    recent = [
+        path
+        for path in unique_candidates
+        if path.is_file() and path.stat().st_mtime >= since_epoch
+    ]
+    recent.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+
+    tails = []
+    for path in recent[:max_files]:
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError as exc:
+            tails.append({"path": str(path), "error": str(exc)})
+            continue
+        tail = "\n".join(lines[-max_lines:])
+        tails.append(
+            {
+                "path": str(path),
+                "modified_at": datetime.fromtimestamp(path.stat().st_mtime).isoformat(),
+                "tail": redact_values(tail, secrets),
+            }
+        )
+    return tails
+
+
+def page_diagnostics(page, screenshot_dir, label, *, sdk_log_dir=None, sdk_log_since_epoch=0.0) -> dict[str, object]:
+    secrets = active_secrets(page)
+    validation_message = ""
+    validation_visible = False
+    if hasattr(page, "validation_message"):
+        try:
+            validation_message = page.validation_message.text()
+            validation_visible = page.validation_message.isVisible()
+        except RuntimeError:
+            validation_message = "<unavailable>"
+    evidence = {
+        "validation_message": redact_values(validation_message, secrets),
+        "validation_visible": validation_visible,
+        "table": app_table_snapshot(page),
+        "active_workers": active_worker_snapshot(page),
+        "screenshot": "",
+        "sdk_log_tails": collect_sdk_log_tails(
+            log_dir=sdk_log_dir,
+            since_epoch=sdk_log_since_epoch,
+            secrets=secrets,
+        ),
+    }
+    try:
+        evidence["screenshot"] = screenshot(page, screenshot_dir, label)
+    except Exception as exc:  # pragma: no cover - evidence must never mask the real failure.
+        evidence["screenshot_error"] = str(exc)
+    return evidence
+
+
+def wait_until_page_state(app, page, predicate, timeout, label):
+    try:
+        wait_until(app, predicate, timeout, label)
+    except TimeoutError as exc:
+        validation_message = ""
+        if hasattr(page, "validation_message"):
+            validation_message = redact_values(page.validation_message.text(), active_secrets(page))
+        workers = active_worker_snapshot(page)
+        raise TimeoutError(
+            f"{exc}; validation_message={validation_message!r}; active_workers={workers}"
+        ) from exc
+
+
+def wait_for_active_workers(app, page, timeout_seconds: float) -> dict[str, object]:
+    deadline = time.monotonic() + max(0.0, timeout_seconds)
+    while time.monotonic() < deadline:
+        app.processEvents()
+        snapshot = active_worker_snapshot(page)
+        if snapshot["running_count"] == 0:
+            return snapshot
+        time.sleep(0.05)
+    app.processEvents()
+    return active_worker_snapshot(page)
+
+
+def size_evidence_page(app, page) -> None:
+    width = 760
+    height = 900
+    screen = app.primaryScreen()
+    if screen is not None:
+        available = screen.availableGeometry()
+        width = min(width, max(page.minimumWidth(), available.width() - 80))
+        height = min(height, max(page.minimumHeight(), available.height() - 80))
+    page.resize(width, height)
+
+
 def run_real_e2e(args):
     os.chdir(REPO_ROOT)
     sys.path.insert(0, str(REPO_ROOT))
@@ -111,6 +275,7 @@ def run_real_e2e(args):
 
     node_address = os.environ[REAL_NODE_ADDRESS_ENV]
     container_name = os.environ[REAL_NODE_CONTAINER_ENV]
+    sdk_log_since_epoch = time.time() - 5
     temp_root = Path(tempfile.mkdtemp(prefix="r1-launcher-real-sdk-e2e-"))
     registry_file = Path(args.registry_file) if args.registry_file else temp_root / "apps.json"
     app_registry = AppRegistry(registry_file)
@@ -141,6 +306,7 @@ def run_real_e2e(args):
         launch_preflight_service=preflight,
     )
     page.set_target_node(node_address=node_address, container_name=container_name)
+    size_evidence_page(app, page)
     page.show()
     app.processEvents()
 
@@ -162,8 +328,24 @@ def run_real_e2e(args):
     except Exception as exc:
         log["result"] = "failed"
         log["error"] = str(exc)
+        record_step(
+            log,
+            args.output,
+            {
+                "step": "real SDK E2E failed",
+                "error": str(exc),
+                "diagnostics": page_diagnostics(
+                    page,
+                    args.screenshot_dir,
+                    "real_sdk_failure",
+                    sdk_log_dir=args.sdk_log_dir or DEFAULT_SDK_LOG_DIR,
+                    sdk_log_since_epoch=sdk_log_since_epoch,
+                ),
+            },
+        )
         raise
     finally:
+        log["worker_cleanup"] = wait_for_active_workers(app, page, args.worker_cleanup_timeout)
         page.close()
         app.processEvents()
         log["finished_at"] = datetime.now().isoformat()
@@ -215,16 +397,40 @@ def _run_real_war(app, page, log, args):
 
 def _click_validate_launch_refresh_copy_stop(app, page, log, args, app_type):
     record_step(log, args.output, {"step": click_visible_button(app, page.validate_button, f"validate real {app_type}")})
-    wait_until(app, lambda: page.validation_message.text() == "Ready", args.timeout, f"real {app_type} validation")
+    wait_until_page_state(
+        app,
+        page,
+        lambda: page.validation_message.text() == "Ready",
+        args.timeout,
+        f"real {app_type} validation",
+    )
     record_step(log, args.output, {"step": click_visible_button(app, page.launch_button, f"launch real {app_type}")})
-    wait_until(app, lambda: page.validation_message.text() == "Launched", args.deploy_timeout + 30, f"real {app_type} launch")
+    wait_until_page_state(
+        app,
+        page,
+        lambda: page.validation_message.text() == "Launched",
+        args.deploy_timeout + 30,
+        f"real {app_type} launch",
+    )
     page.apps_table.selectRow(page.apps_table.rowCount() - 1)
     app.processEvents()
     record_step(log, args.output, {"step": click_visible_button(app, page.refresh_button, f"refresh real {app_type}")})
-    wait_until(app, lambda: page.validation_message.text() in {"Status updated", "No launcher-owned status changes"}, args.timeout, f"real {app_type} refresh")
+    wait_until_page_state(
+        app,
+        page,
+        lambda: page.validation_message.text() in {"Status updated", "No launcher-owned status changes"},
+        args.timeout,
+        f"real {app_type} refresh",
+    )
     record_step(log, args.output, {"step": click_visible_button(app, page.copy_url_button, f"copy real {app_type} URL")})
     record_step(log, args.output, {"step": click_visible_button(app, page.stop_button, f"stop real {app_type}")})
-    wait_until(app, lambda: page.validation_message.text() == "Stopped", args.timeout, f"real {app_type} stop")
+    wait_until_page_state(
+        app,
+        page,
+        lambda: page.validation_message.text() == "Stopped",
+        args.timeout,
+        f"real {app_type} stop",
+    )
     record_step(
         log,
         args.output,
@@ -258,6 +464,8 @@ def build_parser():
     parser.add_argument("--war-commands", default="npm install\nnpm run build\nnpm run start")
     parser.add_argument("--github-user", default="")
     parser.add_argument("--fail-on-skip", action="store_true")
+    parser.add_argument("--sdk-log-dir", default="")
+    parser.add_argument("--worker-cleanup-timeout", type=float, default=5.0)
     return parser
 
 
