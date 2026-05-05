@@ -42,10 +42,19 @@ from widgets.app_widgets.sidebar_controls import (
 class AppsPage(QWidget):
     """Compact CAR/WAR app deployment and launcher-owned app registry page."""
 
-    def __init__(self, *, app_registry=None, deployment_client=None, parent=None):
+    def __init__(
+        self,
+        *,
+        app_registry=None,
+        deployment_client=None,
+        launch_preflight_service=None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.app_registry = app_registry or AppRegistry()
         self.deployment_client = deployment_client
+        self.launch_preflight_service = launch_preflight_service
+        self.target_container_name = ""
         self._records_by_row: dict[int, ManagedAppRecord] = {}
         self._active_workers: list[SdkOperationThread] = []
 
@@ -240,7 +249,15 @@ class AppsPage(QWidget):
 
         return page
 
+    def set_launch_preflight_service(self, launch_preflight_service) -> None:
+        self.launch_preflight_service = launch_preflight_service
+
     def set_target_node_address(self, node_address: str) -> None:
+        self.set_target_node(node_address=node_address)
+
+    def set_target_node(self, *, node_address: str = "", container_name: str | None = None) -> None:
+        if container_name is not None:
+            self.target_container_name = container_name
         if node_address and not self.node_address_input.text().strip():
             self.node_address_input.setText(node_address)
 
@@ -259,16 +276,28 @@ class AppsPage(QWidget):
         if self.deployment_client is None:
             self._show_message("SDK launch worker pending", error=True)
             return
+        target_container_name = self.target_container_name
         if spec.app_type == APP_TYPE_CONTAINER:
-            operation = lambda: self.deployment_client.launch_container_app(spec)
+            operation = lambda: self._launch_with_preflight(
+                lambda: self.deployment_client.launch_container_app(spec),
+                target_container_name,
+            )
         else:
-            operation = lambda: self.deployment_client.launch_worker_app(spec)
+            operation = lambda: self._launch_with_preflight(
+                lambda: self.deployment_client.launch_worker_app(spec),
+                target_container_name,
+            )
         self._start_sdk_operation(
             "launch",
             operation,
             lambda result: self._handle_launch_success(result, spec),
             "Launching...",
         )
+
+    def _launch_with_preflight(self, launch_operation, target_container_name: str):
+        if self.launch_preflight_service is not None:
+            self.launch_preflight_service.prepare(target_container_name)
+        return launch_operation()
 
     def refresh_app_statuses(self) -> None:
         if self.deployment_client is None:

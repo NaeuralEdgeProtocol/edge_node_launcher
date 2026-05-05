@@ -62,16 +62,19 @@ APP_TEST_NODE = "0xai_A9OqTV_iFqmwj1SV7AKbdyr66NLkhSQHPpzp40c7jaLn"
 
 
 class FakeAppDeploymentClient:
-    def __init__(self):
+    def __init__(self, events=None):
         self.container_specs = []
         self.worker_specs = []
         self.stop_calls = []
         self.list_calls = []
         self.delay_seconds = 0
+        self.events = events
 
     def launch_container_app(self, spec):
         if self.delay_seconds:
             time.sleep(self.delay_seconds)
+        if self.events is not None:
+            self.events.append("launch_container")
         self.container_specs.append(spec)
         return DeploymentResult(
             app_id=f"{spec.node_address}:{spec.pipeline_name}:{spec.app_type}",
@@ -88,6 +91,8 @@ class FakeAppDeploymentClient:
     def launch_worker_app(self, spec):
         if self.delay_seconds:
             time.sleep(self.delay_seconds)
+        if self.events is not None:
+            self.events.append("launch_worker")
         self.worker_specs.append(spec)
         return DeploymentResult(
             app_id=f"{spec.node_address}:{spec.pipeline_name}:{spec.app_type}",
@@ -118,6 +123,19 @@ class FakeAppDeploymentClient:
                 url="https://known-live.example",
             )
         ]
+
+
+class FakeLaunchPreflight:
+    def __init__(self, events=None):
+        self.calls = []
+        self.events = events
+
+    def prepare(self, container_name):
+        if self.events is not None:
+            self.events.append("preflight")
+        self.calls.append(container_name)
+        if not container_name:
+            raise ValueError("Target container is required for SDK allow-list setup.")
 
 
 def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
@@ -247,6 +265,51 @@ def test_apps_page_sdk_operations_run_with_busy_state(qtbot, tmp_path):
 
     qtbot.waitUntil(lambda: page.launch_button.isEnabled(), timeout=1000)
     assert page.apps_table.rowCount() == 1
+
+
+def test_apps_page_launch_runs_preflight_before_sdk_launch(qtbot, tmp_path):
+    events = []
+    fake_client = FakeAppDeploymentClient(events=events)
+    fake_preflight = FakeLaunchPreflight(events=events)
+    page = AppsPage(
+        app_registry=AppRegistry(tmp_path / "apps.json"),
+        deployment_client=fake_client,
+        launch_preflight_service=fake_preflight,
+    )
+    qtbot.addWidget(page)
+    page.set_target_node(node_address=APP_TEST_NODE, container_name="r1devnode")
+    page.app_name_input.setText("car_runner")
+    page.car_image_input.setText("nginx:alpine")
+    page.car_port_input.setText("8080")
+
+    qtbot.mouseClick(page.findChild(QPushButton, "appLaunchButton"), Qt.LeftButton)
+    qtbot.waitUntil(lambda: len(fake_client.container_specs) == 1, timeout=1000)
+
+    assert fake_preflight.calls == ["r1devnode"]
+    assert events == ["preflight", "launch_container"]
+
+
+def test_apps_page_launch_reports_missing_preflight_container(qtbot, tmp_path):
+    fake_client = FakeAppDeploymentClient()
+    page = AppsPage(
+        app_registry=AppRegistry(tmp_path / "apps.json"),
+        deployment_client=fake_client,
+        launch_preflight_service=FakeLaunchPreflight(),
+    )
+    qtbot.addWidget(page)
+    page.set_target_node(node_address=APP_TEST_NODE, container_name="old-node")
+    page.set_target_node(node_address=APP_TEST_NODE, container_name="")
+    page.app_name_input.setText("car_runner")
+    page.car_image_input.setText("nginx:alpine")
+    page.car_port_input.setText("8080")
+
+    qtbot.mouseClick(page.findChild(QPushButton, "appLaunchButton"), Qt.LeftButton)
+    qtbot.waitUntil(
+        lambda: "Target container is required" in page.validation_message.text(),
+        timeout=1000,
+    )
+
+    assert fake_client.container_specs == []
 
 
 def test_apps_page_refresh_status_uses_sdk_client_for_existing_records(qtbot, tmp_path):

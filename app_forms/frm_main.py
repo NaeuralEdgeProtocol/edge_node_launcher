@@ -87,7 +87,9 @@ from utils.lifecycle_state import LaunchContext, LifecycleState
 from utils.screen_geometry import available_screen_geometry, screen_geometry
 from utils.window_geometry import calculate_initial_window_geometry, calculate_restored_window_geometry, calculate_visible_frame_client_geometry, format_rect
 from utils.subprocess_utils import terminate_process_by_pid
+from services.app_launch_preflight import AppLaunchPreflightService
 from services.docker_runtime_service import DockerRuntimeService
+from services.node_allowlist_service import NodeAllowListService
 from services.node_telemetry_service import NodeTelemetryMetadata, NodeTelemetryService
 from services.node_status_service import (
   NODE_INFO_FAILURE_ACTION_DEFER_STARTUP,
@@ -96,6 +98,7 @@ from services.node_status_service import (
   NodeStatusService,
 )
 from services.node_runtime_policy import runtime_policy_display
+from services.sdk_identity_service import SdkIdentityService
 from widgets.app_widgets.lifecycle_dialog_presenter import LifecycleDialogPresenter
 from widgets.app_widgets.lifecycle_controls import (
   LIFECYCLE_BUSY_TOOLTIP,
@@ -259,6 +262,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.docker_container_name = self.default_container_name
     self.docker_initialize()
     self.docker_handler = DockerRuntimeService(DockerCommandHandler(self.default_container_name))
+    self._configure_app_deployment_services()
     self.node_status_service = NodeStatusService(
       failure_threshold=NODE_INFO_FAILURE_THRESHOLD,
       startup_grace_seconds=NODE_STARTUP_GRACE_PERIOD_SECONDS,
@@ -840,6 +844,16 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.storageDisplay = resource_panel.storageDisplay
     self._update_edge_image_badge()
     self._update_node_runtime_policy_label(self.default_container_name)
+
+  def _configure_app_deployment_services(self) -> None:
+    if not hasattr(self, "apps_page"):
+      return
+    self.apps_page.set_launch_preflight_service(
+      AppLaunchPreflightService(
+        identity_service=SdkIdentityService(),
+        allowlist_service=NodeAllowListService(self.docker_handler),
+      )
+    )
 
   def _update_edge_image_badge(self) -> None:
     if not hasattr(self, "edgeImageBadge"):
@@ -2325,7 +2339,10 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.node_eth_address = eth_address
     self.node_name = node_name
     if hasattr(self, "apps_page"):
-      self.apps_page.set_target_node_address(self.node_addr)
+      self.apps_page.set_target_node(
+        node_address=self.node_addr,
+        container_name=self._selected_container_name() or "",
+      )
     self._update_address_display(
       self.node_addr,
       show_copy_button=show_copy_buttons and bool(self.node_addr),
