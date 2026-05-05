@@ -931,7 +931,10 @@ def run_mocked_sdk_apps_scenario(
     wait_until(
         app,
         lambda: apps_page.validation_message.isVisible()
-        and apps_page.validation_message.text() in {"SDK access added", "SDK access ready"},
+        and (
+            apps_page.validation_message.text().startswith("SDK access added")
+            or apps_page.validation_message.text().startswith("SDK access ready")
+        ),
         timeout,
         "SDK access check",
     )

@@ -76,6 +76,7 @@ class CreateAppDialog(QDialog):
         title.setProperty("role", "appDialogTitle")
         layout.addWidget(title)
 
+        sticky_footer = self._detach_sticky_footer_widgets(form_widget)
         scroll_area = QScrollArea()
         scroll_area.setObjectName("createAppDialogScrollArea")
         scroll_area.setAccessibleName("Deploy app form")
@@ -84,6 +85,21 @@ class CreateAppDialog(QDialog):
         scroll_area.setFrameShape(QScrollArea.NoFrame)
         scroll_area.setWidget(form_widget)
         layout.addWidget(scroll_area, 1)
+        for widget in sticky_footer:
+            layout.addWidget(widget)
+
+    def _detach_sticky_footer_widgets(self, form_widget: QWidget) -> list[QWidget]:
+        sticky_widgets = []
+        for object_name in ("appValidationMessageLabel", "appLaunchActionBar"):
+            widget = form_widget.findChild(QWidget, object_name)
+            if widget is None:
+                continue
+            parent = widget.parentWidget()
+            if parent is not None and parent.layout() is not None:
+                parent.layout().removeWidget(widget)
+            widget.setParent(self)
+            sticky_widgets.append(widget)
+        return sticky_widgets
 
 
 class AppsPage(QWidget):

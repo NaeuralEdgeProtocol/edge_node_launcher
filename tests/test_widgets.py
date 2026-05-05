@@ -221,6 +221,8 @@ def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path, monkeypatc
     assert dialog.objectName() == "createAppDialog"
     assert dialog.accessibleName() == "Deploy App"
     assert dialog.findChild(QWidget, "appLaunchActionBar").property("role") == "appActionBar"
+    assert dialog.findChild(QWidget, "appLaunchActionBar").parentWidget() is dialog
+    assert dialog.findChild(QLabel, "appValidationMessageLabel").parentWidget() is dialog
     assert dialog.findChild(QWidget, "appDeploymentPanel").property("role") == "appDeploymentPanel"
     assert page.findChild(QComboBox, "appRunnerTypeCombo").currentData() == "CAR"
     assert page.findChild(QLineEdit, "appNameInput").property("role") == "appTextInput"
