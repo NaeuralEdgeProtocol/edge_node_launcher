@@ -13,7 +13,7 @@ else
 fi
 
 # Your base PyInstaller command with platform-specific icon
-PYINSTALLER_CMD="pyinstaller -w --onefile -n 'EdgeNodeLauncher' --icon=$ICON_PATH main.py"
+PYINSTALLER_CMD="pyinstaller -w --onefile -n 'EdgeNodeLauncher' --icon=$ICON_PATH --collect-submodules=ratio1 --hidden-import=asyncio.base_events --hidden-import=asyncio.coroutines --hidden-import=asyncio.events --hidden-import=asyncio.futures --hidden-import=asyncio.tasks --hidden-import=asyncio.transports main.py"
 
 # Combine the base command with the hidden imports and execute
 echo "$PYINSTALLER_CMD"

@@ -90,17 +90,12 @@ To install and run Edge Node Launcher, follow these steps:
    cd edge_node_launcher
    ```
 
-2. Create a Python 3.14 environment with `uv`:
+2. Create and synchronize a Python 3.14 environment with `uv`:
    ```sh
-   uv venv --python 3.14 .venv
+   uv sync --all-groups
    ```
 
-3. Install the required dependencies:
-   ```sh
-   uv pip install -r requirements.txt
-   ```
-
-4. Run the application:
+3. Run the application:
    ```sh
    # Windows
    .venv/Scripts/python.exe main.py
@@ -161,17 +156,17 @@ The application can check for updates, download the latest release, and replace 
 Install test dependencies into the same Python 3.14 environment:
 
 ```sh
-uv pip install -r requirements.txt pytest pytest-qt
+uv sync --all-groups
 ```
 
 Run the baseline test suite:
 
 ```sh
 # Windows
-.venv/Scripts/python.exe -m pytest
+uv run python -m pytest
 
 # macOS/Linux
-.venv/bin/python -m pytest
+uv run python -m pytest
 ```
 
 ### Code Structure

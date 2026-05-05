@@ -4,7 +4,10 @@ from dataclasses import dataclass
 
 
 SDK_CREDENTIALS_MESSAGE = "Ratio1 SDK credentials are not configured. Configure network credentials, then retry."
-SDK_IMPORT_MESSAGE = "Ratio1 SDK is not available in this launcher environment. Repair launcher dependencies, then retry."
+SDK_IMPORT_MESSAGE = (
+    "Ratio1 SDK is not available in this launcher environment. "
+    "Run uv sync in the launcher repo or repair the packaged install, then retry."
+)
 SDK_VERSION_MESSAGE = "Ratio1 rejected the launcher SDK version. Update the Ratio1 SDK, then retry."
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -11,6 +12,14 @@ from utils.const import CONFIG_DIR
 
 LAUNCHER_SDK_ALIAS = "edge-node-launcher"
 SDK_SESSION_MODULES = ("ratio1", "ratio1_sdk")
+SDK_RUNTIME_PRIME_MODULES = (
+    "asyncio.base_events",
+    "asyncio.coroutines",
+    "asyncio.events",
+    "asyncio.futures",
+    "asyncio.tasks",
+    "asyncio.transports",
+)
 
 
 class SdkIdentityError(RuntimeError):
@@ -58,6 +67,7 @@ class SdkSessionFactory:
 
 
 def _load_sdk_session_class(import_module: Callable[[str], Any] | None = None):
+    _prime_sdk_runtime_imports()
     import_module = import_module or importlib.import_module
     errors = []
     for module_name in SDK_SESSION_MODULES:
@@ -77,6 +87,18 @@ def _load_sdk_session_class(import_module: Callable[[str], Any] | None = None):
     raise SdkIdentityError(
         f"Ratio1 SDK import failed. Tried {', '.join(SDK_SESSION_MODULES)}. {details}"
     )
+
+
+def _prime_sdk_runtime_imports() -> None:
+    module_names = SDK_RUNTIME_PRIME_MODULES
+    if sys.platform == "win32":
+        module_names = (*module_names, "asyncio.windows_events")
+
+    for module_name in module_names:
+        try:
+            importlib.import_module(module_name)
+        except Exception:
+            continue
 
 
 class SdkIdentityService:

@@ -18,6 +18,14 @@ set PYINSTALLER_CMD=pyinstaller --noconsole --windowed --onefile --clean --nocon
   --name="EdgeNodeLauncher" ^
   --icon=assets\r1_icon.ico ^
   --add-data "assets\r1_icon.ico;assets" ^
+  --collect-submodules=ratio1 ^
+  --hidden-import=asyncio.base_events ^
+  --hidden-import=asyncio.coroutines ^
+  --hidden-import=asyncio.events ^
+  --hidden-import=asyncio.futures ^
+  --hidden-import=asyncio.tasks ^
+  --hidden-import=asyncio.transports ^
+  --hidden-import=asyncio.windows_events ^
   --log-level=WARN ^
   launcher.py
 set APP_NAME=EdgeNodeLauncher
