@@ -824,19 +824,45 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     if record is None:
       self.apps_detail_text.setHtml(self._apps_empty_detail_html())
       return
-    self.apps_detail_text.setHtml(
-      self._apps_detail_html(
-        [
-          ("Name", record.app_name),
-          ("Type", record.app_type),
-          ("Status", record.status),
-          ("Node", record.node_address),
-          ("Pipeline", record.pipeline_name),
-          ("URL", record.app_url or "-"),
-          ("Last action", record.last_action or "-"),
-        ]
-      )
-    )
+    self.apps_detail_text.setHtml(self._apps_detail_html(self._apps_detail_rows(record)))
+
+  def _apps_detail_rows(self, record) -> list[tuple[str, str]]:
+    metadata = record.metadata or {}
+    rows = [
+      ("Name", record.app_name),
+      ("Type", record.app_type),
+      ("Status", record.status),
+      ("Node", record.node_address),
+      ("Pipeline", record.pipeline_name),
+      ("URL", record.app_url or "-"),
+      ("Last action", record.last_action or "-"),
+    ]
+
+    for label, key in (
+      ("Image", "image"),
+      ("Repository", "repo_url"),
+      ("Branch", "branch"),
+    ):
+      value = metadata.get(key)
+      if value:
+        rows.append((label, str(value)))
+
+    resources = self._format_app_detail_resources(metadata.get("resources"))
+    if resources:
+      rows.append(("Resources", resources))
+
+    volumes = self._format_app_detail_mapping(metadata.get("volumes"))
+    if volumes:
+      rows.append(("Volumes", volumes))
+
+    file_volumes = self._format_app_detail_file_volumes(metadata.get("file_volumes"))
+    if file_volumes:
+      rows.append(("Config files", file_volumes))
+
+    policies = self._format_app_detail_policies(metadata)
+    if policies:
+      rows.append(("Policies", policies))
+    return rows
 
   def _apps_empty_detail_html(self) -> str:
     return (
@@ -849,13 +875,63 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   def _apps_detail_html(self, rows) -> str:
     table_rows = []
     for label, value in rows:
+      safe_value = "<br>".join(escape(part) for part in str(value).splitlines())
       table_rows.append(
         "<tr>"
         f'<td style="padding:4px 16px 4px 0; font-weight:600;">{escape(str(label))}</td>'
-        f'<td style="padding:4px 0;">{escape(str(value))}</td>'
+        f'<td style="padding:4px 0;">{safe_value}</td>'
         "</tr>"
       )
     return '<table cellspacing="0" cellpadding="0">' + "".join(table_rows) + "</table>"
+
+  def _format_app_detail_resources(self, resources) -> str:
+    if not isinstance(resources, dict):
+      return ""
+    parts = []
+    for label, key in (("CPU", "cpu"), ("Memory", "memory"), ("GPU", "gpu")):
+      value = resources.get(key)
+      if value not in (None, "", []):
+        parts.append(f"{label}: {value}")
+    ports = resources.get("ports")
+    if ports:
+      parts.append(f"Ports: {', '.join(str(port) for port in ports)}")
+    return ", ".join(parts)
+
+  def _format_app_detail_mapping(self, mapping) -> str:
+    if not isinstance(mapping, dict) or not mapping:
+      return ""
+    return "\n".join(
+      f"{source} -> {target}"
+      for source, target in sorted(mapping.items(), key=lambda item: str(item[0]))
+    )
+
+  def _format_app_detail_file_volumes(self, file_volumes) -> str:
+    if not isinstance(file_volumes, dict) or not file_volumes:
+      return ""
+    rows = []
+    for name, payload in sorted(file_volumes.items(), key=lambda item: str(item[0])):
+      if isinstance(payload, dict):
+        mount_path = payload.get("mounting_point") or payload.get("mount_path") or "-"
+      else:
+        mount_path = "-"
+      rows.append(f"{name} -> {mount_path}")
+    return "\n".join(rows)
+
+  def _format_app_detail_policies(self, metadata) -> str:
+    if not isinstance(metadata, dict):
+      return ""
+    parts = []
+    for label, key in (
+      ("Restart", "restart_policy"),
+      ("Pull", "image_pull_policy"),
+      ("Tunnel", "tunnel_engine"),
+      ("VCS poll", "vcs_poll_interval"),
+    ):
+      value = metadata.get(key)
+      if value not in (None, "", []):
+        suffix = "s" if key == "vcs_poll_interval" else ""
+        parts.append(f"{label}: {value}{suffix}")
+    return ", ".join(parts)
 
   def _log_app_event(self, message: str, *, color: str = "blue", debug: bool = False) -> None:
     self.add_log(message, debug=debug, color=color)

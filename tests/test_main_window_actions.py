@@ -3222,6 +3222,20 @@ def test_apps_workspace_details_follow_updated_selection(qtbot, monkeypatch, tmp
             app_url="https://known.example",
             status="deployed",
             last_action="deployed",
+            metadata={
+                "image": "nginx:alpine",
+                "registry_password": "***REDACTED***",
+                "resources": {"cpu": 2, "memory": "1g", "gpu": 0, "ports": [8080]},
+                "volumes": {"cache": "/app/cache"},
+                "file_volumes": {
+                    "settings": {
+                        "mounting_point": "/app/settings.ini",
+                        "content": "***REDACTED***",
+                    }
+                },
+                "restart_policy": "on-failure",
+                "image_pull_policy": "if-not-present",
+            },
         )
     )
     launcher.apps_page.app_registry = registry
@@ -3230,7 +3244,16 @@ def test_apps_workspace_details_follow_updated_selection(qtbot, monkeypatch, tmp
     launcher.sidebar_panel.show_page("apps")
 
     launcher.apps_page.apps_table.selectRow(0)
-    assert "deployed" in launcher.apps_detail_text.toPlainText()
+    selected_text = launcher.apps_detail_text.toPlainText()
+    assert "deployed" in selected_text
+    assert "nginx:alpine" in selected_text
+    assert "CPU: 2, Memory: 1g, GPU: 0, Ports: 8080" in selected_text
+    assert "cache -> /app/cache" in selected_text
+    assert "settings -> /app/settings.ini" in selected_text
+    assert "Restart: on-failure" in selected_text
+    assert "Pull: if-not-present" in selected_text
+    assert "registry_password" not in selected_text
+    assert "***REDACTED***" not in selected_text
 
     qtbot.mouseClick(launcher.apps_page.stop_button, Qt.LeftButton)
 
