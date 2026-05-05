@@ -34,6 +34,29 @@ SMOKE_WORKER_APP_SECRET = "smoke-github-token"
 SMOKE_STATUS_SECRET = "smoke-status-token"
 
 
+def configure_qt_font_dir_for_windows(
+    *,
+    environ: dict[str, str] | None = None,
+    platform_name: str | None = None,
+    path_exists=None,
+) -> str:
+    environ = environ if environ is not None else os.environ
+    platform_name = platform_name if platform_name is not None else os.name
+    if platform_name != "nt" or environ.get("QT_QPA_FONTDIR"):
+        return ""
+
+    font_dir = Path(environ.get("WINDIR", r"C:\Windows")) / "Fonts"
+    exists = path_exists or Path.exists
+    if not exists(font_dir):
+        return ""
+
+    environ["QT_QPA_FONTDIR"] = str(font_dir)
+    return str(font_dir)
+
+
+configure_qt_font_dir_for_windows()
+
+
 class FakeDockerHandler:
     def __init__(self, container_name):
         self.container_name = container_name

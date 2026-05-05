@@ -65,6 +65,34 @@ def test_prepare_evidence_paths_resolves_before_launcher_changes_cwd(tmp_path, m
     assert not (changed_cwd / "evidence" / "result.json").exists()
 
 
+def test_configure_qt_font_dir_for_windows_uses_system_fonts_when_available(tmp_path):
+    env = {"WINDIR": str(tmp_path)}
+    fonts = tmp_path / "Fonts"
+    fonts.mkdir()
+
+    selected = smoke.configure_qt_font_dir_for_windows(
+        environ=env,
+        platform_name="nt",
+        path_exists=lambda path: path == fonts,
+    )
+
+    assert selected == str(fonts)
+    assert env["QT_QPA_FONTDIR"] == str(fonts)
+
+
+def test_configure_qt_font_dir_for_windows_preserves_existing_setting(tmp_path):
+    env = {"WINDIR": str(tmp_path), "QT_QPA_FONTDIR": "custom-fonts"}
+
+    selected = smoke.configure_qt_font_dir_for_windows(
+        environ=env,
+        platform_name="nt",
+        path_exists=lambda _path: True,
+    )
+
+    assert selected == ""
+    assert env["QT_QPA_FONTDIR"] == "custom-fonts"
+
+
 def test_smoke_window_snapshot_serializes_geometry():
     class FakeRect:
         def __init__(self, x, y, w, h):

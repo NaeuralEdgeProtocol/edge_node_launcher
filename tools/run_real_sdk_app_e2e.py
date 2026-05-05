@@ -32,6 +32,7 @@ from tools.run_smoke_e2e import (
     set_plain_text_value,
     wait_until,
 )
+from utils.edge_image_config import DEVNET_EDGE_NODE_IMAGE, configure_edge_node_image
 
 
 REAL_E2E_FLAG = "R1_LAUNCHER_REAL_SDK_E2E"
@@ -308,6 +309,7 @@ def size_evidence_page(app, page) -> None:
 def run_real_e2e(args):
     os.chdir(REPO_ROOT)
     sys.path.insert(0, str(REPO_ROOT))
+    image_config = configure_edge_node_image(cli_image=args.edge_image, production_mode=False)
 
     from PyQt5.QtWidgets import QApplication, QDialog
 
@@ -341,6 +343,8 @@ def run_real_e2e(args):
         "node_address": node_address,
         "container_name": container_name,
         "app_kind": args.app_kind,
+        "edge_image": image_config.image,
+        "sdk_network": image_config.environment_key,
         "registry_file": str(registry_file),
         "steps": [],
     }
@@ -503,6 +507,7 @@ def _click_validate_launch_refresh_copy_stop(app, page, log, args, app_type):
 def build_parser():
     parser = argparse.ArgumentParser(description="Run optional real devnet SDK app E2E.")
     parser.add_argument("--app-kind", choices=("car", "war", "both"), default="car")
+    parser.add_argument("--edge-image", default=DEVNET_EDGE_NODE_IMAGE)
     parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--deploy-timeout", type=int, default=240)
     parser.add_argument("--preflight-timeout", type=int, default=90)

@@ -43,6 +43,13 @@ def test_real_car_e2e_does_not_require_war_repo():
     assert real_e2e.validate_real_args(args, {}) == []
 
 
+def test_real_sdk_e2e_parser_defaults_to_devnet_edge_image():
+    parser = real_e2e.build_parser()
+    args = parser.parse_args([])
+
+    assert args.edge_image == real_e2e.DEVNET_EDGE_NODE_IMAGE
+
+
 def test_wait_until_page_state_reports_current_ui_state(monkeypatch):
     page = SimpleNamespace(
         validation_message=SimpleNamespace(text=lambda: "Launching secret-value"),
