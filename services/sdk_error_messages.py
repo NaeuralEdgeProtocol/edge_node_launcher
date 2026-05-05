@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 
 SDK_CREDENTIALS_MESSAGE = "Ratio1 SDK credentials are not configured. Configure network credentials, then retry."
+SDK_IMPORT_MESSAGE = "Ratio1 SDK is not available in this launcher environment. Repair launcher dependencies, then retry."
 SDK_VERSION_MESSAGE = "Ratio1 rejected the launcher SDK version. Update the Ratio1 SDK, then retry."
 
 
@@ -18,6 +19,19 @@ class SdkErrorMessage:
 def classify_sdk_error(error: str) -> SdkErrorMessage:
     diagnostic = str(error or "Unknown SDK error").strip() or "Unknown SDK error"
     normalized = diagnostic.lower()
+
+    if (
+        "ratio1 sdk import failed" in normalized
+        or "no module named 'ratio1'" in normalized
+        or "no module named \"ratio1\"" in normalized
+        or "session class was not found" in normalized
+    ):
+        return SdkErrorMessage(
+            category="import",
+            user_message=SDK_IMPORT_MESSAGE,
+            diagnostic=diagnostic,
+            classified=True,
+        )
 
     if "no user specified" in normalized and (
         "edge protocol network" in normalized or "credential" in normalized

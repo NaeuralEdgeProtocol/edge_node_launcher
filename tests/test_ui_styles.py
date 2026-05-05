@@ -94,6 +94,16 @@ def test_apps_page_controls_use_semantic_styles():
         assert "QTableWidget#appFileVolumesTable" in stylesheet
 
 
+def test_combo_popups_define_readable_text_and_selection_colors():
+    for stylesheet, colors in ((DARK_STYLESHEET, DARK_COLORS), (LIGHT_STYLESHEET, LIGHT_COLORS)):
+        assert "QComboBox[role=\"appCombo\"] QAbstractItemView" in stylesheet
+        assert f"color: {colors['combo_dropdown_text_color']};" in stylesheet
+        assert f"selection-background-color: {colors['combo_dropdown_select_bg']};" in stylesheet
+        assert f"selection-color: {colors['combo_dropdown_select_color']};" in stylesheet
+    assert DARK_COLORS["combo_dropdown_bg"] != DARK_COLORS["combo_dropdown_text_color"]
+    assert LIGHT_COLORS["combo_dropdown_bg"] != LIGHT_COLORS["combo_dropdown_text_color"]
+
+
 def test_stop_button_text_uses_readable_dark_color_on_yellow():
     for colors in (DARK_COLORS, LIGHT_COLORS):
         assert colors["toggle_button_stop_text"] == "#1F2937"

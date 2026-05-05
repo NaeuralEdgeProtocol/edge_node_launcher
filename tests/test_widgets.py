@@ -206,8 +206,12 @@ def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path, monkeypatc
     assert action_bar.property("role") == "appActionBar"
     assert isinstance(action_bar.layout(), QGridLayout)
     assert page.findChild(QPushButton, "appCreateButton").property("actionRole") == "primary"
+    assert page.findChild(QLabel, "appManagementTargetSectionLabel").text() == "Node scope"
     assert page.findChild(QWidget, "appManagementTargetNodeField").property("role") == "appTargetNodeField"
-    assert page.findChild(QComboBox, "appManagementNodeAddressCombo").itemText(0) == "Other..."
+    management_combo = page.findChild(QComboBox, "appManagementNodeAddressCombo")
+    assert management_combo.accessibleName() == "Node scope"
+    assert "SDK access" in management_combo.toolTip()
+    assert management_combo.itemText(0) == "Other..."
     assert page.findChild(QLineEdit, "appManagementNodeAddressInput").accessibleName() == "Custom node address"
     assert page.findChild(QLabel, "appManagementMessageLabel").property("role") == "appValidationMessage"
     assert page.findChild(QWidget, "appDeploymentPanel") is None
@@ -1192,6 +1196,8 @@ def _build_sidebar_panel_for_test(qtbot, *, sdk_identity_service=None, event_log
         copy_eth_handler=record("copy_eth"),
         theme_toggle_handler=record("theme"),
         force_debug_handler=record("debug"),
+        copy_log_handler=record("copy_log"),
+        clear_log_handler=record("clear_log"),
         sdk_identity_service=sdk_identity_service,
         event_logger=event_logger,
     )
@@ -1211,7 +1217,7 @@ def test_sidebar_panel_exposes_stable_launcher_controls(qtbot):
     assert panel.findChild(QToolButton, "navNodesButton").isChecked()
     assert panel.findChild(QToolButton, "navAppsButton") is not None
     assert panel.findChild(QToolButton, "navLogsButton") is not None
-    assert panel.findChild(QToolButton, "navDockerButton") is not None
+    assert panel.findChild(QToolButton, "navDockerButton") is None
     assert panel.findChild(QToolButton, "navSettingsButton") is not None
     assert panel.findChild(QToolButton, "navNetworkButton") is not None
     assert panel.add_node_button.objectName() == "addNodeButton"
@@ -1220,6 +1226,8 @@ def test_sidebar_panel_exposes_stable_launcher_controls(qtbot):
     assert panel.renameNodeButton.objectName() == "renameNodeButton"
     assert panel.toggleButton.objectName() == "startNodeButton"
     assert panel.docker_download_button.objectName() == "downloadDockerButton"
+    assert panel.sidebar_activity_log_copy_button.objectName() == "sidebarActivityLogCopyButton"
+    assert panel.sidebar_activity_log_clear_button.objectName() == "sidebarActivityLogClearButton"
     assert panel.dapp_button.objectName() == "openDappButton"
     assert panel.explorer_button.objectName() == "openExplorerButton"
     assert panel.refresh_sdk_identity_button.objectName() == "refreshSdkIdentityButton"
@@ -1235,8 +1243,9 @@ def test_sidebar_panel_exposes_stable_launcher_controls(qtbot):
     qtbot.mouseClick(panel.add_node_button, Qt.LeftButton)
     qtbot.mouseClick(panel.renameNodeButton, Qt.LeftButton)
     qtbot.mouseClick(panel.toggleButton, Qt.LeftButton)
-    panel.show_page("docker")
-    qtbot.mouseClick(panel.docker_download_button, Qt.LeftButton)
+    panel.show_page("logs")
+    qtbot.mouseClick(panel.sidebar_activity_log_copy_button, Qt.LeftButton)
+    qtbot.mouseClick(panel.sidebar_activity_log_clear_button, Qt.LeftButton)
     panel.show_page("apps")
     apps_sidebar_page = panel.findChild(QWidget, "appsSidebarPage")
     assert panel.page_stack.sizeHint().height() == apps_sidebar_page.sizeHint().height()
@@ -1244,6 +1253,7 @@ def test_sidebar_panel_exposes_stable_launcher_controls(qtbot):
     panel.apps_page.sdk_settings_requested.emit()
     assert panel.current_page_name() == "settings"
     assert panel.findChild(QToolButton, "navSettingsButton").isChecked()
+    qtbot.mouseClick(panel.docker_download_button, Qt.LeftButton)
     panel.show_page("network")
     qtbot.mouseClick(panel.dapp_button, Qt.LeftButton)
     qtbot.mouseClick(panel.explorer_button, Qt.LeftButton)
@@ -1257,6 +1267,8 @@ def test_sidebar_panel_exposes_stable_launcher_controls(qtbot):
         "add",
         "rename",
         "toggle",
+        "copy_log",
+        "clear_log",
         "docker",
         "dapp",
         "explorer",
@@ -1274,7 +1286,7 @@ def test_sidebar_panel_refreshes_and_copies_sdk_identity(qtbot):
         sdk_identity_service=service,
         event_logger=lambda message, **kwargs: events.append((message, kwargs)),
     )
-    panel.show_page("network")
+    panel.show_page("settings")
 
     QApplication.clipboard().clear()
     qtbot.mouseClick(panel.refresh_sdk_identity_button, Qt.LeftButton)
@@ -1307,6 +1319,7 @@ def test_sidebar_panel_compacts_long_sdk_identity_fields(qtbot):
         )
     )
     panel, _calls = _build_sidebar_panel_for_test(qtbot, sdk_identity_service=service)
+    panel.show_page("settings")
 
     qtbot.mouseClick(panel.refresh_sdk_identity_button, Qt.LeftButton)
 
@@ -1323,7 +1336,7 @@ def test_sidebar_panel_classifies_sdk_identity_refresh_errors(qtbot):
         error="Error: No user specified for ratio1 Edge Protocol network connection."
     )
     panel, _calls = _build_sidebar_panel_for_test(qtbot, sdk_identity_service=service)
-    panel.show_page("network")
+    panel.show_page("settings")
 
     qtbot.mouseClick(panel.refresh_sdk_identity_button, Qt.LeftButton)
 

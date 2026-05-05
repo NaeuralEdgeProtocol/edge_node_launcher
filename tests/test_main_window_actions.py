@@ -3202,7 +3202,6 @@ def test_main_window_sidebar_sections_group_controls(qtbot, monkeypatch):
         "nodeControlsSectionLabel": "Node",
         "appsPageSectionLabel": "Apps",
         "logsPageSectionLabel": "Logs",
-        "dockerSectionLabel": "Docker",
         "networkActionsSectionLabel": "Network",
         "statusSectionLabel": "Status",
         "settingsSectionLabel": "Settings",
@@ -3225,13 +3224,13 @@ def test_navigation_rail_switches_contextual_control_pages(qtbot, monkeypatch):
     pages = {
         "nodes": ("navNodesButton", "nodesPage", launcher.toggleButton),
         "apps": ("navAppsButton", "appsSidebarPage", launcher.findChild(QPushButton, "appCreateButton")),
-        "logs": ("navLogsButton", "logsPage", launcher.findChild(QLabel, "logsPagePlaceholderLabel")),
-        "docker": ("navDockerButton", "dockerPage", launcher.docker_download_button),
+        "logs": ("navLogsButton", "logsPage", launcher.sidebar_activity_log_copy_button),
         "settings": ("navSettingsButton", "settingsPage", launcher.themeToggleButton),
         "network": ("navNetworkButton", "networkPage", launcher.dapp_button),
     }
 
     assert launcher.navigation_page_stack.objectName() == "launcherPageStack"
+    assert launcher.findChild(QToolButton, "navDockerButton") is None
 
     for page_name, (button_name, page_object_name, expected_visible_widget) in pages.items():
         nav_button = launcher.findChild(QToolButton, button_name)
@@ -3251,6 +3250,10 @@ def test_navigation_rail_switches_contextual_control_pages(qtbot, monkeypatch):
             assert launcher.main_workspace_stack.currentWidget() is launcher.apps_workspace
         else:
             assert launcher.main_workspace_stack.currentWidget() is launcher.graphView
+
+        if page_name == "logs":
+            splitter_sizes = launcher.dashboard_splitter.sizes()
+            assert splitter_sizes[1] > splitter_sizes[0]
 
 
 def test_apps_workspace_details_follow_updated_selection(qtbot, monkeypatch, tmp_path):
@@ -3371,20 +3374,16 @@ def test_refresh_action_lives_with_status_section(qtbot, monkeypatch):
     assert status_button_area.indexOf(status_label) < status_button_area.indexOf(launcher.refreshButton)
 
 
-def test_docker_download_action_lives_with_network_actions(qtbot, monkeypatch):
+def test_docker_download_action_lives_with_settings_diagnostics(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
-    docker_button_area = launcher.findChild(QVBoxLayout, "dockerButtonArea")
-    docker_label = launcher.findChild(QLabel, "dockerSectionLabel")
+    diagnostics_panel = launcher.findChild(QWidget, "settingsDiagnosticsPanel")
     network_button_area = launcher.findChild(QVBoxLayout, "networkButtonArea")
     network_label = launcher.findChild(QLabel, "networkActionsSectionLabel")
 
-    assert docker_button_area is not None
-    assert docker_label is not None
+    assert diagnostics_panel is not None
     assert network_button_area is not None
     assert network_label is not None
-    assert docker_button_area.indexOf(docker_label) < docker_button_area.indexOf(
-        launcher.docker_download_button
-    )
+    assert launcher.docker_download_button.parent() is diagnostics_panel
     assert network_button_area.indexOf(network_label) < network_button_area.indexOf(launcher.dapp_button)
     assert network_button_area.indexOf(launcher.dapp_button) < network_button_area.indexOf(launcher.explorer_button)
 
@@ -3535,9 +3534,9 @@ def test_main_window_sidebar_controls_do_not_overlap_scrollbar(qtbot, monkeypatc
             launcher.toggleButton,
             launcher.refreshButton,
         ),
-        "docker": (launcher.docker_download_button,),
+        "logs": (launcher.sidebar_activity_log_copy_button, launcher.sidebar_activity_log_clear_button),
         "network": (launcher.dapp_button, launcher.explorer_button),
-        "settings": (launcher.themeToggleButton, launcher.force_debug_checkbox),
+        "settings": (launcher.themeToggleButton, launcher.force_debug_checkbox, launcher.docker_download_button),
     }
 
     for page_name, controls in page_controls.items():

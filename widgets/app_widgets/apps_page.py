@@ -153,7 +153,7 @@ class AppsPage(QWidget):
         self.apps_empty_state.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(self.apps_empty_state)
 
-        layout.addWidget(create_sidebar_section_label("Target", "appManagementTargetSectionLabel"))
+        layout.addWidget(create_sidebar_section_label("Node scope", "appManagementTargetSectionLabel"))
         layout.addWidget(self._create_management_target_node_field())
 
         app_actions = QWidget()
@@ -246,7 +246,8 @@ class AppsPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
-        self.management_node_address_combo = self._create_combo("appManagementNodeAddressCombo", "Target node")
+        self.management_node_address_combo = self._create_combo("appManagementNodeAddressCombo", "Node scope")
+        self.management_node_address_combo.setToolTip("Node used for SDK access checks and app status refresh")
         self.management_node_address_combo.addItem("Other...", OTHER_NODE_OPTION)
         self.management_node_address_combo.currentIndexChanged.connect(self._sync_management_target_node_choice)
         layout.addWidget(self.management_node_address_combo)

@@ -1,5 +1,6 @@
 from services.sdk_error_messages import (
     SDK_CREDENTIALS_MESSAGE,
+    SDK_IMPORT_MESSAGE,
     SDK_VERSION_MESSAGE,
     classify_sdk_error,
 )
@@ -25,6 +26,17 @@ def test_classify_sdk_version_error():
     assert result.classified is True
     assert result.category == "version"
     assert result.user_message == SDK_VERSION_MESSAGE
+
+
+def test_classify_sdk_import_error():
+    result = classify_sdk_error(
+        "Ratio1 SDK import failed. Tried ratio1, ratio1_sdk. "
+        "ratio1: ModuleNotFoundError: No module named 'ratio1'"
+    )
+
+    assert result.classified is True
+    assert result.category == "import"
+    assert result.user_message == SDK_IMPORT_MESSAGE
 
 
 def test_classify_sdk_error_keeps_unknown_diagnostic():

@@ -1,4 +1,11 @@
-from services.sdk_identity_service import SdkIdentityService, SdkSessionFactory
+import pytest
+
+from services.sdk_identity_service import (
+    SdkIdentityError,
+    SdkIdentityService,
+    SdkSessionFactory,
+    _load_sdk_session_class,
+)
 
 
 class FakeBcEngine:
@@ -40,3 +47,29 @@ def test_sdk_identity_service_loads_address_from_injected_session(tmp_path):
     assert FakeSession.created_kwargs[0]["local_cache_base_folder"] == str(tmp_path)
     assert FakeSession.created_kwargs[0]["local_cache_app_folder"] == "sdk"
     assert FakeSession.created_kwargs[0]["use_home_folder"] is False
+
+
+def test_sdk_session_loader_falls_back_to_ratio1_sdk_package():
+    calls = []
+
+    def fake_import_module(module_name):
+        calls.append(module_name)
+        if module_name == "ratio1":
+            raise ModuleNotFoundError("No module named 'ratio1'")
+        return type("FakeRatio1SdkModule", (), {"Session": FakeSession})
+
+    assert _load_sdk_session_class(fake_import_module) is FakeSession
+    assert calls == ["ratio1", "ratio1_sdk"]
+
+
+def test_sdk_session_loader_reports_checked_import_paths():
+    def fake_import_module(module_name):
+        raise ModuleNotFoundError(f"No module named '{module_name}'")
+
+    with pytest.raises(SdkIdentityError) as exc_info:
+        _load_sdk_session_class(fake_import_module)
+
+    message = str(exc_info.value)
+    assert "Tried ratio1, ratio1_sdk" in message
+    assert "ratio1: ModuleNotFoundError" in message
+    assert "ratio1_sdk: ModuleNotFoundError" in message

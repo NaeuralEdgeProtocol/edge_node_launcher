@@ -64,7 +64,6 @@ class SidebarPanel(QWidget):
         ("nodes", "Nodes", "navNodesButton", QStyle.SP_ComputerIcon),
         ("apps", "Apps", "navAppsButton", QStyle.SP_FileDialogContentsView),
         ("logs", "Logs", "navLogsButton", QStyle.SP_FileDialogDetailedView),
-        ("docker", "Docker", "navDockerButton", QStyle.SP_DriveHDIcon),
         ("settings", "Settings", "navSettingsButton", QStyle.SP_FileDialogDetailedView),
         ("network", "Network", "navNetworkButton", QStyle.SP_DriveNetIcon),
     )
@@ -86,6 +85,8 @@ class SidebarPanel(QWidget):
         copy_eth_handler,
         theme_toggle_handler,
         force_debug_handler,
+        copy_log_handler=None,
+        clear_log_handler=None,
         page_changed_handler=None,
         sdk_identity_service=None,
         event_logger=None,
@@ -106,6 +107,8 @@ class SidebarPanel(QWidget):
         self._copy_eth_handler = copy_eth_handler
         self._theme_toggle_handler = theme_toggle_handler
         self._force_debug_handler = force_debug_handler
+        self._copy_log_handler = copy_log_handler or (lambda: None)
+        self._clear_log_handler = clear_log_handler or (lambda: None)
         self._page_changed_handler = page_changed_handler
         self._sdk_identity_service = sdk_identity_service or SdkIdentityService()
         self._event_logger = event_logger
@@ -136,8 +139,7 @@ class SidebarPanel(QWidget):
 
         self._add_page("nodes", self._create_nodes_page())
         self._add_page("apps", self._create_apps_page())
-        self._add_page("logs", self._create_placeholder_page("Logs", "logsPage", "logsPageSectionLabel"))
-        self._add_page("docker", self._create_docker_page())
+        self._add_page("logs", self._create_logs_page())
         self._add_page("settings", self._create_settings_page())
         self._add_page("network", self._create_network_page())
         self.show_page("nodes")
@@ -293,26 +295,6 @@ class SidebarPanel(QWidget):
 
         return page
 
-    def _create_docker_page(self) -> QWidget:
-        page = self._create_page("dockerPage")
-        layout = QVBoxLayout(page)
-        layout.setObjectName("dockerButtonArea")
-        layout.setAlignment(Qt.AlignTop)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(5)
-        layout.addWidget(create_sidebar_section_label("Docker", "dockerSectionLabel"))
-
-        self.docker_download_button = create_sidebar_action_button(
-            DOWNLOAD_DOCKER_BUTTON_TEXT,
-            "downloadDockerButton",
-            "secondary",
-            DOCKER_DOWNLOAD_TOOLTIP,
-            self._docker_download_handler,
-        )
-        layout.addWidget(self.docker_download_button)
-        layout.addStretch(1)
-        return page
-
     def _create_apps_page(self) -> QWidget:
         app_registry = AppRegistry()
         deployment_client = Ratio1SdkDeploymentClient(app_registry=None)
@@ -336,6 +318,42 @@ class SidebarPanel(QWidget):
         self.apps_workspace_label.setProperty("role", "sidebarMutedText")
         self.apps_workspace_label.setWordWrap(True)
         layout.addWidget(self.apps_workspace_label)
+        layout.addStretch(1)
+        return page
+
+    def _create_logs_page(self) -> QWidget:
+        page = self._create_page("logsPage")
+        layout = QVBoxLayout(page)
+        layout.setObjectName("logsButtonArea")
+        layout.setAlignment(Qt.AlignTop)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(5)
+        layout.addWidget(create_sidebar_section_label("Logs", "logsPageSectionLabel"))
+
+        self.logs_scope_label = QLabel("Activity stream")
+        self.logs_scope_label.setObjectName("logsScopeLabel")
+        self.logs_scope_label.setAccessibleName("Activity log scope")
+        self.logs_scope_label.setProperty("role", "sidebarMutedText")
+        self.logs_scope_label.setWordWrap(True)
+        layout.addWidget(self.logs_scope_label)
+
+        self.sidebar_activity_log_copy_button = create_sidebar_action_button(
+            "Copy Log",
+            "sidebarActivityLogCopyButton",
+            "utility",
+            "Copy visible activity log",
+            self._copy_log_handler,
+        )
+        layout.addWidget(self.sidebar_activity_log_copy_button)
+
+        self.sidebar_activity_log_clear_button = create_sidebar_action_button(
+            "Clear Log",
+            "sidebarActivityLogClearButton",
+            "utility",
+            "Clear visible activity log",
+            self._clear_log_handler,
+        )
+        layout.addWidget(self.sidebar_activity_log_clear_button)
         layout.addStretch(1)
         return page
 
@@ -382,6 +400,14 @@ class SidebarPanel(QWidget):
         diagnostics_layout.addWidget(self.force_debug_checkbox)
         self.force_debug_state_label = self._create_settings_value_label("settingsDebugStateLabel")
         diagnostics_layout.addWidget(self.force_debug_state_label)
+        self.docker_download_button = create_sidebar_action_button(
+            DOWNLOAD_DOCKER_BUTTON_TEXT,
+            "downloadDockerButton",
+            "secondary",
+            DOCKER_DOWNLOAD_TOOLTIP,
+            self._docker_download_handler,
+        )
+        diagnostics_layout.addWidget(self.docker_download_button)
         layout.addWidget(diagnostics_panel)
 
         sdk_panel, sdk_layout = self._create_settings_panel(

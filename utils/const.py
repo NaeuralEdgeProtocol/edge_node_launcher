@@ -315,9 +315,10 @@ DARK_COLORS = {
     "combo_hover_bg": "#202734",
     "combo_hover_border": "#4EA3FF",
     "combo_arrow_color": "transparent",
-    "combo_dropdown_bg": "#FFFFFF",
-    "combo_dropdown_select_bg": "red",
-    "combo_dropdown_select_color": "black",
+    "combo_dropdown_bg": "#151A23",
+    "combo_dropdown_text_color": "#E8EEF8",
+    "combo_dropdown_select_bg": "#1B47F7",
+    "combo_dropdown_select_color": "#FFFFFF",
     "combobox_popup_border_color": "#2E6BFF",
     "combobox_popup_bg_color": "#151A23",
     "combobox_popup_item_hover_bg": "transparent",
@@ -413,8 +414,9 @@ LIGHT_COLORS = {
     "combo_hover_border": "#1B47F7",
     "combo_arrow_color": "transparent",
     "combo_dropdown_bg": "#FFFFFF",
-    "combo_dropdown_select_bg": "red",
-    "combo_dropdown_select_color": "black",
+    "combo_dropdown_text_color": "#1F2937",
+    "combo_dropdown_select_bg": "#DDE8FF",
+    "combo_dropdown_select_color": "#1F2937",
     "combobox_popup_border_color": "#D0D0D0",
     "combobox_popup_bg_color": "#F4F4F8",
     "combobox_popup_item_hover_bg": "transparent",
@@ -532,6 +534,29 @@ COMMON_STYLESHEET_TEMPLATE = """
     width: 0px;
     height: 0px;
     margin-right: 8px;
+  }}
+  QComboBox[role="appCombo"] QAbstractItemView {{
+    background-color: {combo_dropdown_bg};
+    color: {combo_dropdown_text_color};
+    selection-background-color: {combo_dropdown_select_bg};
+    selection-color: {combo_dropdown_select_color};
+    border: 1px solid {combo_border};
+    border-radius: 7px;
+    padding: 4px;
+    outline: none;
+  }}
+  QComboBox[role="appCombo"] QAbstractItemView::item {{
+    color: {combo_dropdown_text_color};
+    min-height: 26px;
+    padding: 4px 7px;
+  }}
+  QComboBox[role="appCombo"] QAbstractItemView::item:hover {{
+    background-color: {combo_hover_bg};
+    color: {combo_dropdown_text_color};
+  }}
+  QComboBox[role="appCombo"] QAbstractItemView::item:selected {{
+    background-color: {combo_dropdown_select_bg};
+    color: {combo_dropdown_select_color};
   }}
   QToolButton[role="appDisclosureButton"] {{
     background-color: {secondary_action_bg};
@@ -807,7 +832,7 @@ COMMON_STYLESHEET_TEMPLATE = """
   }}
   QComboBox QAbstractItemView {{
     background-color: {combo_dropdown_bg};
-    color: {text_color};
+    color: {combo_dropdown_text_color};
     selection-background-color: {combo_dropdown_select_bg};
     selection-color: {combo_dropdown_select_color};
     border: 1px solid {combo_border};
@@ -816,15 +841,18 @@ COMMON_STYLESHEET_TEMPLATE = """
     min-width: 190px;
   }}
   QComboBox QAbstractItemView::item {{
+    color: {combo_dropdown_text_color};
     min-height: 24px;
     padding: 3px 5px;
     text-align: center;
   }}
   QComboBox QAbstractItemView::item:hover {{
     background-color: {combo_hover_bg};
+    color: {combo_dropdown_text_color};
   }}
   QComboBox QAbstractItemView::item:selected {{
     background-color: {combo_dropdown_select_bg};
+    color: {combo_dropdown_select_color};
   }}
   QLabel[role="sidebarSection"] {{
     color: {section_label_text};

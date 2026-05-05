@@ -61,6 +61,8 @@ ACTION_IDS = [
     "nodeInfoRefreshButton",
     "activityLogCopyButton",
     "activityLogClearButton",
+    "sidebarActivityLogCopyButton",
+    "sidebarActivityLogClearButton",
     "appValidateButton",
     "appLaunchButton",
     "appRefreshButton",

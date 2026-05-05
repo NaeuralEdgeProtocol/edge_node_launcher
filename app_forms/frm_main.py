@@ -163,6 +163,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.activity_log_copy_button = None
     self.activity_log_clear_button = None
     self.dashboard_splitter = None
+    self._dashboard_sizes_before_log_focus = None
     self.log_buffer = []
     self.__force_debug = False
     super().__init__()
@@ -960,8 +961,32 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   def _on_navigation_page_changed(self, page_name: str) -> None:
     if not hasattr(self, "main_workspace_stack"):
       return
-    target = self.apps_workspace if page_name == "apps" else self.graphView
+    if page_name == "logs":
+      target = self.graphView
+      self._focus_activity_log_panel()
+    else:
+      target = self.apps_workspace if page_name == "apps" else self.graphView
+      self._restore_dashboard_splitter_after_log_focus()
     self.main_workspace_stack.setCurrentWidget(target)
+
+  def _focus_activity_log_panel(self) -> None:
+    if self.dashboard_splitter is None:
+      return
+    current_sizes = self.dashboard_splitter.sizes()
+    if current_sizes and sum(current_sizes) > 0 and self._dashboard_sizes_before_log_focus is None:
+      self._dashboard_sizes_before_log_focus = list(current_sizes)
+
+    total_height = max(sum(current_sizes), 1)
+    log_height = max(280, int(total_height * 0.62))
+    graph_height = max(180, total_height - log_height)
+    self.dashboard_splitter.setSizes([graph_height, log_height])
+    self._schedule_log_scroll()
+
+  def _restore_dashboard_splitter_after_log_focus(self) -> None:
+    if self.dashboard_splitter is None or self._dashboard_sizes_before_log_focus is None:
+      return
+    self.dashboard_splitter.setSizes(self._dashboard_sizes_before_log_focus)
+    self._dashboard_sizes_before_log_focus = None
 
   def _create_right_dashboard_container(self) -> QWidget:
     right_container = QWidget()
@@ -1007,6 +1032,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         copy_eth_handler=self.copy_eth_address,
         theme_toggle_handler=self.toggle_theme,
         force_debug_handler=self.toggle_force_debug,
+        copy_log_handler=self.copy_activity_log,
+        clear_log_handler=self.clear_activity_log,
         page_changed_handler=self._on_navigation_page_changed,
         event_logger=self._log_app_event,
         parent=self,
@@ -1029,6 +1056,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.explorer_button = panel.explorer_button
     self.refresh_sdk_identity_button = panel.refresh_sdk_identity_button
     self.copy_sdk_identity_address_button = panel.copy_sdk_identity_address_button
+    self.sidebar_activity_log_copy_button = panel.sidebar_activity_log_copy_button
+    self.sidebar_activity_log_clear_button = panel.sidebar_activity_log_clear_button
     self.refreshButton = panel.refreshButton
     self.themeToggleButton = panel.themeToggleButton
     self.force_debug_checkbox = panel.force_debug_checkbox

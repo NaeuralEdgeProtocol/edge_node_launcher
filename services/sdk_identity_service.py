@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import inspect
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,6 +10,7 @@ from utils.const import CONFIG_DIR
 
 
 LAUNCHER_SDK_ALIAS = "edge-node-launcher"
+SDK_SESSION_MODULES = ("ratio1", "ratio1_sdk")
 
 
 class SdkIdentityError(RuntimeError):
@@ -42,11 +44,7 @@ class SdkSessionFactory:
     def create_session(self):
         session_class = self.session_class
         if session_class is None:
-            try:
-                from ratio1 import Session
-            except Exception as exc:
-                raise SdkIdentityError(f"Ratio1 SDK import failed: {exc}") from exc
-            session_class = Session
+            session_class = _load_sdk_session_class()
 
         kwargs = {
             "silent": True,
@@ -57,6 +55,28 @@ class SdkSessionFactory:
         }
         kwargs.update(self.session_kwargs)
         return session_class(**kwargs)
+
+
+def _load_sdk_session_class(import_module: Callable[[str], Any] | None = None):
+    import_module = import_module or importlib.import_module
+    errors = []
+    for module_name in SDK_SESSION_MODULES:
+        try:
+            module = import_module(module_name)
+        except Exception as exc:
+            errors.append(f"{module_name}: {type(exc).__name__}: {exc}")
+            continue
+
+        session_class = getattr(module, "Session", None)
+        if session_class is None:
+            errors.append(f"{module_name}: Session class was not found")
+            continue
+        return session_class
+
+    details = "; ".join(errors) if errors else "no modules were checked"
+    raise SdkIdentityError(
+        f"Ratio1 SDK import failed. Tried {', '.join(SDK_SESSION_MODULES)}. {details}"
+    )
 
 
 class SdkIdentityService:

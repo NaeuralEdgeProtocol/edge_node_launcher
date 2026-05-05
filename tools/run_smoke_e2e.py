@@ -407,12 +407,28 @@ def capture_visual_evidence(launcher, screenshot_dir, label):
 
 
 def combo_popup_visual_snapshot(app, combo):
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtTest import QTest
+
+    combo_window = combo.window()
+    if combo_window is not None:
+        combo_window.raise_()
+        combo_window.activateWindow()
+    combo.setFocus(Qt.MouseFocusReason)
     combo.showPopup()
     app.processEvents()
     time.sleep(0.05)
     app.processEvents()
 
-    popup = combo.view().window()
+    view = combo.view()
+    popup = view.window()
+    if not (popup.isVisible() or view.isVisible()):
+        QTest.mouseClick(combo, Qt.LeftButton)
+        app.processEvents()
+        time.sleep(0.05)
+        app.processEvents()
+        view = combo.view()
+        popup = view.window()
     return {
         "combo_object_name": combo.objectName(),
         "combo_accessible_name": combo.accessibleName(),
@@ -429,21 +445,30 @@ def combo_popup_visual_snapshot(app, combo):
             for index in range(combo.count())
         ],
         "popup_visible": popup.isVisible(),
+        "view_visible": view.isVisible(),
         "popup_rect": widget_global_rect(popup),
+        "view_rect": widget_global_rect(view),
         "popup_widget": popup,
+        "view_widget": view,
     }
 
 
 def capture_combo_popup_visual_evidence(app, combo, screenshot_dir, label):
     snapshot = combo_popup_visual_snapshot(app, combo)
     popup = snapshot.pop("popup_widget")
+    view = snapshot.pop("view_widget")
     evidence = {
         "label": label,
         "combo_popup": snapshot,
     }
-    if screenshot_dir and snapshot["popup_visible"]:
+    screenshot_target = None
+    if snapshot["popup_visible"]:
+        screenshot_target = popup
+    elif snapshot["view_visible"]:
+        screenshot_target = view
+    if screenshot_dir and screenshot_target is not None:
         evidence["screenshot"] = save_widget_screenshot(
-            popup,
+            screenshot_target,
             screenshot_dir,
             f"{label}_combo_popup.png",
         )
@@ -1348,7 +1373,7 @@ def run_scenarios(args):
         launcher.resize(1600, 900)
         app.processEvents()
 
-        for page_name in ("apps", "logs", "docker", "settings", "network", "nodes"):
+        for page_name in ("apps", "logs", "settings", "network", "nodes"):
             if getattr(launcher, "toast", None) is not None:
                 launcher.toast.hide()
             show_launcher_page(app, launcher, page_name)
@@ -1670,8 +1695,8 @@ def run_scenarios(args):
                 "visual": capture_toast_visual_evidence(launcher, args.screenshot_dir, "explorer_placeholder"),
             },
         )
-        show_launcher_page(app, launcher, "docker")
-        record_step(log, args.output, {"step": "show docker page"})
+        show_launcher_page(app, launcher, "settings")
+        record_step(log, args.output, {"step": "show settings page for Docker action"})
         record_step(log, args.output, {"step": click_button(app, launcher.docker_download_button, "open docker download link")})
 
         def capture_and_cancel_add_node_dialog():
