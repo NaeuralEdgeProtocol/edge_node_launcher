@@ -24,6 +24,8 @@ def test_sidebar_action_buttons_are_styled_by_hierarchy_role():
         assert 'QPushButton[actionRole="primary"]' in stylesheet
         assert 'QPushButton[actionRole="secondary"]' in stylesheet
         assert 'QPushButton[actionRole="utility"]' in stylesheet
+        assert "margin: 0px;" in stylesheet
+        assert 'font-family: "Segoe UI";' in stylesheet
         assert "action_button_border_radius" not in stylesheet
 
 

@@ -5,6 +5,7 @@ from PyQt5.QtCore import Qt
 
 from utils.const import DARK_STYLESHEET
 from utils.screen_geometry import available_screen_geometry
+from widgets.AdaptiveTextButton import AdaptiveTextButton
 
 class DockerCheckDialog(QDialog):
     def __init__(self, parent=None, icon=None):
@@ -43,7 +44,7 @@ class DockerCheckDialog(QDialog):
         button_layout.setSpacing(10)
         
         # Download Docker button - apply toggle_button_start styles
-        self.download_button = QPushButton('Download Docker')
+        self.download_button = AdaptiveTextButton('Download Docker', compact_text='Docker')
         self.download_button.setObjectName("dockerCheckDownloadButton")
         self.download_button.setAccessibleName("Download Docker")
         self.download_button.setToolTip("Open Docker Desktop download page")
@@ -54,7 +55,7 @@ class DockerCheckDialog(QDialog):
         button_layout.addWidget(self.download_button)
         
         # Try Again button - apply toggle_button_start styles
-        self.retry_button = QPushButton('Try Again')
+        self.retry_button = AdaptiveTextButton('Try Again')
         self.retry_button.setObjectName("dockerCheckRetryButton")
         self.retry_button.setAccessibleName("Try Docker check again")
         self.retry_button.setToolTip("Check Docker again")
@@ -65,7 +66,7 @@ class DockerCheckDialog(QDialog):
         button_layout.addWidget(self.retry_button)
         
         # Quit button - explicitly using toggle_button_stop styles
-        self.quit_button = QPushButton('Quit')
+        self.quit_button = AdaptiveTextButton('Quit')
         self.quit_button.setObjectName("dockerCheckQuitButton")
         self.quit_button.setAccessibleName("Quit launcher")
         self.quit_button.setToolTip("Close the launcher")

@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
 from PyQt5.QtCore import Qt
 
 from widgets.ToastWidget import ToastWidget, NotificationType
+from widgets.AdaptiveTextButton import AdaptiveTextButton
 from utils.const import DARK_STYLESHEET
 
 
@@ -80,7 +81,7 @@ class AddressRow(QWidget):
             f"QLineEdit#authorizedAddressInput {{ color: {input_text_color}; }}"
         )
 
-        self.copy_addr_btn = QPushButton("Copy", parent=self)
+        self.copy_addr_btn = AdaptiveTextButton("Copy", parent=self)
         self.copy_addr_btn.setObjectName("authorizedAddressCopyAddressButton")
         self.copy_addr_btn.setAccessibleName("Copy authorized address")
         self.copy_addr_btn.setToolTip("Copy authorized address")
@@ -113,7 +114,7 @@ class AddressRow(QWidget):
             f"QLineEdit#authorizedAliasInput {{ color: {input_text_color}; }}"
         )
 
-        self.copy_alias_btn = QPushButton("Copy", parent=self)
+        self.copy_alias_btn = AdaptiveTextButton("Copy", parent=self)
         self.copy_alias_btn.setObjectName("authorizedAddressCopyAliasButton")
         self.copy_alias_btn.setAccessibleName("Copy authorized address alias")
         self.copy_alias_btn.setToolTip("Copy authorized address alias")
@@ -125,7 +126,7 @@ class AddressRow(QWidget):
         alias_layout.addWidget(self.copy_alias_btn)
 
         # Delete button
-        self.delete_btn = QPushButton("Remove", parent=self)
+        self.delete_btn = AdaptiveTextButton("Remove", parent=self)
         self.delete_btn.setObjectName("authorizedAddressDeleteButton")
         self.delete_btn.setAccessibleName("Remove authorized address")
         self.delete_btn.setToolTip("Remove authorized address")
@@ -250,21 +251,21 @@ class AuthorizedAddressesDialog(QDialog):
         bottom_layout = QHBoxLayout(self.button_row)
         bottom_layout.setContentsMargins(0, 0, 0, 0)
         bottom_layout.setSpacing(12)
-        self.add_btn = QPushButton("Add New Address")
+        self.add_btn = AdaptiveTextButton("Add New Address", compact_text="Add Address")
         self.add_btn.setObjectName("authorizedAddressAddButton")
         self.add_btn.setAccessibleName("Add authorized address")
         self.add_btn.setToolTip("Add another authorized address")
         self.add_btn.setProperty("actionRole", "secondary")
         self._prepare_footer_button(self.add_btn, minimum_width=170)
         self.add_btn.clicked.connect(self.add_row)
-        self.save_btn = QPushButton("Save")
+        self.save_btn = AdaptiveTextButton("Save")
         self.save_btn.setObjectName("authorizedAddressSaveButton")
         self.save_btn.setAccessibleName("Save authorized addresses")
         self.save_btn.setToolTip("Save authorized address changes")
         self.save_btn.setProperty("actionRole", "primary")
         self._prepare_footer_button(self.save_btn)
         self.save_btn.clicked.connect(self.save_changes)
-        self.close_btn = QPushButton("Close")
+        self.close_btn = AdaptiveTextButton("Close")
         self.close_btn.setObjectName("authorizedAddressCloseButton")
         self.close_btn.setAccessibleName("Close authorized addresses")
         self.close_btn.setToolTip("Close without saving")

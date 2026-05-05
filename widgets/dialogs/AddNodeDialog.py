@@ -10,6 +10,8 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from widgets.AdaptiveTextButton import AdaptiveTextButton
+
 
 CreateNodeCallback = Callable[[str, str, Optional[str], QDialog], None]
 ButtonStyler = Callable[[QPushButton, str], None]
@@ -56,7 +58,10 @@ class AddNodeDialog(QDialog):
         button_layout = QHBoxLayout(self.button_row)
         button_layout.setContentsMargins(0, 0, 0, 0)
         button_layout.setSpacing(12)
-        self.create_button = QPushButton("Create Anyway" if self._is_overcommit else "Create Node")
+        self.create_button = AdaptiveTextButton(
+            "Create Anyway" if self._is_overcommit else "Create Node",
+            compact_text="Create",
+        )
         self.create_button.setObjectName("createNodeConfirmButton")
         self.create_button.setAccessibleName("Create node")
         self.create_button.setToolTip(
@@ -66,7 +71,7 @@ class AddNodeDialog(QDialog):
         )
         self.create_button.setProperty("actionRole", "primary")
         self._prepare_button(self.create_button)
-        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button = AdaptiveTextButton("Cancel")
         self.cancel_button.setObjectName("createNodeCancelButton")
         self.cancel_button.setAccessibleName("Cancel node creation")
         self.cancel_button.setToolTip("Cancel node creation")

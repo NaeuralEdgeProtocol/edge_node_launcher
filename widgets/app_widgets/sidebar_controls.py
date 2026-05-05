@@ -2,6 +2,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import QLabel, QPushButton, QSizePolicy
 
+from widgets.AdaptiveTextButton import AdaptiveTextButton
+
 SIDEBAR_SECTION_LABEL_HEIGHT = 24
 SIDEBAR_ACTION_BUTTON_HEIGHTS = {
     "primary": 48,
@@ -27,8 +29,10 @@ def create_sidebar_action_button(
     action_role: str,
     tooltip: str,
     handler,
+    *,
+    compact_text: str | None = None,
 ) -> QPushButton:
-    button = QPushButton(text)
+    button = AdaptiveTextButton(text, compact_text=compact_text)
     button.setObjectName(object_name)
     button.setProperty("actionRole", action_role)
     button.setToolTip(tooltip)
@@ -40,6 +44,6 @@ def create_sidebar_action_button(
     )
     button.setMinimumHeight(button_height)
     button.setMaximumHeight(button_height)
-    button.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+    button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
     button.clicked.connect(handler)
     return button

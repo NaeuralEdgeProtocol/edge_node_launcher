@@ -11,6 +11,8 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from widgets.AdaptiveTextButton import AdaptiveTextButton
+
 
 AliasValidator = Callable[[str], Optional[str]]
 AliasSubmitter = Callable[[str, Callable[[], None]], bool]
@@ -107,14 +109,14 @@ class RenameNodeDialog(QDialog):
         button_layout = QHBoxLayout(self.button_row)
         button_layout.setContentsMargins(0, 0, 0, 0)
         button_layout.setSpacing(12)
-        self.save_button = QPushButton("Save")
+        self.save_button = AdaptiveTextButton("Save")
         self.save_button.setObjectName("renameNodeSaveButton")
         self.save_button.setAccessibleName("Save node name")
         self.save_button.setToolTip("Save node display name")
         self.save_button.setProperty("type", "confirm")
         self.save_button.setProperty("actionRole", "primary")
         self._prepare_button(self.save_button)
-        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button = AdaptiveTextButton("Cancel")
         self.cancel_button.setObjectName("renameNodeCancelButton")
         self.cancel_button.setAccessibleName("Cancel node rename")
         self.cancel_button.setToolTip("Cancel node rename")

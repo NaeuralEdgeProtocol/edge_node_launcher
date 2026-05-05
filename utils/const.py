@@ -989,11 +989,12 @@ COMMON_STYLESHEET_TEMPLATE = """
     color: {primary_action_text};
     border: 1px solid {primary_action_border};
     border-radius: {action_button_border_radius};
-    padding: 5px 10px;
-    margin: 3px 6px;
+    padding: 7px 12px;
+    margin: 0px;
     min-height: 24px;
     font-size: 14px;
     font-weight: bold;
+    font-family: "Segoe UI";
   }}
   QPushButton[actionRole="primary"]:hover {{
     background-color: {primary_action_hover};
@@ -1003,11 +1004,12 @@ COMMON_STYLESHEET_TEMPLATE = """
     color: {secondary_action_text};
     border: 1px solid {secondary_action_border};
     border-radius: {action_button_border_radius};
-    padding: 5px 10px;
-    margin: 3px 6px;
+    padding: 7px 12px;
+    margin: 0px;
     min-height: 22px;
     font-size: 14px;
     font-weight: {button_font_weight};
+    font-family: "Segoe UI";
   }}
   QPushButton[actionRole="secondary"]:hover {{
     background-color: {secondary_action_hover};
@@ -1017,11 +1019,12 @@ COMMON_STYLESHEET_TEMPLATE = """
     color: {utility_action_text};
     border: 1px solid {utility_action_border};
     border-radius: {action_button_border_radius};
-    padding: 5px 10px;
-    margin: 3px 6px;
+    padding: 7px 12px;
+    margin: 0px;
     min-height: 22px;
     font-size: 14px;
     font-weight: {button_font_weight};
+    font-family: "Segoe UI";
   }}
   QPushButton[actionRole="utility"]:hover {{
     background-color: {utility_action_hover};

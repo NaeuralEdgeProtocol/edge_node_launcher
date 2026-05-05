@@ -36,6 +36,7 @@ from services.sdk_identity_service import SdkIdentity
 from widgets.DockerPullDialog import DOCKER_PULL_DIALOG_STYLE_COLORS, DockerPullDialog
 from widgets.LoadingDialog import LoadingDialog
 from widgets.CenteredComboBox import CenteredComboBox
+from widgets.AdaptiveTextButton import AdaptiveTextButton
 from widgets.loading_indicator import LoadingIndicator
 from app_forms.frm_utils import LoadingIndicator as LegacyLoadingIndicator
 from widgets.app_widgets.activity_log import ACTIVITY_LOG_COLOR_MAP, ActivityLogWidget
@@ -1212,11 +1213,49 @@ def test_sidebar_control_factories_expose_stable_metadata(qtbot):
     assert button.minimumWidth() == 0
     assert button.minimumHeight() == SIDEBAR_ACTION_BUTTON_HEIGHTS["secondary"]
     assert button.maximumHeight() == SIDEBAR_ACTION_BUTTON_HEIGHTS["secondary"]
-    assert button.sizePolicy().horizontalPolicy() == QSizePolicy.Ignored
+    assert button.sizePolicy().horizontalPolicy() == QSizePolicy.Expanding
+    assert isinstance(button, AdaptiveTextButton)
+    assert button.property("fullText") == "Launch dApp"
+    assert button.property("responsiveText") is True
 
     qtbot.mouseClick(button, Qt.LeftButton)
 
     assert calls == ["clicked"]
+
+
+def test_sidebar_action_buttons_adapt_text_in_narrow_spaces(qtbot):
+    button = create_sidebar_action_button(
+        "Switch to Dark Theme",
+        "themeToggleButton",
+        "utility",
+        "Switch between dark and light themes",
+        lambda: None,
+    )
+    qtbot.addWidget(button)
+
+    button.show()
+    qtbot.waitUntil(button.isVisible)
+
+    metrics = button.fontMetrics()
+    full_width = metrics.horizontalAdvance("Switch to Dark Theme")
+    compact_width = metrics.horizontalAdvance("Dark Theme")
+    narrow_width = min(
+        full_width + AdaptiveTextButton.TEXT_HORIZONTAL_INSET - 1,
+        compact_width + AdaptiveTextButton.TEXT_HORIZONTAL_INSET + 24,
+    )
+
+    button.resize(narrow_width, SIDEBAR_ACTION_BUTTON_HEIGHTS["utility"])
+    qtbot.wait(0)
+
+    assert button.text() == "Dark Theme"
+    assert button.property("fullText") == "Switch to Dark Theme"
+    assert button.accessibleName() == "Switch to Dark Theme"
+    assert button.fontMetrics().horizontalAdvance(button.text()) <= button.width() - 24
+
+    button.resize(full_width + AdaptiveTextButton.TEXT_HORIZONTAL_INSET + 40, SIDEBAR_ACTION_BUTTON_HEIGHTS["utility"])
+    qtbot.wait(0)
+
+    assert button.text() == "Switch to Dark Theme"
 
 
 def _build_sidebar_panel_for_test(qtbot, *, sdk_identity_service=None, event_logger=None):
