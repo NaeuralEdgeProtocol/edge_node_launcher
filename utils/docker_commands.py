@@ -30,6 +30,7 @@ DEFAULT_TIMEOUT = 90  # Default timeout for commands in seconds
 THREAD_JOIN_TIMEOUT = 2  # Timeout for thread joining in seconds
 DOCKER_STATUS_TIMEOUT = 10  # Short timeout for UI refresh/status checks
 GPU_CHECK_TIMEOUT = 5  # Short timeout for nvidia-smi availability probes
+NODE_HISTORY_TIMEOUT = 20  # Bounded telemetry-history probe timeout
 
 @dataclass
 class ContainerInfo:
@@ -119,11 +120,12 @@ class DockerCommandThread(QThread):
     command_finished = pyqtSignal(dict)
     command_error = pyqtSignal(str)
 
-    def __init__(self, container_name: str, command: str, input_data: str = None):
+    def __init__(self, container_name: str, command: str, input_data: str = None, timeout: Optional[int] = None):
         super().__init__()
         self.container_name = container_name
         self.command = command
         self.input_data = input_data
+        self.timeout = timeout or DEFAULT_TIMEOUT
         # Store the result to be processed in the main thread
         self.result_data = None
         self.error_message = None
@@ -147,7 +149,7 @@ class DockerCommandThread(QThread):
                         input=self.input_data,
                         capture_output=True,
                         text=True,
-                        timeout=DEFAULT_TIMEOUT,
+                        timeout=self.timeout,
                         creationflags=subprocess.CREATE_NO_WINDOW
                     )
                 else:
@@ -156,7 +158,7 @@ class DockerCommandThread(QThread):
                         input=self.input_data,
                         capture_output=True,
                         text=True,
-                        timeout=DEFAULT_TIMEOUT
+                        timeout=self.timeout
                     )
                 if result.returncode != 0:
                     self.error_message = f"Command failed: {result.stderr}\nCommand: {' '.join(full_command)}\nInput data: {self.input_data}"
@@ -599,8 +601,8 @@ class DockerCommandHandler:
         
         return command
 
-    def _execute_threaded(self, command: str, callback, error_callback, input_data: str = None) -> None:
-        thread = DockerCommandThread(self.container_name, command, input_data)
+    def _execute_threaded(self, command: str, callback, error_callback, input_data: str = None, timeout: Optional[int] = None) -> None:
+        thread = DockerCommandThread(self.container_name, command, input_data, timeout=timeout)
         
         # Connect signals to slots that will safely emit signals in the main thread
         thread.finished.connect(lambda: self._handle_thread_finished(thread, callback, error_callback))
@@ -660,7 +662,12 @@ class DockerCommandHandler:
                     logging.error(traceback.format_exc())
                     error_callback(f"Failed to process metrics: {str(e)}")
 
-            self._execute_threaded('get_node_history', process_metrics, error_callback)
+            self._execute_threaded(
+                'get_node_history',
+                process_metrics,
+                error_callback,
+                timeout=NODE_HISTORY_TIMEOUT,
+            )
         except Exception as e:
             logging.error(f"Error in get_node_history: {str(e)}")
             error_callback(f"Error getting node history: {str(e)}")

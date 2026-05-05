@@ -275,6 +275,48 @@ def test_execute_command_returns_timeout_error(monkeypatch):
     assert return_code == 124
 
 
+def test_get_node_history_uses_short_telemetry_timeout(monkeypatch):
+    handler = make_handler(monkeypatch, container_name="r1devnode")
+    calls = []
+
+    def fake_execute_threaded(command, callback, error_callback, input_data=None, timeout=None):
+        calls.append((command, input_data, timeout))
+
+    monkeypatch.setattr(handler, "_execute_threaded", fake_execute_threaded)
+
+    handler.get_node_history(lambda history: None, lambda error: None)
+
+    assert calls == [
+        (
+            "get_node_history",
+            None,
+            docker_commands.NODE_HISTORY_TIMEOUT,
+        )
+    ]
+
+
+def test_docker_command_thread_uses_custom_timeout(monkeypatch):
+    calls = []
+    thread = docker_commands.DockerCommandThread("r1node", "get_node_history", timeout=7)
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+
+        class Result:
+            returncode = 0
+            stdout = "{}"
+            stderr = ""
+
+        return Result()
+
+    monkeypatch.setattr(docker_commands.subprocess, "run", fake_run)
+    monkeypatch.setattr(docker_commands.os, "name", "posix")
+
+    thread.run()
+
+    assert calls[0][1]["timeout"] == 7
+
+
 def test_get_container_stats_uses_bounded_docker_stats_worker(monkeypatch):
     handler = make_handler(monkeypatch, container_name="r1devnode")
     calls = []
