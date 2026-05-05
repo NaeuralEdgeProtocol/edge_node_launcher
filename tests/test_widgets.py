@@ -184,7 +184,14 @@ def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
     assert page.findChild(QWidget, "appRuntimePanel").property("role") == "appRuntimePanel"
     assert page.findChild(QLineEdit, "appCpuInput").text() == "1"
     assert page.findChild(QLineEdit, "appMemoryInput").text() == "512m"
-    assert page.findChild(QPlainTextEdit, "appVolumesInput").property("role") == "appTextInput"
+    volume_editor = page.findChild(QWidget, "appVolumeEditor")
+    volume_table = page.findChild(QTableWidget, "appVolumesTable")
+    assert volume_editor.property("role") == "appVolumeEditor"
+    assert page.findChild(QLineEdit, "appVolumeSourceInput").placeholderText() == "volume_name"
+    assert page.findChild(QLineEdit, "appVolumeMountInput").placeholderText() == "/container/path"
+    assert volume_table.accessibleName() == "Configured volume mounts"
+    assert volume_table.horizontalHeaderItem(0).text() == "Source"
+    assert volume_table.horizontalHeaderItem(1).text() == "Mount path"
     assert page.findChild(QComboBox, "appRestartPolicyCombo").currentText() == "always"
     assert page.findChild(QComboBox, "appImagePullPolicyCombo").currentText() == "always"
     assert page.findChild(QLineEdit, "workerRegistryInput").text() == "docker.io"
@@ -194,6 +201,25 @@ def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
     assert page.findChild(QPushButton, "appRefreshButton").property("actionRole") == "secondary"
     assert page.findChild(QPushButton, "appStopButton").property("actionRole") == "utility"
     assert page.findChild(QPushButton, "appCopyUrlButton").property("actionRole") == "utility"
+    assert page.findChild(QPushButton, "appSdkSettingsButton").property("actionRole") == "utility"
+    assert page.findChild(QPushButton, "appAddVolumeButton").property("actionRole") == "secondary"
+    assert page.findChild(QPushButton, "appRemoveVolumeButton").property("actionRole") == "utility"
+
+    requested = []
+    page.sdk_settings_requested.connect(lambda: requested.append(True))
+    qtbot.mouseClick(page.findChild(QPushButton, "appSdkSettingsButton"), Qt.LeftButton)
+    assert requested == [True]
+
+    page.advanced_options_toggle.setChecked(True)
+    page.app_volume_source_input.setText("cache")
+    page.app_volume_mount_input.setText("/app/cache")
+    qtbot.mouseClick(page.findChild(QPushButton, "appAddVolumeButton"), Qt.LeftButton)
+    assert volume_table.rowCount() == 1
+    assert volume_table.item(0, 0).text() == "cache"
+    assert volume_table.item(0, 1).text() == "/app/cache"
+    volume_table.selectRow(0)
+    qtbot.mouseClick(page.findChild(QPushButton, "appRemoveVolumeButton"), Qt.LeftButton)
+    assert volume_table.rowCount() == 0
 
 
 def test_apps_page_validates_and_launches_container_with_fake_sdk(qtbot, tmp_path):
@@ -211,7 +237,10 @@ def test_apps_page_validates_and_launches_container_with_fake_sdk(qtbot, tmp_pat
     page.env_input.setPlainText("PUBLIC_VALUE=1")
     page.app_cpu_input.setText("2")
     page.app_memory_input.setText("1g")
-    page.app_volumes_input.setPlainText("r1_app_cache:/app/cache")
+    page.advanced_options_toggle.setChecked(True)
+    page.app_volume_source_input.setText("r1_app_cache")
+    page.app_volume_mount_input.setText("/app/cache")
+    qtbot.mouseClick(page.findChild(QPushButton, "appAddVolumeButton"), Qt.LeftButton)
     page.app_restart_policy_combo.setCurrentText("on-failure")
     page.app_pull_policy_combo.setCurrentText("if-not-present")
 
@@ -257,7 +286,8 @@ def test_apps_page_worker_mode_validates_payload(qtbot, tmp_path):
     page.worker_registry_user_input.setText("registry-user")
     page.worker_registry_password_input.setText("registry-secret")
     page.worker_vcs_poll_input.setText("120")
-    page.app_volumes_input.setPlainText("worker_cache:/workspace/cache")
+    page.app_volume_source_input.setText("worker_cache")
+    page.app_volume_mount_input.setText("/workspace/cache")
 
     assert page.runner_stack.currentIndex() == 1
 
@@ -286,11 +316,12 @@ def test_apps_page_rejects_invalid_volume_rows(qtbot, tmp_path):
     page.node_address_input.setText(APP_TEST_NODE)
     page.car_image_input.setText("nginx:alpine")
     page.car_port_input.setText("8080")
-    page.app_volumes_input.setPlainText("broken-volume-row")
+    page.app_volume_source_input.setText("broken-volume")
+    page.app_volume_mount_input.setText("relative/path")
 
     qtbot.mouseClick(page.findChild(QPushButton, "appLaunchButton"), Qt.LeftButton)
 
-    assert page.validation_message.text() == "volumes: Volume rows must use source:/container/path."
+    assert page.validation_message.text() == "volumes: Volume mount path must start with /."
     assert fake_client.container_specs == []
 
 
@@ -917,6 +948,9 @@ def test_sidebar_panel_exposes_stable_launcher_controls(qtbot):
     apps_sidebar_page = panel.findChild(QWidget, "appsSidebarPage")
     assert panel.page_stack.sizeHint().height() == apps_sidebar_page.sizeHint().height()
     assert panel.findChild(QLabel, "appsWorkspaceSidebarLabel").text() == "Deployment workspace"
+    panel.apps_page.sdk_settings_requested.emit()
+    assert panel.current_page_name() == "network"
+    assert panel.findChild(QToolButton, "navNetworkButton").isChecked()
     panel.show_page("network")
     qtbot.mouseClick(panel.dapp_button, Qt.LeftButton)
     qtbot.mouseClick(panel.explorer_button, Qt.LeftButton)

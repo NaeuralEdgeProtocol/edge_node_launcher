@@ -577,6 +577,9 @@ COMMON_STYLESHEET_TEMPLATE = """
   QWidget[role="appAdvancedOptionsPanel"] {{
     background-color: transparent;
   }}
+  QWidget[role="appVolumeEditor"] {{
+    background-color: transparent;
+  }}
   QWidget[role="appsWorkspace"] {{
     background-color: transparent;
   }}
@@ -621,7 +624,8 @@ COMMON_STYLESHEET_TEMPLATE = """
   QScrollArea#appsWorkspaceScrollArea QScrollBar::sub-page:vertical {{
     background: transparent;
   }}
-  QTableWidget#appsTable {{
+  QTableWidget#appsTable,
+  QTableWidget#appVolumesTable {{
     background-color: {info_box_bg};
     color: {info_box_text};
     border: 1px solid {info_box_border};
@@ -632,11 +636,13 @@ COMMON_STYLESHEET_TEMPLATE = """
     selection-background-color: {secondary_action_hover};
     selection-color: {secondary_action_text};
   }}
-  QTableWidget#appsTable QScrollBar:horizontal {{
+  QTableWidget#appsTable QScrollBar:horizontal,
+  QTableWidget#appVolumesTable QScrollBar:horizontal {{
     height: 0px;
     background: transparent;
   }}
-  QTableWidget#appsTable QHeaderView::section {{
+  QTableWidget#appsTable QHeaderView::section,
+  QTableWidget#appVolumesTable QHeaderView::section {{
     background-color: {secondary_action_bg};
     color: {secondary_action_text};
     border: none;

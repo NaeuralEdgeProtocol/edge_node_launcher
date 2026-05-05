@@ -26,6 +26,9 @@ object name near construction.
 | Apps | `appRefreshButton` | button | Refreshes the launcher-owned app table from the local registry. | Static inventory, widget click |
 | Apps | `appStopButton` | button | Stops or marks stopped the selected launcher-owned app. | Static inventory, widget click with fake SDK client |
 | Apps | `appCopyUrlButton` | button | Copies the selected launcher-owned app URL. | Static inventory, widget click |
+| Apps | `appSdkSettingsButton` | button | Opens the Network page for SDK/network configuration. | Static inventory, widget signal, main-window navigation click |
+| Apps | `appAddVolumeButton` | button | Adds a source-to-mount-path row to the app volume editor. | Static inventory, widget click, smoke E2E |
+| Apps | `appRemoveVolumeButton` | button | Removes the selected app volume mount row. | Static inventory, widget click, smoke E2E |
 | Bottom actions | `renameNodeButton` | button | Opens rename-node dialog. | Static inventory, mocked main-window guard/save, destructive Docker rename E2E |
 | Bottom actions | `themeToggleButton` | button | Switches light or dark theme. | Static inventory, mocked main-window click |
 | Bottom actions | `forceDebugCheckbox` | checkbox | Enables or disables debug logging. | Static inventory, mocked main-window click |

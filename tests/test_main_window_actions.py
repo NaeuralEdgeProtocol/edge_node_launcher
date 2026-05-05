@@ -3254,6 +3254,17 @@ def test_apps_workspace_logs_sdk_events_to_activity_log(qtbot, monkeypatch):
     assert "SDK Apps validation ready:" in launcher.logView.toPlainText()
 
 
+def test_apps_sdk_settings_action_switches_to_network_context(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+    launcher.sidebar_panel.show_page("apps")
+
+    qtbot.mouseClick(launcher.apps_page.sdk_settings_button, Qt.LeftButton)
+
+    assert launcher.sidebar_panel.current_page_name() == "network"
+    assert launcher.findChild(QToolButton, "navNetworkButton").isChecked()
+    assert launcher.main_workspace_stack.currentWidget() is launcher.graphView
+
+
 def test_rename_action_lives_with_node_controls(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
     top_button_area = launcher.findChild(QVBoxLayout, "topButtonArea")

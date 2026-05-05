@@ -701,6 +701,18 @@ def run_mocked_sdk_apps_scenario(
     app.processEvents()
     record_step(log, output_path, {"step": "show apps page for mocked SDK app E2E"})
 
+    record_step(
+        log,
+        output_path,
+        {"step": click_visible_button(app, apps_page.sdk_settings_button, "open SDK settings from apps")},
+    )
+    if getattr(launcher, "sidebar_panel", None) is None or launcher.sidebar_panel.current_page_name() != "network":
+        raise AssertionError("SDK settings button did not switch to the Network page")
+    show_launcher_page(app, launcher, "apps")
+    scroll_apps_workspace_to(launcher, "top")
+    app.processEvents()
+    record_step(log, output_path, {"step": "returned to apps page after SDK settings shortcut"})
+
     set_line_edit_value(app, apps_page.app_name_input, "smoke_car")
     set_line_edit_value(app, apps_page.car_image_input, "nginx:alpine")
     set_line_edit_value(app, apps_page.car_port_input, "8080")
@@ -715,6 +727,15 @@ def run_mocked_sdk_apps_scenario(
             output_path,
             {"step": click_visible_button(app, apps_page.advanced_options_toggle, "show advanced app options")},
         )
+    set_line_edit_value(app, apps_page.app_volume_source_input, "smoke_car_cache")
+    set_line_edit_value(app, apps_page.app_volume_mount_input, "/app/cache")
+    record_step(
+        log,
+        output_path,
+        {"step": click_visible_button(app, apps_page.add_volume_button, "add container app volume mount")},
+    )
+    if apps_page.app_volumes_table.rowCount() != 1:
+        raise AssertionError("container app volume mount was not added")
     scroll_apps_workspace_to(launcher, "bottom")
     app.processEvents()
     if getattr(launcher, "toast", None) is not None:
@@ -807,6 +828,16 @@ def run_mocked_sdk_apps_scenario(
         "container app stop",
     )
 
+    apps_page.app_volumes_table.selectRow(0)
+    app.processEvents()
+    record_step(
+        log,
+        output_path,
+        {"step": click_visible_button(app, apps_page.remove_volume_button, "remove container app volume mount")},
+    )
+    if apps_page.app_volumes_table.rowCount() != 0:
+        raise AssertionError("container app volume mount was not removed")
+
     apps_page.runner_type_combo.setCurrentIndex(1)
     app.processEvents()
     set_line_edit_value(app, apps_page.app_name_input, "smoke_war")
@@ -819,6 +850,15 @@ def run_mocked_sdk_apps_scenario(
     set_line_edit_value(app, apps_page.worker_github_token_input, SMOKE_WORKER_APP_SECRET)
     set_plain_text_value(app, apps_page.worker_commands_input, "npm install\nnpm run build\nnpm run start")
     set_plain_text_value(app, apps_page.env_input, "SMOKE_MODE=mock\nPUBLIC_VALUE=worker")
+    set_line_edit_value(app, apps_page.app_volume_source_input, "smoke_worker_cache")
+    set_line_edit_value(app, apps_page.app_volume_mount_input, "/workspace/cache")
+    record_step(
+        log,
+        output_path,
+        {"step": click_visible_button(app, apps_page.add_volume_button, "add worker app volume mount")},
+    )
+    if apps_page.app_volumes_table.rowCount() != 1:
+        raise AssertionError("worker app volume mount was not added")
 
     scroll_apps_workspace_to(launcher, "bottom")
     app.processEvents()
@@ -1036,6 +1076,8 @@ def run_scenarios(args):
         app.processEvents()
 
         for page_name in ("apps", "logs", "docker", "settings", "network", "nodes"):
+            if getattr(launcher, "toast", None) is not None:
+                launcher.toast.hide()
             show_launcher_page(app, launcher, page_name)
             page_visual = capture_visual_evidence(
                 launcher,

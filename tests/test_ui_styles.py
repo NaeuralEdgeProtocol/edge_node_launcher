@@ -70,6 +70,7 @@ def test_apps_page_controls_use_semantic_styles():
         assert 'QWidget[role="appActionBar"]' in stylesheet
         assert 'QWidget[role="appDeploymentPanel"]' in stylesheet
         assert 'QWidget[role="appAdvancedOptionsPanel"]' in stylesheet
+        assert 'QWidget[role="appVolumeEditor"]' in stylesheet
         assert 'QWidget[role="appsDetailPanel"]' in stylesheet
         assert 'QTextBrowser[role="appsDetailText"]' in stylesheet
         assert "QScrollArea#appsWorkspaceScrollArea" in stylesheet
@@ -81,6 +82,7 @@ def test_apps_page_controls_use_semantic_styles():
         assert 'QLabel[role="appFormLabel"]' in stylesheet
         assert 'QLabel[role="appValidationMessage"]' in stylesheet
         assert "QTableWidget#appsTable" in stylesheet
+        assert "QTableWidget#appVolumesTable" in stylesheet
 
 
 def test_stop_button_text_uses_readable_dark_color_on_yellow():

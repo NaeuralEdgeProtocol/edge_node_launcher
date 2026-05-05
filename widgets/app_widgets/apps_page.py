@@ -49,6 +49,7 @@ class AppsPage(QWidget):
     """CAR/WAR app deployment and launcher-owned app registry page."""
 
     selected_record_changed = pyqtSignal(object)
+    sdk_settings_requested = pyqtSignal()
 
     def __init__(
         self,
@@ -136,6 +137,16 @@ class AppsPage(QWidget):
         )
         self._set_workspace_button_size(self.copy_url_button, 40)
         actions_layout.addWidget(self.copy_url_button)
+
+        self.sdk_settings_button = create_sidebar_action_button(
+            "SDK Settings",
+            "appSdkSettingsButton",
+            "utility",
+            "Open SDK and network settings",
+            self.sdk_settings_requested.emit,
+        )
+        self._set_workspace_button_size(self.sdk_settings_button, 40)
+        actions_layout.addWidget(self.sdk_settings_button)
         layout.addWidget(app_actions)
 
         layout.addWidget(create_sidebar_section_label("Deployment", "appDeploymentSectionLabel"))
@@ -392,11 +403,6 @@ class AppsPage(QWidget):
         self.app_restart_policy_combo.addItems(["always", "on-failure", "never"])
         self.app_pull_policy_combo = self._create_combo("appImagePullPolicyCombo", "Image pull policy")
         self.app_pull_policy_combo.addItems(["always", "if-not-present", "never"])
-        self.app_volumes_input = self._create_plain_text(
-            "appVolumesInput",
-            "volume_name:/container/path",
-        )
-        self.app_volumes_input.setMaximumHeight(64)
 
         self._add_grid_field(layout, 0, 0, "CPU", "appCpuLabel", self.app_cpu_input)
         self._add_grid_field(layout, 0, 1, "Memory", "appMemoryLabel", self.app_memory_input)
@@ -416,9 +422,103 @@ class AppsPage(QWidget):
             "appImagePullPolicyLabel",
             self.app_pull_policy_combo,
         )
-        self._add_grid_field(layout, 2, 0, "Volumes", "appVolumesLabel", self.app_volumes_input, 2)
+        layout.addWidget(self._label("Volumes", "appVolumesLabel"), 4, 0, 1, 2)
+        layout.addWidget(self._create_volume_editor(), 5, 0, 1, 2)
         layout.setRowStretch(6, 1)
         return panel
+
+    def _create_volume_editor(self) -> QWidget:
+        panel = QWidget()
+        panel.setObjectName("appVolumeEditor")
+        panel.setAccessibleName("Volume mount editor")
+        panel.setProperty("role", "appVolumeEditor")
+        layout = QGridLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setHorizontalSpacing(8)
+        layout.setVerticalSpacing(5)
+        layout.setColumnStretch(0, 2)
+        layout.setColumnStretch(1, 3)
+
+        self.app_volume_source_input = self._create_line_edit("appVolumeSourceInput", "volume_name")
+        self.app_volume_mount_input = self._create_line_edit("appVolumeMountInput", "/container/path")
+        layout.addWidget(self.app_volume_source_input, 0, 0)
+        layout.addWidget(self.app_volume_mount_input, 0, 1)
+
+        volume_actions = QWidget()
+        volume_actions.setObjectName("appVolumeActionBar")
+        volume_actions.setAccessibleName("Volume mount actions")
+        volume_actions.setProperty("role", "appActionBar")
+        volume_action_layout = QHBoxLayout(volume_actions)
+        volume_action_layout.setContentsMargins(0, 0, 0, 0)
+        volume_action_layout.setSpacing(8)
+
+        self.add_volume_button = create_sidebar_action_button(
+            "Add Mount",
+            "appAddVolumeButton",
+            "secondary",
+            "Add the volume mount row",
+            self.add_volume_mount,
+        )
+        self._set_workspace_button_size(self.add_volume_button, 34)
+        volume_action_layout.addWidget(self.add_volume_button)
+
+        self.remove_volume_button = create_sidebar_action_button(
+            "Remove Selected",
+            "appRemoveVolumeButton",
+            "utility",
+            "Remove the selected volume mount",
+            self.remove_selected_volume_mount,
+        )
+        self._set_workspace_button_size(self.remove_volume_button, 34)
+        volume_action_layout.addWidget(self.remove_volume_button)
+        layout.addWidget(volume_actions, 1, 0, 1, 2)
+
+        self.app_volumes_table = QTableWidget(0, 2)
+        self.app_volumes_table.setObjectName("appVolumesTable")
+        self.app_volumes_table.setAccessibleName("Configured volume mounts")
+        self.app_volumes_table.setHorizontalHeaderLabels(["Source", "Mount path"])
+        self.app_volumes_table.verticalHeader().hide()
+        self.app_volumes_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.app_volumes_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.app_volumes_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.app_volumes_table.setAlternatingRowColors(False)
+        self.app_volumes_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.app_volumes_table.setMinimumHeight(76)
+        self.app_volumes_table.setMaximumHeight(96)
+        header = self.app_volumes_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        layout.addWidget(self.app_volumes_table, 2, 0, 1, 2)
+        return panel
+
+    def add_volume_mount(self) -> bool:
+        source = self.app_volume_source_input.text().strip()
+        mount_path = self.app_volume_mount_input.text().strip()
+        issue = self._validate_volume_values(source, mount_path)
+        if issue is not None:
+            self._show_message(_format_issue(issue), error=True)
+            self._log_event(f"SDK Apps volume mount rejected: {_format_issue(issue)}", color="yellow")
+            return False
+        if self._find_volume_row(source) is not None:
+            issue = ValidationIssue("volumes", f"Duplicate volume source: {source}.")
+            self._show_message(_format_issue(issue), error=True)
+            self._log_event(f"SDK Apps volume mount rejected: {_format_issue(issue)}", color="yellow")
+            return False
+        self._append_volume_row(source, mount_path)
+        self.app_volume_source_input.clear()
+        self.app_volume_mount_input.clear()
+        self._clear_message()
+        return True
+
+    def remove_selected_volume_mount(self) -> bool:
+        selected = self.app_volumes_table.selectionModel().selectedRows()
+        if not selected:
+            self._show_message("volumes: Select a volume mount to remove.", error=True)
+            return False
+        for model_index in sorted(selected, key=lambda item: item.row(), reverse=True):
+            self.app_volumes_table.removeRow(model_index.row())
+        self._clear_message()
+        return True
 
     def set_launch_preflight_service(self, launch_preflight_service) -> None:
         self.launch_preflight_service = launch_preflight_service
@@ -652,21 +752,59 @@ class AppsPage(QWidget):
     def _parse_volumes(self) -> tuple[dict[str, str], list[ValidationIssue]]:
         volumes = {}
         issues = []
-        for line in self.app_volumes_input.toPlainText().splitlines():
-            normalized = line.strip()
-            if not normalized:
+        for source, target in self._volume_rows():
+            issue = self._validate_volume_values(source, target)
+            if issue is not None:
+                issues.append(issue)
                 continue
-            if ":" not in normalized:
-                issues.append(ValidationIssue("volumes", "Volume rows must use source:/container/path."))
-                continue
-            source, target = normalized.rsplit(":", 1)
-            source = source.strip()
-            target = target.strip()
-            if not source or not target:
-                issues.append(ValidationIssue("volumes", "Volume source and mount path are required."))
+            if source in volumes:
+                issues.append(ValidationIssue("volumes", f"Duplicate volume source: {source}."))
                 continue
             volumes[source] = target
+
+        pending_source = self.app_volume_source_input.text().strip()
+        pending_target = self.app_volume_mount_input.text().strip()
+        if pending_source or pending_target:
+            issue = self._validate_volume_values(pending_source, pending_target)
+            if issue is not None:
+                issues.append(issue)
+            elif pending_source in volumes:
+                issues.append(ValidationIssue("volumes", f"Duplicate volume source: {pending_source}."))
+            else:
+                volumes[pending_source] = pending_target
         return volumes, issues
+
+    def _volume_rows(self) -> list[tuple[str, str]]:
+        rows = []
+        for row in range(self.app_volumes_table.rowCount()):
+            source_item = self.app_volumes_table.item(row, 0)
+            target_item = self.app_volumes_table.item(row, 1)
+            rows.append(
+                (
+                    source_item.text().strip() if source_item is not None else "",
+                    target_item.text().strip() if target_item is not None else "",
+                )
+            )
+        return rows
+
+    def _validate_volume_values(self, source: str, mount_path: str) -> ValidationIssue | None:
+        if not source or not mount_path:
+            return ValidationIssue("volumes", "Volume source and mount path are required.")
+        if not mount_path.startswith("/"):
+            return ValidationIssue("volumes", "Volume mount path must start with /.")
+        return None
+
+    def _find_volume_row(self, source: str) -> int | None:
+        for row, (row_source, _mount_path) in enumerate(self._volume_rows()):
+            if row_source == source:
+                return row
+        return None
+
+    def _append_volume_row(self, source: str, mount_path: str) -> None:
+        row = self.app_volumes_table.rowCount()
+        self.app_volumes_table.insertRow(row)
+        self.app_volumes_table.setItem(row, 0, QTableWidgetItem(source))
+        self.app_volumes_table.setItem(row, 1, QTableWidgetItem(mount_path))
 
     def _parse_resources(self) -> tuple[AppResourceSpec, list[ValidationIssue]]:
         try:
@@ -819,11 +957,12 @@ class AppsPage(QWidget):
             self.worker_vcs_poll_input,
             self.app_cpu_input,
             self.app_memory_input,
+            self.app_volume_source_input,
+            self.app_volume_mount_input,
         ):
             widget.textChanged.connect(lambda *_args: self._clear_message())
         self.env_input.textChanged.connect(self._clear_message)
         self.worker_commands_input.textChanged.connect(self._clear_message)
-        self.app_volumes_input.textChanged.connect(self._clear_message)
         self.app_restart_policy_combo.currentIndexChanged.connect(lambda *_args: self._clear_message())
         self.app_pull_policy_combo.currentIndexChanged.connect(lambda *_args: self._clear_message())
 

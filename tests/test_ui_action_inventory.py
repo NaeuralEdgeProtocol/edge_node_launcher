@@ -66,6 +66,9 @@ ACTION_IDS = [
     "appRefreshButton",
     "appStopButton",
     "appCopyUrlButton",
+    "appSdkSettingsButton",
+    "appAddVolumeButton",
+    "appRemoveVolumeButton",
 ]
 
 CONTROL_PATTERN = re.compile(

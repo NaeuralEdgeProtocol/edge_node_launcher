@@ -310,6 +310,7 @@ class SidebarPanel(QWidget):
             deployment_client=deployment_client,
             parent=self,
         )
+        self.apps_page.sdk_settings_requested.connect(lambda: self.show_page("network"))
         page = self._create_page("appsSidebarPage")
         layout = QVBoxLayout(page)
         layout.setObjectName("appsSidebarPageLayout")
