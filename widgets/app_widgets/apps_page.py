@@ -35,6 +35,7 @@ from services.app_deployment_validation import (
 )
 from services.app_registry import AppRegistry
 from services.app_secret_redaction import REDACTED_SECRET
+from services.sdk_error_messages import classify_sdk_error
 from services.sdk_operation_worker import SdkOperationThread
 from widgets.app_widgets.sidebar_controls import (
     create_sidebar_action_button,
@@ -570,8 +571,22 @@ class AppsPage(QWidget):
     def _fail_sdk_operation(self, worker: SdkOperationThread, error: str) -> None:
         self._set_busy(False)
         safe_error = self._redact_active_secrets(error)
-        self._show_message(safe_error, error=True)
-        self._log_event(f"SDK Apps {worker.operation_name} failed: {safe_error}", color="red")
+        error_message = classify_sdk_error(safe_error)
+        self._show_message(error_message.user_message, error=True)
+        self._log_event(
+            f"SDK Apps {worker.operation_name} failed: {error_message.user_message}",
+            color="red",
+        )
+        if error_message.classified:
+            diagnostic = (
+                f"SDK Apps {worker.operation_name} diagnostic "
+                f"({error_message.category}): {error_message.diagnostic}"
+            )
+            self._log_event(
+                diagnostic,
+                color="red",
+                debug=True,
+            )
 
     def _cleanup_worker(self, worker: SdkOperationThread) -> None:
         if worker in self._active_workers:

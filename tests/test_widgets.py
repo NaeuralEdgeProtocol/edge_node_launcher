@@ -1,4 +1,5 @@
 import time
+from types import SimpleNamespace
 
 from PyQt5.QtCore import QRect, Qt
 from PyQt5.QtGui import QColor, QShowEvent
@@ -28,6 +29,8 @@ from models.NodeInfo import NodeInfo
 from services.app_deployment_models import DeploymentResult, ManagedAppRecord
 from services.app_deployment_models import SdkAppStatus
 from services.app_registry import AppRegistry
+from services.app_secret_redaction import REDACTED_SECRET
+from services.sdk_error_messages import SDK_CREDENTIALS_MESSAGE
 from widgets.DockerPullDialog import DOCKER_PULL_DIALOG_STYLE_COLORS, DockerPullDialog
 from widgets.LoadingDialog import LoadingDialog
 from widgets.CenteredComboBox import CenteredComboBox
@@ -308,6 +311,32 @@ def test_apps_page_logs_sdk_events_without_secret_values(qtbot, tmp_path):
     assert any(message.startswith("SDK Apps launch complete:") for message in messages)
     assert all("super-secret-registry-password" not in message for message in messages)
     assert all("cr_password" not in message for message in messages)
+
+
+def test_apps_page_shows_clear_sdk_error_and_logs_diagnostic(qtbot, tmp_path):
+    events = []
+    page = AppsPage(
+        app_registry=AppRegistry(tmp_path / "apps.json"),
+        event_logger=lambda message, **kwargs: events.append((message, kwargs)),
+    )
+    qtbot.addWidget(page)
+    page.car_registry_password_input.setText("super-secret-registry-password")
+
+    page._fail_sdk_operation(
+        SimpleNamespace(operation_name="launch"),
+        "Error: No user specified for ratio1 Edge Protocol network connection. "
+        "Please make sure you have the correct credentials. super-secret-registry-password",
+    )
+
+    assert page.validation_message.text() == SDK_CREDENTIALS_MESSAGE
+    visible_logs = [message for message, kwargs in events if not kwargs.get("debug")]
+    diagnostic_logs = [message for message, kwargs in events if kwargs.get("debug")]
+    assert visible_logs == [f"SDK Apps launch failed: {SDK_CREDENTIALS_MESSAGE}"]
+    assert len(diagnostic_logs) == 1
+    assert "diagnostic (credentials)" in diagnostic_logs[0]
+    assert "No user specified" in diagnostic_logs[0]
+    assert REDACTED_SECRET in diagnostic_logs[0]
+    assert "super-secret-registry-password" not in "\n".join(message for message, _kwargs in events)
 
 
 def test_apps_page_sdk_operations_run_with_busy_state(qtbot, tmp_path):
