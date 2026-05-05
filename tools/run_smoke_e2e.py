@@ -165,8 +165,12 @@ class FakeAppLaunchPreflight:
     def prepare(self, container_name):
         if not container_name:
             raise ValueError("Target container is required for SDK allow-list setup.")
+        changed = not self.calls
         self.calls.append(container_name)
-        return SimpleNamespace(container_name=container_name)
+        return SimpleNamespace(
+            container_name=container_name,
+            allowlist=SimpleNamespace(changed=changed),
+        )
 
 
 class FakeSdkIdentityService:
@@ -778,6 +782,27 @@ def run_mocked_sdk_apps_scenario(
     scroll_apps_workspace_to(launcher, "top")
     app.processEvents()
     record_step(log, output_path, {"step": "returned to apps page after SDK settings shortcut"})
+    record_step(
+        log,
+        output_path,
+        {"step": click_visible_button(app, apps_page.check_sdk_access_button, "check SDK node access")},
+    )
+    wait_until(
+        app,
+        lambda: apps_page.validation_message.isVisible()
+        and apps_page.validation_message.text() in {"SDK access added", "SDK access ready"},
+        timeout,
+        "SDK access check",
+    )
+    record_step(
+        log,
+        output_path,
+        {
+            "step": "SDK access checked before app launch",
+            "message": apps_page.validation_message.text(),
+            "preflight_calls": list(fake_preflight.calls),
+        },
+    )
 
     set_line_edit_value(app, apps_page.app_name_input, "smoke_car")
     set_line_edit_value(app, apps_page.car_image_input, "nginx:alpine")

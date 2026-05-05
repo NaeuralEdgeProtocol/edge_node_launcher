@@ -149,9 +149,10 @@ class FakeAppDeploymentClient:
 
 
 class FakeLaunchPreflight:
-    def __init__(self, events=None):
+    def __init__(self, events=None, changed=False):
         self.calls = []
         self.events = events
+        self.changed = changed
 
     def prepare(self, container_name):
         if self.events is not None:
@@ -159,6 +160,7 @@ class FakeLaunchPreflight:
         self.calls.append(container_name)
         if not container_name:
             raise ValueError("Target container is required for SDK allow-list setup.")
+        return SimpleNamespace(allowlist=SimpleNamespace(changed=self.changed))
 
 
 def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
@@ -248,6 +250,7 @@ def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
     assert page.findChild(QPushButton, "appRefreshButton").property("actionRole") == "secondary"
     assert page.findChild(QPushButton, "appStopButton").property("actionRole") == "utility"
     assert page.findChild(QPushButton, "appCopyUrlButton").property("actionRole") == "utility"
+    assert page.findChild(QPushButton, "appCheckSdkAccessButton").property("actionRole") == "secondary"
     assert page.findChild(QPushButton, "appSdkSettingsButton").property("actionRole") == "utility"
     assert page.findChild(QPushButton, "appAddVolumeButton").property("actionRole") == "secondary"
     assert page.findChild(QPushButton, "appRemoveVolumeButton").property("actionRole") == "utility"
@@ -577,6 +580,27 @@ def test_apps_page_launch_runs_preflight_before_sdk_launch(qtbot, tmp_path):
 
     assert fake_preflight.calls == ["r1devnode"]
     assert events == ["preflight", "launch_container"]
+
+
+def test_apps_page_check_sdk_access_runs_preflight_without_launch(qtbot, tmp_path):
+    events = []
+    fake_client = FakeAppDeploymentClient(events=events)
+    fake_preflight = FakeLaunchPreflight(events=events, changed=True)
+    page = AppsPage(
+        app_registry=AppRegistry(tmp_path / "apps.json"),
+        deployment_client=fake_client,
+        launch_preflight_service=fake_preflight,
+    )
+    qtbot.addWidget(page)
+    page.set_target_node(node_address=APP_TEST_NODE, container_name="r1devnode")
+
+    qtbot.mouseClick(page.findChild(QPushButton, "appCheckSdkAccessButton"), Qt.LeftButton)
+    qtbot.waitUntil(lambda: fake_preflight.calls == ["r1devnode"], timeout=1000)
+
+    assert fake_client.container_specs == []
+    assert fake_client.worker_specs == []
+    assert events == ["preflight"]
+    assert page.validation_message.text() == "SDK access added"
 
 
 def test_apps_page_launch_reports_missing_preflight_container(qtbot, tmp_path):

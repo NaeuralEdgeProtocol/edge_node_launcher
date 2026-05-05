@@ -151,6 +151,16 @@ class AppsPage(QWidget):
         self._set_workspace_button_size(self.copy_url_button, 40)
         actions_layout.addWidget(self.copy_url_button)
 
+        self.check_sdk_access_button = create_sidebar_action_button(
+            "Check Access",
+            "appCheckSdkAccessButton",
+            "secondary",
+            "Verify launcher SDK access on the selected node",
+            self.check_sdk_access,
+        )
+        self._set_workspace_button_size(self.check_sdk_access_button, 40)
+        actions_layout.addWidget(self.check_sdk_access_button)
+
         self.sdk_settings_button = create_sidebar_action_button(
             "SDK Settings",
             "appSdkSettingsButton",
@@ -749,10 +759,41 @@ class AppsPage(QWidget):
             "Launching...",
         )
 
+    def check_sdk_access(self) -> None:
+        if self.launch_preflight_service is None:
+            self._show_message("SDK access check unavailable", error=True)
+            self._log_event("SDK Apps access check unavailable: preflight service is not configured", color="red")
+            return
+        target_container_name = self.target_container_name
+        if not target_container_name:
+            self._show_message("Target container is required", error=True)
+            self._log_event("SDK Apps access check blocked: target container is required", color="yellow")
+            return
+        self._log_event(
+            f"SDK Apps access check requested: container={target_container_name}",
+            color="blue",
+        )
+        self._start_sdk_operation(
+            "access check",
+            lambda: self.launch_preflight_service.prepare(target_container_name),
+            lambda result: self._handle_access_check_success(result, target_container_name),
+            "Checking SDK access...",
+        )
+
     def _launch_with_preflight(self, launch_operation, target_container_name: str):
         if self.launch_preflight_service is not None:
             self.launch_preflight_service.prepare(target_container_name)
         return launch_operation()
+
+    def _handle_access_check_success(self, result, target_container_name: str) -> None:
+        allowlist = getattr(result, "allowlist", None)
+        changed = bool(getattr(allowlist, "changed", False))
+        message = "SDK access added" if changed else "SDK access ready"
+        self._show_message(message, error=False)
+        self._log_event(
+            f"SDK Apps access check complete: container={target_container_name} changed={changed}",
+            color="green",
+        )
 
     def refresh_app_statuses(self) -> None:
         if self.deployment_client is None:
@@ -1171,6 +1212,7 @@ class AppsPage(QWidget):
             self.refresh_button,
             self.stop_button,
             self.copy_url_button,
+            self.check_sdk_access_button,
             self.validate_button,
         ):
             button.setEnabled(not busy)
@@ -1237,7 +1279,12 @@ class AppsPage(QWidget):
         self.app_pull_policy_combo.currentIndexChanged.connect(lambda *_args: self._clear_message())
 
     def _clear_message(self) -> None:
-        if self.validation_message.text() in {"Launching...", "Refreshing...", "Stopping..."}:
+        if self.validation_message.text() in {
+            "Launching...",
+            "Refreshing...",
+            "Stopping...",
+            "Checking SDK access...",
+        }:
             return
         self._show_message("", error=False)
 

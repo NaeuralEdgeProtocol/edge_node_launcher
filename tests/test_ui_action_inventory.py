@@ -66,6 +66,7 @@ ACTION_IDS = [
     "appRefreshButton",
     "appStopButton",
     "appCopyUrlButton",
+    "appCheckSdkAccessButton",
     "appSdkSettingsButton",
     "appAddVolumeButton",
     "appRemoveVolumeButton",
