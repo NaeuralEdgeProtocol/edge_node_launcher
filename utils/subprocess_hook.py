@@ -8,18 +8,42 @@ by default on Windows systems. Import this module early in your application.
 import os
 import sys
 import subprocess
-import functools
 import logging
 
 # Setup basic logging if not already configured
 logging.basicConfig(level=logging.INFO)
 
-# Store original functions before patching
-_orig_popen = subprocess.Popen
-_orig_call = subprocess.call
-_orig_check_call = subprocess.check_call
-_orig_check_output = subprocess.check_output
-_orig_run = subprocess.run
+_ORIGINALS_ATTR = "_edge_node_launcher_subprocess_originals"
+
+
+def _get_originals():
+    originals = getattr(subprocess, _ORIGINALS_ATTR, None)
+    if originals is not None:
+        return originals
+
+    originals = {
+        "popen": subprocess.Popen,
+        "call": subprocess.call,
+        "check_call": subprocess.check_call,
+        "check_output": subprocess.check_output,
+        "run": subprocess.run,
+        "os_system": os.system,
+        "os_popen": os.popen,
+    }
+    setattr(subprocess, _ORIGINALS_ATTR, originals)
+    return originals
+
+
+# Store original functions before patching. Keep these stable across repeated
+# imports so the hook does not wrap itself.
+_ORIGINALS = _get_originals()
+_orig_popen = _ORIGINALS["popen"]
+_orig_call = _ORIGINALS["call"]
+_orig_check_call = _ORIGINALS["check_call"]
+_orig_check_output = _ORIGINALS["check_output"]
+_orig_run = _ORIGINALS["run"]
+_orig_system = _ORIGINALS["os_system"]
+_orig_popen_os = _ORIGINALS["os_popen"]
 
 def _get_no_window_flags():
     """Get the process creation flags to hide console windows on Windows"""
@@ -55,15 +79,21 @@ def _patch_kwargs(kwargs):
     
     return kwargs
 
-# Patched versions with safe fallbacks
-def patched_popen(*args, **kwargs):
-    """Patched Popen that hides console windows"""
-    try:
-        kwargs = _patch_kwargs(kwargs)
-        return _orig_popen(*args, **kwargs)
-    except Exception as e:
-        logging.warning(f"Error in patched_popen, falling back to original: {e}")
-        return _orig_popen(*args, **kwargs)
+class HiddenWindowPopen(_orig_popen):
+    """Popen subclass that hides console windows while preserving class semantics."""
+
+    def __init__(self, *args, **kwargs):
+        original_kwargs = dict(kwargs)
+        try:
+            patched_kwargs = _patch_kwargs(dict(kwargs))
+            super().__init__(*args, **patched_kwargs)
+        except Exception as e:
+            logging.warning(f"Error in HiddenWindowPopen, falling back to original flags: {e}")
+            super().__init__(*args, **original_kwargs)
+
+
+# Backward-compatible name for tests and callers that import the old symbol.
+patched_popen = HiddenWindowPopen
 
 def patched_call(*args, **kwargs):
     """Patched call that hides console windows"""
@@ -104,7 +134,7 @@ def patched_run(*args, **kwargs):
 def safe_patch_subprocess():
     """Patch all subprocess functions to hide console windows with safety fallbacks"""
     try:
-        subprocess.Popen = patched_popen
+        subprocess.Popen = HiddenWindowPopen
         subprocess.call = patched_call
         subprocess.check_call = patched_check_call
         subprocess.check_output = patched_check_output
@@ -160,8 +190,6 @@ def patched_popen_os(command, mode='r', buffering=-1):
 def safe_patch_os():
     """Patch os.system and os.popen to hide console windows with safety fallbacks"""
     try:
-        _orig_system = os.system
-        _orig_popen_os = os.popen
         os.system = patched_system
         os.popen = patched_popen_os
         logging.info("OS module patched to hide console windows")
@@ -179,4 +207,4 @@ try:
     else:
         logging.info("Development environment detected, skipping subprocess patching")
 except Exception as e:
-    logging.error(f"Error during subprocess patching setup: {e}") 
+    logging.error(f"Error during subprocess patching setup: {e}")
