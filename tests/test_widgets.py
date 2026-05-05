@@ -283,6 +283,33 @@ def test_apps_page_preserves_selection_and_emits_updated_record_after_stop(qtbot
     assert emitted[-1].status == "stopped"
 
 
+def test_apps_page_logs_sdk_events_without_secret_values(qtbot, tmp_path):
+    fake_client = FakeAppDeploymentClient()
+    events = []
+    page = AppsPage(
+        app_registry=AppRegistry(tmp_path / "apps.json"),
+        deployment_client=fake_client,
+        event_logger=lambda message, **kwargs: events.append((message, kwargs)),
+    )
+    qtbot.addWidget(page)
+
+    page.app_name_input.setText("car_runner")
+    page.node_address_input.setText(APP_TEST_NODE)
+    page.car_image_input.setText("nginx:alpine")
+    page.car_port_input.setText("8080")
+    page.car_registry_password_input.setText("super-secret-registry-password")
+
+    qtbot.mouseClick(page.findChild(QPushButton, "appLaunchButton"), Qt.LeftButton)
+    qtbot.waitUntil(lambda: len(fake_client.container_specs) == 1, timeout=1000)
+
+    messages = [message for message, _kwargs in events]
+    assert any(message.startswith("SDK Apps validation ready:") for message in messages)
+    assert any(message.startswith("SDK Apps launch requested:") for message in messages)
+    assert any(message.startswith("SDK Apps launch complete:") for message in messages)
+    assert all("super-secret-registry-password" not in message for message in messages)
+    assert all("cr_password" not in message for message in messages)
+
+
 def test_apps_page_sdk_operations_run_with_busy_state(qtbot, tmp_path):
     fake_client = FakeAppDeploymentClient()
     fake_client.delay_seconds = 0.05

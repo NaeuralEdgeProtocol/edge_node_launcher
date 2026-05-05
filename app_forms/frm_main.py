@@ -788,6 +788,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.apps_page.setParent(None)
     self.apps_page.setMinimumWidth(520)
     self.apps_page.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+    self.apps_page.set_event_logger(self._log_app_event)
     apps_scroll.setWidget(self.apps_page)
     layout.addWidget(apps_scroll, 3)
 
@@ -855,7 +856,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         "</tr>"
       )
     return '<table cellspacing="0" cellpadding="0">' + "".join(table_rows) + "</table>"
-    self.apps_detail_text.setText(detail)
+
+  def _log_app_event(self, message: str, *, color: str = "blue", debug: bool = False) -> None:
+    self.add_log(message, debug=debug, color=color)
 
   def _on_navigation_page_changed(self, page_name: str) -> None:
     if not hasattr(self, "main_workspace_stack"):

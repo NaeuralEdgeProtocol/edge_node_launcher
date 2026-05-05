@@ -33,6 +33,7 @@ REAL_REFRESH_NODE_INFO = frm_main.EdgeNodeLauncher.refresh_node_info
 REAL_MAYBE_REFRESH_UPTIME = frm_main.EdgeNodeLauncher.maybe_refresh_uptime
 REAL_UPDATE_RESOURCES_DISPLAY = frm_main.EdgeNodeLauncher.update_resources_display
 REAL_CHECK_FOR_UPDATES = frm_main.EdgeNodeLauncher.check_for_updates
+APP_TEST_NODE = "0xai_A9OqTV_iFqmwj1SV7AKbdyr66NLkhSQHPpzp40c7jaLn"
 
 
 class FakeToast:
@@ -3238,6 +3239,19 @@ def test_apps_workspace_details_follow_updated_selection(qtbot, monkeypatch, tmp
     assert "Status" in detail_text
     assert "stopped" in detail_text
     assert "deployed" not in detail_text
+
+
+def test_apps_workspace_logs_sdk_events_to_activity_log(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
+    launcher.sidebar_panel.show_page("apps")
+    launcher.apps_page.app_name_input.setText("car_runner")
+    launcher.apps_page.node_address_input.setText(APP_TEST_NODE)
+    launcher.apps_page.car_image_input.setText("nginx:alpine")
+    launcher.apps_page.car_port_input.setText("8080")
+
+    qtbot.mouseClick(launcher.apps_page.validate_button, Qt.LeftButton)
+
+    assert "SDK Apps validation ready:" in launcher.logView.toPlainText()
 
 
 def test_rename_action_lives_with_node_controls(qtbot, monkeypatch):

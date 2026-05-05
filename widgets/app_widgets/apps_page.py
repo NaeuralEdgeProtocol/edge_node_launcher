@@ -34,6 +34,7 @@ from services.app_deployment_validation import (
     validate_worker_spec,
 )
 from services.app_registry import AppRegistry
+from services.app_secret_redaction import REDACTED_SECRET
 from services.sdk_operation_worker import SdkOperationThread
 from widgets.app_widgets.sidebar_controls import (
     create_sidebar_action_button,
@@ -52,12 +53,14 @@ class AppsPage(QWidget):
         app_registry=None,
         deployment_client=None,
         launch_preflight_service=None,
+        event_logger=None,
         parent=None,
     ):
         super().__init__(parent)
         self.app_registry = app_registry or AppRegistry()
         self.deployment_client = deployment_client
         self.launch_preflight_service = launch_preflight_service
+        self.event_logger = event_logger
         self.target_container_name = ""
         self._records_by_row: dict[int, ManagedAppRecord] = {}
         self._active_workers: list[SdkOperationThread] = []
@@ -299,6 +302,9 @@ class AppsPage(QWidget):
     def set_launch_preflight_service(self, launch_preflight_service) -> None:
         self.launch_preflight_service = launch_preflight_service
 
+    def set_event_logger(self, event_logger) -> None:
+        self.event_logger = event_logger
+
     def set_target_node_address(self, node_address: str) -> None:
         self.set_target_node(node_address=node_address)
 
@@ -311,9 +317,16 @@ class AppsPage(QWidget):
     def validate_current_form(self):
         spec, issues = self._build_current_spec()
         if issues:
-            self._show_message(_format_issue(issues[0]), error=True)
+            issue_text = _format_issue(issues[0])
+            self._show_message(issue_text, error=True)
+            self._log_event(f"SDK Apps validation failed: {issue_text}", color="yellow")
             return None
         self._show_message("Ready", error=False)
+        self._log_event(
+            "SDK Apps validation ready: "
+            f"type={spec.app_type} app={spec.app_name or '-'} node={_short_node_address(spec.node_address)}",
+            color="blue",
+        )
         return spec
 
     def launch_current_app(self) -> None:
@@ -322,8 +335,15 @@ class AppsPage(QWidget):
             return
         if self.deployment_client is None:
             self._show_message("SDK launch worker pending", error=True)
+            self._log_event("SDK Apps launch unavailable: deployment client is not configured", color="red")
             return
         target_container_name = self.target_container_name
+        self._log_event(
+            "SDK Apps launch requested: "
+            f"type={spec.app_type} app={spec.app_name} node={_short_node_address(spec.node_address)} "
+            f"container={target_container_name or '-'}",
+            color="blue",
+        )
         if spec.app_type == APP_TYPE_CONTAINER:
             operation = lambda: self._launch_with_preflight(
                 lambda: self.deployment_client.launch_container_app(spec),
@@ -350,12 +370,18 @@ class AppsPage(QWidget):
         if self.deployment_client is None:
             self.refresh_apps()
             self._show_message("Refreshed", error=False)
+            self._log_event("SDK Apps refresh used local registry because deployment client is not configured", color="blue")
             return
         node_address = self.node_address_input.text().strip()
         if not node_address:
             self.refresh_apps()
             self._show_message("Target node is required", error=True)
+            self._log_event("SDK Apps refresh blocked: target node is required", color="yellow")
             return
+        self._log_event(
+            f"SDK Apps refresh requested: node={_short_node_address(node_address)}",
+            color="blue",
+        )
         self._start_sdk_operation(
             "refresh",
             lambda: self.deployment_client.list_node_apps(node_address),
@@ -395,7 +421,13 @@ class AppsPage(QWidget):
         record = self._selected_record()
         if record is None:
             self._show_message("Select an app first", error=True)
+            self._log_event("SDK Apps stop blocked: no app selected", color="yellow")
             return
+        self._log_event(
+            "SDK Apps stop requested: "
+            f"app={record.app_name} node={_short_node_address(record.node_address)} pipeline={record.pipeline_name}",
+            color="blue",
+        )
         if self.deployment_client is not None:
             self._start_sdk_operation(
                 "stop",
@@ -412,14 +444,24 @@ class AppsPage(QWidget):
         self.app_registry.upsert(record)
         self.refresh_apps(selected_app_id=record.app_id)
         self._show_message("Stopped", error=False)
+        self._log_event(
+            "SDK Apps stop complete: "
+            f"app={record.app_name} node={_short_node_address(record.node_address)}",
+            color="green",
+        )
 
     def copy_selected_url(self) -> None:
         record = self._selected_record()
         if record is None or not record.app_url:
             self._show_message("No URL selected", error=True)
+            self._log_event("SDK Apps copy URL blocked: no URL selected", color="yellow")
             return
         QApplication.clipboard().setText(record.app_url)
         self._show_message("URL copied", error=False)
+        self._log_event(
+            f"SDK Apps URL copied: app={record.app_name} node={_short_node_address(record.node_address)}",
+            color="blue",
+        )
 
     def _build_current_spec(self):
         env, env_issues = self._parse_env()
@@ -480,12 +522,17 @@ class AppsPage(QWidget):
         self._persist_result_if_needed(result, spec)
         self.refresh_apps(selected_app_id=result.app_id)
         self._show_message("Launched", error=False)
+        self._log_event(
+            "SDK Apps launch complete: "
+            f"type={result.app_type} app={result.app_name} status={result.status} url={'yes' if result.app_url else 'no'}",
+            color="green",
+        )
 
     def _handle_refresh_success(self, statuses: list[SdkAppStatus]) -> None:
         selected = self._selected_record()
         selected_app_id = selected.app_id if selected is not None else None
         records = self.app_registry.list_apps()
-        changed = False
+        changed = 0
         for record in records:
             status = _matching_status(record, statuses)
             if status is None:
@@ -494,12 +541,17 @@ class AppsPage(QWidget):
             if status.url:
                 record.app_url = status.url
             self.app_registry.upsert(record)
-            changed = True
+            changed += 1
         self.refresh_apps(selected_app_id=selected_app_id)
         self._show_message("Status updated" if changed else "No launcher-owned status changes", error=False)
+        self._log_event(
+            f"SDK Apps refresh complete: statuses={len(statuses or [])} updated={changed}",
+            color="green" if changed else "blue",
+        )
 
     def _start_sdk_operation(self, operation_name: str, operation, on_success, message: str) -> None:
         self._set_busy(True, message)
+        self._log_event(f"SDK Apps {operation_name} started", color="blue")
         worker = SdkOperationThread(operation_name, operation, parent=self)
         self._active_workers.append(worker)
         worker.operation_finished.connect(
@@ -517,7 +569,9 @@ class AppsPage(QWidget):
 
     def _fail_sdk_operation(self, worker: SdkOperationThread, error: str) -> None:
         self._set_busy(False)
-        self._show_message(error, error=True)
+        safe_error = self._redact_active_secrets(error)
+        self._show_message(safe_error, error=True)
+        self._log_event(f"SDK Apps {worker.operation_name} failed: {safe_error}", color="red")
 
     def _cleanup_worker(self, worker: SdkOperationThread) -> None:
         if worker in self._active_workers:
@@ -593,6 +647,24 @@ class AppsPage(QWidget):
         self.validation_message.setProperty("state", "error" if error else "ok")
         self.validation_message.style().unpolish(self.validation_message)
         self.validation_message.style().polish(self.validation_message)
+
+    def _log_event(self, message: str, *, color: str = "blue", debug: bool = False) -> None:
+        if self.event_logger is None:
+            return
+        self.event_logger(self._redact_active_secrets(message), color=color, debug=debug)
+
+    def _redact_active_secrets(self, text: str) -> str:
+        safe_text = str(text)
+        for value in (
+            getattr(self, "car_registry_password_input", None),
+            getattr(self, "worker_github_token_input", None),
+        ):
+            if value is None:
+                continue
+            secret = value.text()
+            if secret:
+                safe_text = safe_text.replace(secret, REDACTED_SECRET)
+        return safe_text
 
     def _create_line_edit(self, object_name: str, placeholder: str) -> QLineEdit:
         widget = QLineEdit()
