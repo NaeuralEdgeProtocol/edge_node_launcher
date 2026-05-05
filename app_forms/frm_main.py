@@ -804,6 +804,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
   def _bind_sidebar_panel_aliases(self, panel: SidebarPanel) -> None:
     self.sidebar_panel = panel
     self.navigation_page_stack = panel.page_stack
+    self.apps_page = panel.apps_page
     self.add_node_button = panel.add_node_button
     self.container_combo = panel.container_combo
     self.renameNodeButton = panel.renameNodeButton
@@ -2323,6 +2324,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.node_addr = node_address
     self.node_eth_address = eth_address
     self.node_name = node_name
+    if hasattr(self, "apps_page"):
+      self.apps_page.set_target_node_address(self.node_addr)
     self._update_address_display(
       self.node_addr,
       show_copy_button=show_copy_buttons and bool(self.node_addr),

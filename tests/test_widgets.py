@@ -8,9 +8,13 @@ from PyQt5.QtWidgets import (
     QGridLayout,
     QLabel,
     QProgressBar,
+    QPushButton,
+    QLineEdit,
+    QPlainTextEdit,
     QScrollArea,
     QSizePolicy,
     QTabWidget,
+    QTableWidget,
     QTextEdit,
     QToolButton,
     QWidget,
@@ -18,12 +22,15 @@ from PyQt5.QtWidgets import (
 
 from models.NodeHistory import NodeHistory
 from models.NodeInfo import NodeInfo
+from services.app_deployment_models import DeploymentResult, ManagedAppRecord
+from services.app_registry import AppRegistry
 from widgets.DockerPullDialog import DOCKER_PULL_DIALOG_STYLE_COLORS, DockerPullDialog
 from widgets.LoadingDialog import LoadingDialog
 from widgets.CenteredComboBox import CenteredComboBox
 from widgets.loading_indicator import LoadingIndicator
 from app_forms.frm_utils import LoadingIndicator as LegacyLoadingIndicator
 from widgets.app_widgets.activity_log import ACTIVITY_LOG_COLOR_MAP, ActivityLogWidget
+from widgets.app_widgets.apps_page import AppsPage
 from widgets.app_widgets.config_editor import ConfigEditorWidget
 from widgets.app_widgets.container_list import CONTAINER_LIST_EMPTY_TEXT, ContainerListWidget
 from widgets.app_widgets.dashboard_panel import DashboardPanel
@@ -46,6 +53,151 @@ from widgets.app_widgets.sidebar_controls import (
 )
 from widgets.app_widgets.sidebar_panel import SidebarPanel
 from widgets.app_widgets.sidebar_status_cards import NodeStatusPanel, ResourceStatusPanel
+
+
+APP_TEST_NODE = "0xai_A9OqTV_iFqmwj1SV7AKbdyr66NLkhSQHPpzp40c7jaLn"
+
+
+class FakeAppDeploymentClient:
+    def __init__(self):
+        self.container_specs = []
+        self.worker_specs = []
+        self.stop_calls = []
+
+    def launch_container_app(self, spec):
+        self.container_specs.append(spec)
+        return DeploymentResult(
+            app_id=f"{spec.node_address}:{spec.pipeline_name}:{spec.app_type}",
+            app_name=spec.app_name,
+            app_type=spec.app_type,
+            node_address=spec.node_address,
+            pipeline_name=spec.pipeline_name,
+            plugin_signature=spec.plugin_signature,
+            instance_id="instance-1",
+            app_url="https://car.example",
+            status="deployed",
+        )
+
+    def launch_worker_app(self, spec):
+        self.worker_specs.append(spec)
+        return DeploymentResult(
+            app_id=f"{spec.node_address}:{spec.pipeline_name}:{spec.app_type}",
+            app_name=spec.app_name,
+            app_type=spec.app_type,
+            node_address=spec.node_address,
+            pipeline_name=spec.pipeline_name,
+            plugin_signature=spec.plugin_signature,
+            instance_id="instance-2",
+            app_url="https://worker.example",
+            status="deployed",
+        )
+
+    def stop_app(self, node_address, pipeline_name):
+        self.stop_calls.append((node_address, pipeline_name))
+
+
+def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
+    page = AppsPage(app_registry=AppRegistry(tmp_path / "apps.json"))
+    qtbot.addWidget(page)
+
+    assert page.objectName() == "appsPage"
+    assert page.accessibleName() == "Apps page"
+    assert page.property("role") == "navigationPage"
+    assert page.findChild(QTableWidget, "appsTable").accessibleName() == "Launcher-owned apps"
+    assert page.findChild(QComboBox, "appRunnerTypeCombo").currentData() == "CAR"
+    assert page.findChild(QLineEdit, "appNameInput").property("role") == "appTextInput"
+    assert page.findChild(QLineEdit, "appNodeAddressInput").property("role") == "appTextInput"
+    assert page.findChild(QLineEdit, "carImageInput").accessibleName() == "nginx:alpine"
+    assert page.findChild(QLineEdit, "workerRepoInput").accessibleName() == "https://github.com/org/repo"
+    assert page.findChild(QPlainTextEdit, "workerCommandsInput").property("role") == "appTextInput"
+    assert page.findChild(QPushButton, "appValidateButton").property("actionRole") == "secondary"
+    assert page.findChild(QPushButton, "appLaunchButton").property("actionRole") == "primary"
+    assert page.findChild(QPushButton, "appRefreshButton").property("actionRole") == "secondary"
+    assert page.findChild(QPushButton, "appStopButton").property("actionRole") == "utility"
+    assert page.findChild(QPushButton, "appCopyUrlButton").property("actionRole") == "utility"
+
+
+def test_apps_page_validates_and_launches_container_with_fake_sdk(qtbot, tmp_path):
+    fake_client = FakeAppDeploymentClient()
+    page = AppsPage(
+        app_registry=AppRegistry(tmp_path / "apps.json"),
+        deployment_client=fake_client,
+    )
+    qtbot.addWidget(page)
+
+    page.app_name_input.setText("car_runner")
+    page.node_address_input.setText(APP_TEST_NODE)
+    page.car_image_input.setText("nginx:alpine")
+    page.car_port_input.setText("8080")
+    page.env_input.setPlainText("PUBLIC_VALUE=1")
+
+    qtbot.mouseClick(page.findChild(QPushButton, "appValidateButton"), Qt.LeftButton)
+    assert page.validation_message.text() == "Ready"
+
+    qtbot.mouseClick(page.findChild(QPushButton, "appLaunchButton"), Qt.LeftButton)
+
+    assert fake_client.container_specs[0].image == "nginx:alpine"
+    assert page.apps_table.rowCount() == 1
+    assert page.apps_table.item(0, 0).text() == "car_runner"
+    assert page.apps_table.item(0, 2).text() == "deployed"
+
+    page.apps_table.selectRow(0)
+    qtbot.mouseClick(page.findChild(QPushButton, "appCopyUrlButton"), Qt.LeftButton)
+    assert QApplication.clipboard().text() == "https://car.example"
+
+    qtbot.mouseClick(page.findChild(QPushButton, "appStopButton"), Qt.LeftButton)
+    assert fake_client.stop_calls == [(APP_TEST_NODE, "car_runner")]
+    assert page.apps_table.item(0, 2).text() == "stopped"
+
+
+def test_apps_page_worker_mode_validates_payload(qtbot, tmp_path):
+    fake_client = FakeAppDeploymentClient()
+    page = AppsPage(
+        app_registry=AppRegistry(tmp_path / "apps.json"),
+        deployment_client=fake_client,
+    )
+    qtbot.addWidget(page)
+
+    page.runner_type_combo.setCurrentIndex(1)
+    page.app_name_input.setText("worker_runner")
+    page.node_address_input.setText(APP_TEST_NODE)
+    page.worker_repo_input.setText("https://github.com/Ratio1/example-app")
+    page.worker_port_input.setText("4173")
+
+    assert page.runner_stack.currentIndex() == 1
+
+    qtbot.mouseClick(page.findChild(QPushButton, "appLaunchButton"), Qt.LeftButton)
+
+    assert fake_client.worker_specs[0].repo_url == "https://github.com/Ratio1/example-app"
+    assert fake_client.worker_specs[0].commands == ["npm install", "npm run build", "npm run start"]
+    assert page.apps_table.item(0, 1).text() == "WAR"
+
+
+def test_apps_page_refreshes_registry_records_and_reports_missing_selection(qtbot, tmp_path):
+    registry = AppRegistry(tmp_path / "apps.json")
+    registry.upsert(
+        ManagedAppRecord(
+            app_id=f"{APP_TEST_NODE}:known:CAR",
+            app_name="known",
+            app_type="CAR",
+            node_address=APP_TEST_NODE,
+            pipeline_name="known",
+            plugin_signature="CONTAINER_APP_RUNNER",
+            app_url="https://known.example",
+            status="deployed",
+        )
+    )
+    page = AppsPage(app_registry=registry)
+    qtbot.addWidget(page)
+
+    qtbot.mouseClick(page.findChild(QPushButton, "appRefreshButton"), Qt.LeftButton)
+
+    assert page.apps_table.rowCount() == 1
+    assert page.apps_table.item(0, 0).text() == "known"
+
+    page.apps_table.clearSelection()
+    qtbot.mouseClick(page.findChild(QPushButton, "appStopButton"), Qt.LeftButton)
+    assert page.validation_message.text() == "Select an app first"
 
 
 def test_container_list_updates_selection_and_emits_toggle(qtbot):
@@ -424,6 +576,7 @@ def test_sidebar_panel_exposes_stable_launcher_controls(qtbot):
     assert panel.findChild(QWidget, "sidebarPanel") is None
     assert panel.page_stack.objectName() == "launcherPageStack"
     assert panel.current_page_name() == "nodes"
+    assert panel.page_stack.sizeHint().height() == panel.findChild(QWidget, "nodesPage").sizeHint().height()
     assert panel.findChild(QToolButton, "navNodesButton").isChecked()
     assert panel.findChild(QToolButton, "navAppsButton") is not None
     assert panel.findChild(QToolButton, "navLogsButton") is not None
@@ -450,6 +603,8 @@ def test_sidebar_panel_exposes_stable_launcher_controls(qtbot):
     qtbot.mouseClick(panel.toggleButton, Qt.LeftButton)
     panel.show_page("docker")
     qtbot.mouseClick(panel.docker_download_button, Qt.LeftButton)
+    panel.show_page("apps")
+    assert panel.page_stack.sizeHint().height() == panel.apps_page.sizeHint().height()
     panel.show_page("network")
     qtbot.mouseClick(panel.dapp_button, Qt.LeftButton)
     qtbot.mouseClick(panel.explorer_button, Qt.LeftButton)

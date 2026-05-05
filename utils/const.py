@@ -501,6 +501,82 @@ COMMON_STYLESHEET_TEMPLATE = """
     background-color: {toggle_button_disabled_bg};
     border-color: {toggle_button_disabled_border};
   }}
+  QLineEdit[role="appTextInput"],
+  QPlainTextEdit[role="appTextInput"],
+  QComboBox[role="appCombo"] {{
+    background-color: {secondary_action_bg};
+    color: {secondary_action_text};
+    border: 1px solid {secondary_action_border};
+    border-radius: 6px;
+    padding: 6px 8px;
+    selection-background-color: {primary_action_bg};
+    selection-color: {primary_action_text};
+    font-family: "Segoe UI";
+    font-size: 9pt;
+  }}
+  QLineEdit[role="appTextInput"]:focus,
+  QPlainTextEdit[role="appTextInput"]:focus,
+  QComboBox[role="appCombo"]:focus {{
+    background-color: {secondary_action_hover};
+    border: 1px solid {combo_hover_border};
+  }}
+  QComboBox[role="appCombo"]::drop-down {{
+    border: none;
+    width: 24px;
+  }}
+  QComboBox[role="appCombo"]::down-arrow {{
+    image: none;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid {secondary_action_text};
+    width: 0px;
+    height: 0px;
+    margin-right: 8px;
+  }}
+  QLabel[role="appFormLabel"] {{
+    color: {section_label_text};
+    background-color: transparent;
+    font-family: "Segoe UI";
+    font-size: 8pt;
+    font-weight: 600;
+    padding: 2px 6px 0px 6px;
+  }}
+  QLabel[role="appValidationMessage"] {{
+    color: {toggle_button_stop_text};
+    background-color: {toggle_button_stop_bg};
+    border: 1px solid {toggle_button_stop_border};
+    border-radius: 6px;
+    font-family: "Segoe UI";
+    font-size: 8pt;
+    font-weight: 600;
+    padding: 5px 7px;
+    margin: 2px 6px;
+  }}
+  QTableWidget#appsTable {{
+    background-color: {info_box_bg};
+    color: {info_box_text};
+    border: 1px solid {info_box_border};
+    border-radius: 7px;
+    gridline-color: {graph_border};
+    font-family: "Segoe UI";
+    font-size: 8pt;
+    selection-background-color: {primary_action_bg};
+    selection-color: {primary_action_text};
+  }}
+  QTableWidget#appsTable QScrollBar:horizontal {{
+    height: 0px;
+    background: transparent;
+  }}
+  QTableWidget#appsTable QHeaderView::section {{
+    background-color: {secondary_action_bg};
+    color: {secondary_action_text};
+    border: none;
+    border-bottom: 1px solid {secondary_action_border};
+    padding: 4px 5px;
+    font-family: "Segoe UI";
+    font-size: 8pt;
+    font-weight: 600;
+  }}
   PlotWidget, QWidget[class="plot-container"] {{
     background-color: {graph_bg};
     border: 1px solid {graph_border};

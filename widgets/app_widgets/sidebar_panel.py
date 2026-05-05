@@ -33,8 +33,21 @@ from utils.const import (
     TOGGLE_NODE_TOOLTIP,
 )
 from widgets.CenteredComboBox import CenteredComboBox
+from widgets.app_widgets.apps_page import AppsPage
 from widgets.app_widgets.sidebar_controls import create_sidebar_action_button, create_sidebar_section_label
 from widgets.app_widgets.sidebar_status_cards import NodeStatusPanel, ResourceStatusPanel
+
+
+class CurrentPageStack(QStackedWidget):
+    """QStackedWidget that sizes the sidebar from the active page only."""
+
+    def sizeHint(self):
+        current = self.currentWidget()
+        return current.sizeHint() if current is not None else super().sizeHint()
+
+    def minimumSizeHint(self):
+        current = self.currentWidget()
+        return current.minimumSizeHint() if current is not None else super().minimumSizeHint()
 
 
 class SidebarPanel(QWidget):
@@ -99,7 +112,7 @@ class SidebarPanel(QWidget):
         root_layout.setSpacing(8)
         root_layout.addWidget(self._create_navigation_rail())
 
-        self.page_stack = QStackedWidget()
+        self.page_stack = CurrentPageStack()
         self.page_stack.setObjectName("launcherPageStack")
         self.page_stack.setAccessibleName("Launcher navigation pages")
         self.page_stack.setProperty("role", "navigationPageStack")
@@ -107,7 +120,7 @@ class SidebarPanel(QWidget):
         root_layout.addWidget(self.page_stack, 1)
 
         self._add_page("nodes", self._create_nodes_page())
-        self._add_page("apps", self._create_placeholder_page("Apps", "appsPage", "appsPageSectionLabel"))
+        self._add_page("apps", self._create_apps_page())
         self._add_page("logs", self._create_placeholder_page("Logs", "logsPage", "logsPageSectionLabel"))
         self._add_page("docker", self._create_docker_page())
         self._add_page("settings", self._create_settings_page())
@@ -164,6 +177,7 @@ class SidebarPanel(QWidget):
         if page is None:
             return
         self.page_stack.setCurrentWidget(page)
+        self.page_stack.updateGeometry()
         button = self._nav_buttons.get(name)
         if button is not None:
             button.setChecked(True)
@@ -281,6 +295,10 @@ class SidebarPanel(QWidget):
         layout.addWidget(self.docker_download_button)
         layout.addStretch(1)
         return page
+
+    def _create_apps_page(self) -> QWidget:
+        self.apps_page = AppsPage(parent=self)
+        return self.apps_page
 
     def _create_settings_page(self) -> QWidget:
         page = self._create_page("settingsPage")

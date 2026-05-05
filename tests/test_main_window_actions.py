@@ -3172,7 +3172,7 @@ def test_navigation_rail_switches_contextual_control_pages(qtbot, monkeypatch):
 
     pages = {
         "nodes": ("navNodesButton", "nodesPage", launcher.toggleButton),
-        "apps": ("navAppsButton", "appsPage", launcher.findChild(QLabel, "appsPagePlaceholderLabel")),
+        "apps": ("navAppsButton", "appsPage", launcher.findChild(QPushButton, "appLaunchButton")),
         "logs": ("navLogsButton", "logsPage", launcher.findChild(QLabel, "logsPagePlaceholderLabel")),
         "docker": ("navDockerButton", "dockerPage", launcher.docker_download_button),
         "settings": ("navSettingsButton", "settingsPage", launcher.themeToggleButton),
@@ -3373,12 +3373,6 @@ def test_main_window_sidebar_controls_do_not_overlap_scrollbar(qtbot, monkeypatc
     assert sidebar_scroll is not None
 
     viewport = sidebar_scroll.viewport()
-    scrollbar = sidebar_scroll.verticalScrollBar()
-    viewport_right = viewport.mapToGlobal(viewport.rect().topRight()).x()
-    safe_right = viewport_right - 2
-    if scrollbar.isVisible():
-        safe_right = scrollbar.mapToGlobal(scrollbar.rect().topLeft()).x() - 2
-
     assert sidebar_scroll.widget().width() <= viewport.width()
 
     page_controls = {
@@ -3396,6 +3390,13 @@ def test_main_window_sidebar_controls_do_not_overlap_scrollbar(qtbot, monkeypatc
     for page_name, controls in page_controls.items():
         launcher.sidebar_panel.show_page(page_name)
         qtbot.wait(20)
+        viewport = sidebar_scroll.viewport()
+        scrollbar = sidebar_scroll.verticalScrollBar()
+        viewport_right = viewport.mapToGlobal(viewport.rect().topRight()).x()
+        safe_right = viewport_right - 2
+        if scrollbar.isVisible():
+            safe_right = scrollbar.mapToGlobal(scrollbar.rect().topLeft()).x() - 2
+
         for control in controls:
             assert control.isVisible(), control.objectName()
             control_right = control.mapToGlobal(control.rect().topRight()).x()

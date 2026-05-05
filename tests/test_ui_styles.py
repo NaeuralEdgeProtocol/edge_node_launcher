@@ -63,6 +63,16 @@ def test_dialog_text_inputs_use_semantic_styles():
         assert "selection-background-color:" in stylesheet
 
 
+def test_apps_page_controls_use_semantic_styles():
+    for stylesheet in (DARK_STYLESHEET, LIGHT_STYLESHEET):
+        assert 'QLineEdit[role="appTextInput"]' in stylesheet
+        assert 'QPlainTextEdit[role="appTextInput"]' in stylesheet
+        assert 'QComboBox[role="appCombo"]' in stylesheet
+        assert 'QLabel[role="appFormLabel"]' in stylesheet
+        assert 'QLabel[role="appValidationMessage"]' in stylesheet
+        assert "QTableWidget#appsTable" in stylesheet
+
+
 def test_stop_button_text_uses_readable_dark_color_on_yellow():
     for colors in (DARK_COLORS, LIGHT_COLORS):
         assert colors["toggle_button_stop_text"] == "#1F2937"

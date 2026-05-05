@@ -13,6 +13,7 @@ ACTION_SOURCE_FILES = [
     Path("widgets/dialogs/RenameNodeDialog.py"),
     Path("widgets/app_widgets/config_editor.py"),
     Path("widgets/app_widgets/activity_log.py"),
+    Path("widgets/app_widgets/apps_page.py"),
     Path("widgets/app_widgets/container_list.py"),
     Path("widgets/app_widgets/log_console.py"),
     Path("widgets/app_widgets/metrics_widget.py"),
@@ -60,6 +61,11 @@ ACTION_IDS = [
     "nodeInfoRefreshButton",
     "activityLogCopyButton",
     "activityLogClearButton",
+    "appValidateButton",
+    "appLaunchButton",
+    "appRefreshButton",
+    "appStopButton",
+    "appCopyUrlButton",
 ]
 
 CONTROL_PATTERN = re.compile(

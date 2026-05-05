@@ -21,6 +21,11 @@ object name near construction.
 | Node info | `copyEthButton` | button | Copies ETH address. | Static inventory, mocked main-window click |
 | Activity Log | `activityLogCopyButton` | tool button | Copies visible Activity Log text. | Static inventory, widget click, smoke E2E |
 | Activity Log | `activityLogClearButton` | tool button | Clears visible Activity Log text. | Static inventory, widget click, smoke E2E |
+| Apps | `appValidateButton` | button | Validates the current CAR/WAR app form. | Static inventory, widget click |
+| Apps | `appLaunchButton` | button | Launches the current CAR/WAR app through the injectable SDK deployment client. | Static inventory, widget click with fake SDK client |
+| Apps | `appRefreshButton` | button | Refreshes the launcher-owned app table from the local registry. | Static inventory, widget click |
+| Apps | `appStopButton` | button | Stops or marks stopped the selected launcher-owned app. | Static inventory, widget click with fake SDK client |
+| Apps | `appCopyUrlButton` | button | Copies the selected launcher-owned app URL. | Static inventory, widget click |
 | Bottom actions | `renameNodeButton` | button | Opens rename-node dialog. | Static inventory, mocked main-window guard/save, destructive Docker rename E2E |
 | Bottom actions | `themeToggleButton` | button | Switches light or dark theme. | Static inventory, mocked main-window click |
 | Bottom actions | `forceDebugCheckbox` | checkbox | Enables or disables debug logging. | Static inventory, mocked main-window click |
