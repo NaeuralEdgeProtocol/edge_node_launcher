@@ -1,6 +1,11 @@
 from dataclasses import dataclass
 
-from services.app_secret_redaction import REDACTED_SECRET, is_secret_key, redact_secrets
+from services.app_secret_redaction import (
+    REDACTED_SECRET,
+    is_secret_key,
+    redact_secret_text,
+    redact_secrets,
+)
 
 
 @dataclass
@@ -36,3 +41,16 @@ def test_redact_secrets_recurses_through_dicts_lists_and_dataclasses():
     assert redacted["env"][1]["token"] == REDACTED_SECRET
     assert redacted["carrier"]["registry_password"] == REDACTED_SECRET
     assert redacted["carrier"]["visible_name"] == "car"
+
+
+def test_redact_secret_text_masks_inline_assignments_and_bearer_tokens():
+    text = "probe failed password: hunter2 token=abc123 Bearer ey.secret"
+
+    redacted = redact_secret_text(text)
+
+    assert "hunter2" not in redacted
+    assert "abc123" not in redacted
+    assert "ey.secret" not in redacted
+    assert "password: [redacted]" in redacted
+    assert "token=[redacted]" in redacted
+    assert "Bearer [redacted]" in redacted

@@ -31,6 +31,7 @@ SMOKE_VALID_NODE_ADDRESS = "0xai_smokeprimary123"
 SMOKE_SDK_ADDRESS = "0xai_smokelauncher123"
 SMOKE_CONTAINER_APP_SECRET = "smoke-registry-secret"
 SMOKE_WORKER_APP_SECRET = "smoke-github-token"
+SMOKE_STATUS_SECRET = "smoke-status-token"
 
 
 class FakeDockerHandler:
@@ -82,6 +83,7 @@ class FakeSdkDeploymentClient:
         self.events = []
         self.deployed = {}
         self.stopped = set()
+        self.status_errors = {}
 
     def launch_container_app(self, spec):
         self.events.append(
@@ -116,6 +118,7 @@ class FakeSdkDeploymentClient:
             if result.node_address != node_address:
                 continue
             stopped_key = (result.node_address, result.pipeline_name)
+            status_key = (result.node_address, result.pipeline_name)
             statuses.append(
                 SdkAppStatus(
                     node_address=result.node_address,
@@ -124,6 +127,7 @@ class FakeSdkDeploymentClient:
                     instance_id=result.instance_id,
                     status="stopped" if stopped_key in self.stopped else "online",
                     url=result.app_url,
+                    last_error=self.status_errors.get(status_key, ""),
                 )
             )
         return statuses
@@ -911,6 +915,9 @@ def run_mocked_sdk_apps_scenario(
     apps_page.apps_table.selectRow(0)
     app.processEvents()
     record_step(log, output_path, {"step": "select container app row"})
+    fake_sdk_client.status_errors[(SMOKE_VALID_NODE_ADDRESS, "smoke_car")] = (
+        f"health probe failed token={SMOKE_STATUS_SECRET}"
+    )
     record_step(log, output_path, {"step": click_visible_button(app, apps_page.refresh_button, "refresh container app status")})
     wait_until(
         app,
@@ -918,10 +925,22 @@ def run_mocked_sdk_apps_scenario(
         timeout,
         "container app status refresh",
     )
+    registry_payload = app_registry.registry_file.read_text(encoding="utf-8")
+    if SMOKE_STATUS_SECRET in registry_payload:
+        raise AssertionError("SDK status diagnostic secret was written to the app registry")
+    details_text = launcher.apps_detail_text.toPlainText()
+    if "health probe failed token=[redacted]" not in details_text:
+        raise AssertionError("redacted SDK status diagnostic was not visible in app details")
+    diagnostics_visual = capture_visual_evidence(launcher, screenshot_dir, "apps_status_diagnostics")
     record_step(
         log,
         output_path,
-        {"step": "container app status refreshed", "table": app_table_snapshot(apps_page)},
+        {
+            "step": "container app status refreshed",
+            "table": app_table_snapshot(apps_page),
+            "details_contains_redacted_diagnostic": True,
+            "visual": diagnostics_visual,
+        },
     )
     record_step(
         log,

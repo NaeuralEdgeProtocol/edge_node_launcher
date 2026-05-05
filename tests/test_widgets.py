@@ -92,6 +92,8 @@ class FakeAppDeploymentClient:
         self.list_calls = []
         self.delay_seconds = 0
         self.events = events
+        self.status_value = "online"
+        self.status_last_error = ""
 
     def launch_container_app(self, spec):
         if self.delay_seconds:
@@ -142,8 +144,9 @@ class FakeAppDeploymentClient:
                 app_name="known",
                 plugin_signature="CONTAINER_APP_RUNNER",
                 instance_id="instance-known",
-                status="online",
+                status=self.status_value,
                 url="https://known-live.example",
+                last_error=self.status_last_error,
             )
         ]
 
@@ -665,6 +668,40 @@ def test_apps_page_refresh_status_uses_sdk_client_for_existing_records(qtbot, tm
     assert fake_client.list_calls == [APP_TEST_NODE]
     assert page.apps_table.item(0, 2).text() == "online"
     assert registry.get(f"{APP_TEST_NODE}:known:CAR").app_url == "https://known-live.example"
+
+
+def test_apps_page_refresh_status_persists_redacted_diagnostics(qtbot, tmp_path):
+    fake_client = FakeAppDeploymentClient()
+    fake_client.status_value = "failed"
+    fake_client.status_last_error = "health probe failed token=abc123 password: hunter2"
+    registry = AppRegistry(tmp_path / "apps.json")
+    registry.upsert(
+        ManagedAppRecord(
+            app_id=f"{APP_TEST_NODE}:known:CAR",
+            app_name="known",
+            app_type="CAR",
+            node_address=APP_TEST_NODE,
+            pipeline_name="known",
+            plugin_signature="CONTAINER_APP_RUNNER",
+            status="deployed",
+        )
+    )
+    page = AppsPage(app_registry=registry, deployment_client=fake_client)
+    qtbot.addWidget(page)
+    page.node_address_input.setText(APP_TEST_NODE)
+
+    qtbot.mouseClick(page.findChild(QPushButton, "appRefreshButton"), Qt.LeftButton)
+    qtbot.waitUntil(lambda: page.apps_table.item(0, 2).text() == "failed", timeout=1000)
+
+    record = registry.get(f"{APP_TEST_NODE}:known:CAR")
+    assert record.status == "failed"
+    assert record.last_action == "status refreshed"
+    assert "last_status_checked_at" in record.metadata
+    assert record.metadata["last_error"] == (
+        "health probe failed token=[redacted] password: [redacted]"
+    )
+    assert "abc123" not in registry.registry_file.read_text(encoding="utf-8")
+    assert "hunter2" not in registry.registry_file.read_text(encoding="utf-8")
 
 
 def test_container_list_updates_selection_and_emits_toggle(qtbot):

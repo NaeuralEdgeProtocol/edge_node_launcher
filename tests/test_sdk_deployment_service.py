@@ -139,3 +139,30 @@ def test_map_sdk_app_rows_handles_dataframes_and_empty_rows():
 
     assert map_sdk_app_rows(None) == []
     assert map_sdk_app_rows(FakeDataFrame())[0].app_name == "a"
+
+
+def test_map_sdk_app_rows_reads_nested_status_diagnostics():
+    statuses = map_sdk_app_rows(
+        [
+            {
+                "Node": NODE_ADDRESS,
+                "App": "car_runner",
+                "Plugin": "CONTAINER_APP_RUNNER",
+                "Data": {
+                    "status": "failed",
+                    "url": "https://app.example",
+                    "last_error": "probe timed out",
+                },
+            },
+            {
+                "Node": NODE_ADDRESS,
+                "App": "worker_runner",
+                "Plugin": "WORKER_APP_RUNNER",
+                "Probe": {"error": "health endpoint returned 500"},
+            },
+        ]
+    )
+
+    assert statuses[0].status == "failed"
+    assert statuses[0].last_error == "probe timed out"
+    assert statuses[1].last_error == "health endpoint returned 500"

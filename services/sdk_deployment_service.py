@@ -117,6 +117,17 @@ def _status_from_row(row: dict[str, Any]) -> SdkAppStatus:
         probe = {}
     url = data.get("url") or data.get("URL") or probe.get("url") or ""
     status = data.get("status") or data.get("STATUS") or row.get("Status") or "unknown"
+    last_error = (
+        row.get("LastError")
+        or row.get("last_error")
+        or data.get("LastError")
+        or data.get("last_error")
+        or data.get("error")
+        or probe.get("LastError")
+        or probe.get("last_error")
+        or probe.get("error")
+        or ""
+    )
     return SdkAppStatus(
         node_address=str(row.get("Node") or row.get("node") or ""),
         app_name=str(row.get("App") or row.get("app") or ""),
@@ -125,7 +136,7 @@ def _status_from_row(row: dict[str, Any]) -> SdkAppStatus:
         owner=str(row.get("Owner") or row.get("owner") or ""),
         status=str(status),
         url=str(url),
-        last_error=str(row.get("LastError") or row.get("last_error") or ""),
+        last_error=str(last_error),
         raw=dict(row),
     )
 

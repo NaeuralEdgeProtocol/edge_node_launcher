@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, is_dataclass
+import re
 from typing import Any, Mapping
 
 
@@ -17,6 +18,11 @@ SECRET_KEY_PATTERNS = (
     "pemfile",
     "auth",
 )
+
+SECRET_ASSIGNMENT_PATTERN = re.compile(
+    r"(?i)\b(password|passwd|token|secret|private[_\-\s]?key|auth)(\s*[:=]\s*)([^\s,;]+)"
+)
+BEARER_TOKEN_PATTERN = re.compile(r"(?i)\b(bearer\s+)([A-Za-z0-9._~+/=-]+)")
 
 
 def is_secret_key(key: Any) -> bool:
@@ -48,3 +54,13 @@ def redact_secrets(value: Any) -> Any:
     if isinstance(value, tuple):
         return tuple(redact_secrets(item) for item in value)
     return value
+
+
+def redact_secret_text(value: Any) -> str:
+    """Redact inline secret assignments inside user-facing diagnostic text."""
+    text = str(value or "")
+    text = SECRET_ASSIGNMENT_PATTERN.sub(
+        lambda match: f"{match.group(1)}{match.group(2)}[redacted]",
+        text,
+    )
+    return BEARER_TOKEN_PATTERN.sub(lambda match: f"{match.group(1)}[redacted]", text)

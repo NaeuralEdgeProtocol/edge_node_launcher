@@ -838,6 +838,14 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       ("Last action", record.last_action or "-"),
     ]
 
+    checked_at = metadata.get("last_status_checked_at")
+    if checked_at:
+      rows.append(("Last check", str(checked_at)))
+
+    last_error = metadata.get("last_error")
+    if last_error:
+      rows.append(("Last error", str(last_error)))
+
     for label, key in (
       ("Image", "image"),
       ("Repository", "repo_url"),

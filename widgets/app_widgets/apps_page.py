@@ -31,6 +31,7 @@ from services.app_deployment_models import (
     ManagedAppRecord,
     SdkAppStatus,
     WorkerAppSpec,
+    utc_now_iso,
 )
 from services.app_deployment_validation import (
     ValidationIssue,
@@ -39,7 +40,7 @@ from services.app_deployment_validation import (
     validate_worker_spec,
 )
 from services.app_registry import AppRegistry
-from services.app_secret_redaction import REDACTED_SECRET
+from services.app_secret_redaction import REDACTED_SECRET, redact_secret_text, redact_secrets
 from services.sdk_error_messages import classify_sdk_error
 from services.sdk_operation_worker import SdkOperationThread
 from widgets.app_widgets.sidebar_controls import (
@@ -1151,9 +1152,7 @@ class AppsPage(QWidget):
             status = _matching_status(record, statuses)
             if status is None:
                 continue
-            record.status = status.status
-            if status.url:
-                record.app_url = status.url
+            self._apply_status_to_record(record, status)
             self.app_registry.upsert(record)
             changed += 1
         self.refresh_apps(selected_app_id=selected_app_id)
@@ -1162,6 +1161,23 @@ class AppsPage(QWidget):
             f"SDK Apps refresh complete: statuses={len(statuses or [])} updated={changed}",
             color="green" if changed else "blue",
         )
+
+    def _apply_status_to_record(self, record: ManagedAppRecord, status: SdkAppStatus) -> None:
+        checked_at = utc_now_iso()
+        record.status = status.status
+        if status.url:
+            record.app_url = status.url
+        record.last_action = "status refreshed"
+        record.updated_at = checked_at
+
+        metadata = dict(record.metadata or {})
+        metadata["last_status_checked_at"] = checked_at
+        safe_error = redact_secret_text(status.last_error).strip()
+        if safe_error:
+            metadata["last_error"] = safe_error
+        else:
+            metadata.pop("last_error", None)
+        record.metadata = redact_secrets(metadata)
 
     def _start_sdk_operation(self, operation_name: str, operation, on_success, message: str) -> None:
         self._set_busy(True, message)

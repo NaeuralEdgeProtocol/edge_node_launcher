@@ -3227,6 +3227,8 @@ def test_apps_workspace_details_follow_updated_selection(qtbot, monkeypatch, tmp
                 "registry_password": "***REDACTED***",
                 "resources": {"cpu": 2, "memory": "1g", "gpu": 0, "ports": [8080]},
                 "volumes": {"cache": "/app/cache"},
+                "last_status_checked_at": "2026-05-05T07:30:00+00:00",
+                "last_error": "health probe failed token=[redacted]",
                 "file_volumes": {
                     "settings": {
                         "mounting_point": "/app/settings.ini",
@@ -3250,6 +3252,8 @@ def test_apps_workspace_details_follow_updated_selection(qtbot, monkeypatch, tmp
     assert "CPU: 2, Memory: 1g, GPU: 0, Ports: 8080" in selected_text
     assert "cache -> /app/cache" in selected_text
     assert "settings -> /app/settings.ini" in selected_text
+    assert "2026-05-05T07:30:00+00:00" in selected_text
+    assert "health probe failed token=[redacted]" in selected_text
     assert "Restart: on-failure" in selected_text
     assert "Pull: if-not-present" in selected_text
     assert "registry_password" not in selected_text
