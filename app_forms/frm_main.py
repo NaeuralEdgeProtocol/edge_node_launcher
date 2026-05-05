@@ -1141,6 +1141,9 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         self.themeToggleButton.setText(LIGHT_DASHBOARD_BUTTON_TEXT)
         self.themeToggleButton.setAccessibleName(LIGHT_DASHBOARD_BUTTON_TEXT)
         is_dark = True
+
+    if hasattr(self, "sidebar_panel"):
+        self.sidebar_panel.set_theme_state(is_dark)
     
     # Update button colors for the new theme
     self.init_button_colors()

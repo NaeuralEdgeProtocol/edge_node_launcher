@@ -584,6 +584,14 @@ COMMON_STYLESHEET_TEMPLATE = """
   QWidget[role="appDeploymentPanel"] {{
     background-color: transparent;
   }}
+  QLabel[role="appDialogTitle"] {{
+    color: {text_color};
+    background-color: transparent;
+    font-family: "Segoe UI";
+    font-size: 13pt;
+    font-weight: 700;
+    padding: 0px 2px 6px 2px;
+  }}
   QWidget[role="appAdvancedOptionsPanel"] {{
     background-color: transparent;
   }}
@@ -1029,6 +1037,26 @@ COMMON_STYLESHEET_TEMPLATE = """
   QCheckBox[role="settingsToggle"]::indicator:checked:hover {{
     background-color: {primary_action_hover};
     border-color: {primary_action_hover};
+  }}
+  QFrame[role="settingsPanel"] {{
+    background-color: {info_box_bg};
+    border: 1px solid {info_box_border};
+    border-radius: 8px;
+    margin: 2px 6px 6px 6px;
+  }}
+  QLabel[role="settingsPanelTitle"] {{
+    color: {text_color};
+    background-color: transparent;
+    font-family: "Segoe UI";
+    font-size: 9pt;
+    font-weight: 700;
+  }}
+  QLabel[role="settingsValueText"] {{
+    color: {section_label_text};
+    background-color: transparent;
+    font-family: "Segoe UI";
+    font-size: 8pt;
+    font-weight: 500;
   }}
   QPushButton[type="confirm"] {{
     background-color: {confirm_button_bg};

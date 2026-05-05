@@ -21,19 +21,21 @@ object name near construction.
 | Node info | `copyEthButton` | button | Copies ETH address. | Static inventory, mocked main-window click |
 | Activity Log | `activityLogCopyButton` | tool button | Copies visible Activity Log text. | Static inventory, widget click, smoke E2E |
 | Activity Log | `activityLogClearButton` | tool button | Clears visible Activity Log text. | Static inventory, widget click, smoke E2E |
-| Apps | `appValidateButton` | button | Validates the current CAR/WAR app form. | Static inventory, widget click |
-| Apps | `appLaunchButton` | button | Launches the current CAR/WAR app through the injectable SDK deployment client. | Static inventory, widget click with fake SDK client |
+| Apps | `appCreateButton` | button | Opens the Deploy App dialog for CAR/WAR creation. | Static inventory, widget click, smoke E2E |
 | Apps | `appRefreshButton` | button | Refreshes the launcher-owned app table from the local registry. | Static inventory, widget click |
 | Apps | `appStopButton` | button | Stops or marks stopped the selected launcher-owned app. | Static inventory, widget click with fake SDK client |
 | Apps | `appCopyUrlButton` | button | Copies the selected launcher-owned app URL. | Static inventory, widget click |
 | Apps | `appCheckSdkAccessButton` | button | Verifies launcher SDK access on the selected node without launching an app. | Static inventory, widget click, smoke E2E |
-| Apps | `appSdkSettingsButton` | button | Opens the Network page for SDK/network configuration. | Static inventory, widget signal, main-window navigation click |
-| Apps | `appAddVolumeButton` | button | Adds a source-to-mount-path row to the app volume editor. | Static inventory, widget click, smoke E2E |
-| Apps | `appRemoveVolumeButton` | button | Removes the selected app volume mount row. | Static inventory, widget click, smoke E2E |
-| Apps | `appAddFileVolumeButton` | button | Adds an in-memory config-file volume row to the app payload. | Static inventory, widget click, smoke E2E |
-| Apps | `appRemoveFileVolumeButton` | button | Removes the selected config-file volume row. | Static inventory, widget click |
-| SDK settings | `refreshSdkIdentityButton` | button | Loads the launcher's Ratio1 SDK identity on a background worker. | Static inventory, widget click, smoke E2E |
-| SDK settings | `copySdkIdentityAddressButton` | button | Copies the loaded launcher SDK address. | Static inventory, widget click, smoke E2E |
+| Apps | `appSdkSettingsButton` | button | Opens the Settings page for SDK identity and launcher preferences. | Static inventory, widget signal, main-window navigation click, smoke E2E |
+| Create app dialog | `appValidateButton` | button | Validates the current CAR/WAR app form. | Static inventory, widget click, smoke E2E |
+| Create app dialog | `appLaunchButton` | button | Launches the current CAR/WAR app through the injectable SDK deployment client. | Static inventory, widget click with fake SDK client, smoke E2E |
+| Create app dialog | `appCreateCancelButton` | button | Closes the Deploy App dialog without launching. | Static inventory, widget click |
+| Create app dialog | `appAddVolumeButton` | button | Adds a source-to-mount-path row to the app volume editor. | Static inventory, widget click, smoke E2E |
+| Create app dialog | `appRemoveVolumeButton` | button | Removes the selected app volume mount row. | Static inventory, widget click |
+| Create app dialog | `appAddFileVolumeButton` | button | Adds an in-memory config-file volume row to the app payload. | Static inventory, widget click, smoke E2E |
+| Create app dialog | `appRemoveFileVolumeButton` | button | Removes the selected config-file volume row. | Static inventory, widget click |
+| Settings | `refreshSdkIdentityButton` | button | Loads the launcher's Ratio1 SDK identity on a background worker. | Static inventory, widget click, smoke E2E |
+| Settings | `copySdkIdentityAddressButton` | button | Copies the loaded launcher SDK address. | Static inventory, widget click, smoke E2E |
 | Bottom actions | `renameNodeButton` | button | Opens rename-node dialog. | Static inventory, mocked main-window guard/save, destructive Docker rename E2E |
 | Bottom actions | `themeToggleButton` | button | Switches light or dark theme. | Static inventory, mocked main-window click |
 | Bottom actions | `forceDebugCheckbox` | checkbox | Enables or disables debug logging. | Static inventory, mocked main-window click |

@@ -166,7 +166,24 @@ class FakeLaunchPreflight:
         return SimpleNamespace(allowlist=SimpleNamespace(changed=self.changed))
 
 
-def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
+def _open_create_app_dialog_for_test(page, qtbot, monkeypatch):
+    opened = []
+
+    def capture_exec(dialog):
+        opened.append(dialog)
+        dialog.show()
+        return QDialog.Rejected
+
+    monkeypatch.setattr(QDialog, "exec_", capture_exec)
+    qtbot.mouseClick(page.findChild(QPushButton, "appCreateButton"), Qt.LeftButton)
+    assert opened
+    dialog = opened[-1]
+    page._active_create_dialog = dialog
+    qtbot.waitUntil(dialog.isVisible)
+    return dialog
+
+
+def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path, monkeypatch):
     page = AppsPage(app_registry=AppRegistry(tmp_path / "apps.json"))
     qtbot.addWidget(page)
 
@@ -185,9 +202,21 @@ def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
     assert empty_state.property("role") == "appsEmptyState"
     assert apps_table.isHidden()
     assert not empty_state.isHidden()
-    assert page.findChild(QWidget, "appManagementActionBar").property("role") == "appActionBar"
-    assert page.findChild(QWidget, "appLaunchActionBar").property("role") == "appActionBar"
-    assert page.findChild(QWidget, "appDeploymentPanel").property("role") == "appDeploymentPanel"
+    action_bar = page.findChild(QWidget, "appManagementActionBar")
+    assert action_bar.property("role") == "appActionBar"
+    assert isinstance(action_bar.layout(), QGridLayout)
+    assert page.findChild(QPushButton, "appCreateButton").property("actionRole") == "primary"
+    assert page.findChild(QWidget, "appManagementTargetNodeField").property("role") == "appTargetNodeField"
+    assert page.findChild(QComboBox, "appManagementNodeAddressCombo").itemText(0) == "Other..."
+    assert page.findChild(QLineEdit, "appManagementNodeAddressInput").accessibleName() == "Custom node address"
+    assert page.findChild(QLabel, "appManagementMessageLabel").property("role") == "appValidationMessage"
+    assert page.findChild(QWidget, "appDeploymentPanel") is None
+
+    dialog = _open_create_app_dialog_for_test(page, qtbot, monkeypatch)
+    assert dialog.objectName() == "createAppDialog"
+    assert dialog.accessibleName() == "Deploy App"
+    assert dialog.findChild(QWidget, "appLaunchActionBar").property("role") == "appActionBar"
+    assert dialog.findChild(QWidget, "appDeploymentPanel").property("role") == "appDeploymentPanel"
     assert page.findChild(QComboBox, "appRunnerTypeCombo").currentData() == "CAR"
     assert page.findChild(QLineEdit, "appNameInput").property("role") == "appTextInput"
     assert page.findChild(QWidget, "appTargetNodeField").property("role") == "appTargetNodeField"
@@ -253,6 +282,8 @@ def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
     assert page.findChild(QLineEdit, "workerVcsPollInput").text() == "60"
     assert page.findChild(QPushButton, "appValidateButton").property("actionRole") == "secondary"
     assert page.findChild(QPushButton, "appLaunchButton").property("actionRole") == "primary"
+    assert page.findChild(QPushButton, "appLaunchButton").text() == "Deploy"
+    assert page.findChild(QPushButton, "appCreateCancelButton").property("actionRole") == "utility"
     assert page.findChild(QPushButton, "appRefreshButton").property("actionRole") == "secondary"
     assert page.findChild(QPushButton, "appStopButton").property("actionRole") == "utility"
     assert page.findChild(QPushButton, "appCopyUrlButton").property("actionRole") == "utility"
@@ -296,7 +327,28 @@ def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
     assert file_volume_table.rowCount() == 0
 
 
-def test_apps_page_target_node_picker_supports_known_nodes_and_manual_other(qtbot, tmp_path):
+def test_apps_page_management_actions_fit_labels_at_dashboard_width(qtbot, tmp_path):
+    page = AppsPage(app_registry=AppRegistry(tmp_path / "apps.json"))
+    qtbot.addWidget(page)
+    page.resize(680, 520)
+    page.show()
+    qtbot.waitUntil(page.isVisible)
+    QApplication.processEvents()
+
+    for object_name in (
+        "appCreateButton",
+        "appRefreshButton",
+        "appStopButton",
+        "appCopyUrlButton",
+        "appCheckSdkAccessButton",
+        "appSdkSettingsButton",
+    ):
+        button = page.findChild(QPushButton, object_name)
+        text_width = button.fontMetrics().horizontalAdvance(button.text())
+        assert text_width <= button.width() - 24, object_name
+
+
+def test_apps_page_target_node_picker_supports_known_nodes_and_manual_other(qtbot, tmp_path, monkeypatch):
     page = AppsPage(app_registry=AppRegistry(tmp_path / "apps.json"))
     qtbot.addWidget(page)
     page.show()
@@ -317,7 +369,14 @@ def test_apps_page_target_node_picker_supports_known_nodes_and_manual_other(qtbo
         ]
     )
 
-    combo = page.findChild(QComboBox, "appNodeAddressCombo")
+    management_combo = page.findChild(QComboBox, "appManagementNodeAddressCombo")
+    assert management_combo.count() == 3
+    assert management_combo.itemText(0).startswith("alpha")
+    assert management_combo.itemText(1).startswith("beta")
+    assert management_combo.itemText(2) == "Other..."
+
+    dialog = _open_create_app_dialog_for_test(page, qtbot, monkeypatch)
+    combo = dialog.findChild(QComboBox, "appNodeAddressCombo")
     assert combo.count() == 3
     assert combo.itemText(0).startswith("alpha")
     assert combo.itemText(1).startswith("beta")
@@ -344,7 +403,7 @@ def test_apps_page_target_node_picker_supports_known_nodes_and_manual_other(qtbo
     assert page.node_address_input.isHidden()
 
 
-def test_apps_page_validates_and_launches_container_with_fake_sdk(qtbot, tmp_path):
+def test_apps_page_validates_and_launches_container_with_fake_sdk(qtbot, tmp_path, monkeypatch):
     fake_client = FakeAppDeploymentClient()
     registry = AppRegistry(tmp_path / "apps.json")
     page = AppsPage(
@@ -352,6 +411,7 @@ def test_apps_page_validates_and_launches_container_with_fake_sdk(qtbot, tmp_pat
         deployment_client=fake_client,
     )
     qtbot.addWidget(page)
+    _open_create_app_dialog_for_test(page, qtbot, monkeypatch)
 
     page.app_name_input.setText("car_runner")
     page.node_address_input.setText(APP_TEST_NODE)
@@ -403,13 +463,14 @@ def test_apps_page_validates_and_launches_container_with_fake_sdk(qtbot, tmp_pat
     assert page.apps_table.item(0, 2).text() == "stopped"
 
 
-def test_apps_page_worker_mode_validates_payload(qtbot, tmp_path):
+def test_apps_page_worker_mode_validates_payload(qtbot, tmp_path, monkeypatch):
     fake_client = FakeAppDeploymentClient()
     page = AppsPage(
         app_registry=AppRegistry(tmp_path / "apps.json"),
         deployment_client=fake_client,
     )
     qtbot.addWidget(page)
+    _open_create_app_dialog_for_test(page, qtbot, monkeypatch)
 
     page.runner_type_combo.setCurrentIndex(1)
     page.app_name_input.setText("worker_runner")
@@ -441,13 +502,14 @@ def test_apps_page_worker_mode_validates_payload(qtbot, tmp_path):
     assert page.apps_table.item(0, 1).text() == "WAR"
 
 
-def test_apps_page_rejects_invalid_volume_rows(qtbot, tmp_path):
+def test_apps_page_rejects_invalid_volume_rows(qtbot, tmp_path, monkeypatch):
     fake_client = FakeAppDeploymentClient()
     page = AppsPage(
         app_registry=AppRegistry(tmp_path / "apps.json"),
         deployment_client=fake_client,
     )
     qtbot.addWidget(page)
+    _open_create_app_dialog_for_test(page, qtbot, monkeypatch)
 
     page.app_name_input.setText("car_runner")
     page.node_address_input.setText(APP_TEST_NODE)
@@ -462,13 +524,14 @@ def test_apps_page_rejects_invalid_volume_rows(qtbot, tmp_path):
     assert fake_client.container_specs == []
 
 
-def test_apps_page_rejects_invalid_file_volume_rows(qtbot, tmp_path):
+def test_apps_page_rejects_invalid_file_volume_rows(qtbot, tmp_path, monkeypatch):
     fake_client = FakeAppDeploymentClient()
     page = AppsPage(
         app_registry=AppRegistry(tmp_path / "apps.json"),
         deployment_client=fake_client,
     )
     qtbot.addWidget(page)
+    _open_create_app_dialog_for_test(page, qtbot, monkeypatch)
 
     page.app_name_input.setText("car_runner")
     page.node_address_input.setText(APP_TEST_NODE)
@@ -539,7 +602,7 @@ def test_apps_page_preserves_selection_and_emits_updated_record_after_stop(qtbot
     assert emitted[-1].status == "stopped"
 
 
-def test_apps_page_logs_sdk_events_without_secret_values(qtbot, tmp_path):
+def test_apps_page_logs_sdk_events_without_secret_values(qtbot, tmp_path, monkeypatch):
     fake_client = FakeAppDeploymentClient()
     events = []
     page = AppsPage(
@@ -548,6 +611,7 @@ def test_apps_page_logs_sdk_events_without_secret_values(qtbot, tmp_path):
         event_logger=lambda message, **kwargs: events.append((message, kwargs)),
     )
     qtbot.addWidget(page)
+    _open_create_app_dialog_for_test(page, qtbot, monkeypatch)
 
     page.app_name_input.setText("car_runner")
     page.node_address_input.setText(APP_TEST_NODE)
@@ -566,13 +630,14 @@ def test_apps_page_logs_sdk_events_without_secret_values(qtbot, tmp_path):
     assert all("cr_password" not in message for message in messages)
 
 
-def test_apps_page_shows_clear_sdk_error_and_logs_diagnostic(qtbot, tmp_path):
+def test_apps_page_shows_clear_sdk_error_and_logs_diagnostic(qtbot, tmp_path, monkeypatch):
     events = []
     page = AppsPage(
         app_registry=AppRegistry(tmp_path / "apps.json"),
         event_logger=lambda message, **kwargs: events.append((message, kwargs)),
     )
     qtbot.addWidget(page)
+    _open_create_app_dialog_for_test(page, qtbot, monkeypatch)
     page.car_registry_password_input.setText("super-secret-registry-password")
 
     page._fail_sdk_operation(
@@ -592,7 +657,7 @@ def test_apps_page_shows_clear_sdk_error_and_logs_diagnostic(qtbot, tmp_path):
     assert "super-secret-registry-password" not in "\n".join(message for message, _kwargs in events)
 
 
-def test_apps_page_sdk_operations_run_with_busy_state(qtbot, tmp_path):
+def test_apps_page_sdk_operations_run_with_busy_state(qtbot, tmp_path, monkeypatch):
     fake_client = FakeAppDeploymentClient()
     fake_client.delay_seconds = 0.05
     page = AppsPage(
@@ -600,6 +665,7 @@ def test_apps_page_sdk_operations_run_with_busy_state(qtbot, tmp_path):
         deployment_client=fake_client,
     )
     qtbot.addWidget(page)
+    _open_create_app_dialog_for_test(page, qtbot, monkeypatch)
     page.app_name_input.setText("car_runner")
     page.node_address_input.setText(APP_TEST_NODE)
     page.car_image_input.setText("nginx:alpine")
@@ -614,7 +680,7 @@ def test_apps_page_sdk_operations_run_with_busy_state(qtbot, tmp_path):
     assert page.apps_table.rowCount() == 1
 
 
-def test_apps_page_launch_runs_preflight_before_sdk_launch(qtbot, tmp_path):
+def test_apps_page_launch_runs_preflight_before_sdk_launch(qtbot, tmp_path, monkeypatch):
     events = []
     fake_client = FakeAppDeploymentClient(events=events)
     fake_preflight = FakeLaunchPreflight(events=events)
@@ -625,6 +691,7 @@ def test_apps_page_launch_runs_preflight_before_sdk_launch(qtbot, tmp_path):
     )
     qtbot.addWidget(page)
     page.set_target_node(node_address=APP_TEST_NODE, container_name="r1devnode")
+    _open_create_app_dialog_for_test(page, qtbot, monkeypatch)
     page.app_name_input.setText("car_runner")
     page.car_image_input.setText("nginx:alpine")
     page.car_port_input.setText("8080")
@@ -657,7 +724,7 @@ def test_apps_page_check_sdk_access_runs_preflight_without_launch(qtbot, tmp_pat
     assert page.validation_message.text() == "SDK access added"
 
 
-def test_apps_page_launch_reports_missing_preflight_container(qtbot, tmp_path):
+def test_apps_page_launch_reports_missing_preflight_container(qtbot, tmp_path, monkeypatch):
     fake_client = FakeAppDeploymentClient()
     page = AppsPage(
         app_registry=AppRegistry(tmp_path / "apps.json"),
@@ -667,6 +734,7 @@ def test_apps_page_launch_reports_missing_preflight_container(qtbot, tmp_path):
     qtbot.addWidget(page)
     page.set_target_node(node_address=APP_TEST_NODE, container_name="old-node")
     page.set_target_node(node_address=APP_TEST_NODE, container_name="")
+    _open_create_app_dialog_for_test(page, qtbot, monkeypatch)
     page.app_name_input.setText("car_runner")
     page.car_image_input.setText("nginx:alpine")
     page.car_port_input.setText("8080")
@@ -680,9 +748,10 @@ def test_apps_page_launch_reports_missing_preflight_container(qtbot, tmp_path):
     assert fake_client.container_specs == []
 
 
-def test_apps_page_clears_stale_status_when_form_changes(qtbot, tmp_path):
+def test_apps_page_clears_stale_status_when_form_changes(qtbot, tmp_path, monkeypatch):
     page = AppsPage(app_registry=AppRegistry(tmp_path / "apps.json"))
     qtbot.addWidget(page)
+    _open_create_app_dialog_for_test(page, qtbot, monkeypatch)
     page.show()
     qtbot.waitUntil(page.isVisible)
 
@@ -711,7 +780,7 @@ def test_apps_page_refresh_status_uses_sdk_client_for_existing_records(qtbot, tm
     )
     page = AppsPage(app_registry=registry, deployment_client=fake_client)
     qtbot.addWidget(page)
-    page.node_address_input.setText(APP_TEST_NODE)
+    page.management_node_address_input.setText(APP_TEST_NODE)
 
     qtbot.mouseClick(page.findChild(QPushButton, "appRefreshButton"), Qt.LeftButton)
     qtbot.waitUntil(lambda: page.apps_table.item(0, 2).text() == "online", timeout=1000)
@@ -739,7 +808,7 @@ def test_apps_page_refresh_status_persists_redacted_diagnostics(qtbot, tmp_path)
     )
     page = AppsPage(app_registry=registry, deployment_client=fake_client)
     qtbot.addWidget(page)
-    page.node_address_input.setText(APP_TEST_NODE)
+    page.management_node_address_input.setText(APP_TEST_NODE)
 
     qtbot.mouseClick(page.findChild(QPushButton, "appRefreshButton"), Qt.LeftButton)
     qtbot.waitUntil(lambda: page.apps_table.item(0, 2).text() == "failed", timeout=1000)
@@ -1173,8 +1242,8 @@ def test_sidebar_panel_exposes_stable_launcher_controls(qtbot):
     assert panel.page_stack.sizeHint().height() == apps_sidebar_page.sizeHint().height()
     assert panel.findChild(QLabel, "appsWorkspaceSidebarLabel").text() == "Deployment workspace"
     panel.apps_page.sdk_settings_requested.emit()
-    assert panel.current_page_name() == "network"
-    assert panel.findChild(QToolButton, "navNetworkButton").isChecked()
+    assert panel.current_page_name() == "settings"
+    assert panel.findChild(QToolButton, "navSettingsButton").isChecked()
     panel.show_page("network")
     qtbot.mouseClick(panel.dapp_button, Qt.LeftButton)
     qtbot.mouseClick(panel.explorer_button, Qt.LeftButton)

@@ -312,6 +312,27 @@ def test_capture_dialog_visual_evidence_omits_screenshot_without_dir(qtbot):
     assert "screenshot" not in evidence
 
 
+def test_dialog_visual_snapshot_redacts_secret_line_edits(qtbot):
+    dialog = QDialog()
+    secret = QLineEdit(dialog)
+    secret.setObjectName("registryPasswordInput")
+    secret.setAccessibleName("Registry password")
+    secret.setPlaceholderText("Registry password")
+    secret.setText(smoke.SMOKE_CONTAINER_APP_SECRET)
+    qtbot.addWidget(dialog)
+
+    dialog.show()
+    qtbot.waitUntil(dialog.isVisible)
+
+    snapshot = smoke.dialog_visual_snapshot(dialog)
+
+    secret_snapshot = next(
+        line_edit for line_edit in snapshot["line_edits"] if line_edit["object_name"] == "registryPasswordInput"
+    )
+    assert secret_snapshot["text"] == "***REDACTED***"
+    assert smoke.SMOKE_CONTAINER_APP_SECRET not in repr(snapshot)
+
+
 def test_save_widget_region_screenshot_crops_composed_parent_region(qtbot, tmp_path):
     parent = QDialog()
     parent.resize(120, 90)

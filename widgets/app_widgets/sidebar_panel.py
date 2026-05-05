@@ -321,7 +321,7 @@ class SidebarPanel(QWidget):
             deployment_client=deployment_client,
             parent=self,
         )
-        self.apps_page.sdk_settings_requested.connect(lambda: self.show_page("network"))
+        self.apps_page.sdk_settings_requested.connect(lambda: self.show_page("settings"))
         page = self._create_page("appsSidebarPage")
         layout = QVBoxLayout(page)
         layout.setObjectName("appsSidebarPageLayout")
@@ -348,6 +348,13 @@ class SidebarPanel(QWidget):
         layout.setSpacing(5)
         layout.addWidget(create_sidebar_section_label("Settings", "settingsSectionLabel"))
 
+        appearance_panel, appearance_layout = self._create_settings_panel(
+            "settingsAppearancePanel",
+            "Appearance settings",
+        )
+        appearance_layout.addWidget(self._create_settings_panel_title("Appearance", "settingsAppearanceTitle"))
+        self.theme_state_label = self._create_settings_value_label("settingsThemeStateLabel")
+        appearance_layout.addWidget(self.theme_state_label)
         self.themeToggleButton = create_sidebar_action_button(
             LIGHT_DASHBOARD_BUTTON_TEXT,
             "themeToggleButton",
@@ -355,8 +362,14 @@ class SidebarPanel(QWidget):
             THEME_TOGGLE_TOOLTIP,
             self._theme_toggle_handler,
         )
-        layout.addWidget(self.themeToggleButton)
+        appearance_layout.addWidget(self.themeToggleButton)
+        layout.addWidget(appearance_panel)
 
+        diagnostics_panel, diagnostics_layout = self._create_settings_panel(
+            "settingsDiagnosticsPanel",
+            "Diagnostics settings",
+        )
+        diagnostics_layout.addWidget(self._create_settings_panel_title("Diagnostics", "settingsDiagnosticsTitle"))
         self.force_debug_checkbox = QCheckBox("Force Debug Mode")
         self.force_debug_checkbox.setObjectName("forceDebugCheckbox")
         self.force_debug_checkbox.setProperty("role", "settingsToggle")
@@ -365,10 +378,67 @@ class SidebarPanel(QWidget):
         self.force_debug_checkbox.setChecked(self._force_debug)
         self.force_debug_checkbox.setFont(QFont("Segoe UI", 9, QFont.Medium))
         self.force_debug_checkbox.setMinimumHeight(32)
-        self.force_debug_checkbox.stateChanged.connect(self._force_debug_handler)
-        layout.addWidget(self.force_debug_checkbox)
+        self.force_debug_checkbox.stateChanged.connect(self._handle_force_debug_changed)
+        diagnostics_layout.addWidget(self.force_debug_checkbox)
+        self.force_debug_state_label = self._create_settings_value_label("settingsDebugStateLabel")
+        diagnostics_layout.addWidget(self.force_debug_state_label)
+        layout.addWidget(diagnostics_panel)
+
+        sdk_panel, sdk_layout = self._create_settings_panel(
+            "settingsSdkIdentityPanel",
+            "SDK identity settings",
+        )
+        sdk_layout.addWidget(self._create_settings_panel_title("SDK Identity", "settingsSdkIdentityTitle"))
+        sdk_layout.addWidget(self._create_sdk_identity_panel())
+        layout.addWidget(sdk_panel)
+
+        self.update_settings_state_labels()
         layout.addStretch(1)
         return page
+
+    def _create_settings_panel(self, object_name: str, accessible_name: str) -> tuple[QFrame, QVBoxLayout]:
+        panel = QFrame()
+        panel.setObjectName(object_name)
+        panel.setAccessibleName(accessible_name)
+        panel.setProperty("role", "settingsPanel")
+        panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+        return panel, layout
+
+    def _create_settings_panel_title(self, text: str, object_name: str) -> QLabel:
+        label = QLabel(text)
+        label.setObjectName(object_name)
+        label.setAccessibleName(text)
+        label.setProperty("role", "settingsPanelTitle")
+        return label
+
+    def _create_settings_value_label(self, object_name: str) -> QLabel:
+        label = QLabel("")
+        label.setObjectName(object_name)
+        label.setAccessibleName(object_name.replace("settings", "Settings "))
+        label.setProperty("role", "settingsValueText")
+        label.setWordWrap(True)
+        return label
+
+    def update_settings_state_labels(self) -> None:
+        if hasattr(self, "theme_state_label"):
+            self.theme_state_label.setText("Dark theme active" if self._is_dark else "Light theme active")
+        if hasattr(self, "force_debug_state_label"):
+            self.force_debug_state_label.setText(
+                "Debug logging is enabled for node container runs."
+                if self.force_debug_checkbox.isChecked()
+                else "Debug logging is disabled for node container runs."
+            )
+
+    def set_theme_state(self, is_dark: bool) -> None:
+        self._is_dark = bool(is_dark)
+        self.update_settings_state_labels()
+
+    def _handle_force_debug_changed(self, state) -> None:
+        self.update_settings_state_labels()
+        self._force_debug_handler(state)
 
     def _create_network_page(self) -> QWidget:
         page = self._create_page("networkPage")
@@ -377,9 +447,6 @@ class SidebarPanel(QWidget):
         layout.setAlignment(Qt.AlignTop)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(5)
-
-        layout.addWidget(create_sidebar_section_label("SDK", "sdkSettingsSectionLabel"))
-        layout.addWidget(self._create_sdk_identity_panel())
 
         layout.addWidget(create_sidebar_section_label("Network", "networkActionsSectionLabel"))
 

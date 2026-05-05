@@ -4,6 +4,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QApplication,
     QComboBox,
+    QDialog,
     QGridLayout,
     QHeaderView,
     QHBoxLayout,
@@ -11,6 +12,7 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QPlainTextEdit,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QStackedWidget,
     QTabWidget,
@@ -51,6 +53,38 @@ from widgets.app_widgets.sidebar_controls import (
 OTHER_NODE_OPTION = "__other_node__"
 
 
+class CreateAppDialog(QDialog):
+    """Modal workflow for creating CAR/WAR launcher-owned apps."""
+
+    def __init__(self, form_widget: QWidget, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Deploy App")
+        self.setObjectName("createAppDialog")
+        self.setAccessibleName("Deploy App")
+        self.setMinimumSize(760, 620)
+        self.resize(860, 720)
+        self.setWindowModality(Qt.ApplicationModal)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(10)
+
+        title = QLabel("Deploy App")
+        title.setObjectName("createAppDialogTitle")
+        title.setAccessibleName("Deploy App")
+        title.setProperty("role", "appDialogTitle")
+        layout.addWidget(title)
+
+        scroll_area = QScrollArea()
+        scroll_area.setObjectName("createAppDialogScrollArea")
+        scroll_area.setAccessibleName("Deploy app form")
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_area.setFrameShape(QScrollArea.NoFrame)
+        scroll_area.setWidget(form_widget)
+        layout.addWidget(scroll_area, 1)
+
+
 class AppsPage(QWidget):
     """CAR/WAR app deployment and launcher-owned app registry page."""
 
@@ -72,6 +106,9 @@ class AppsPage(QWidget):
         self.launch_preflight_service = launch_preflight_service
         self.event_logger = event_logger
         self.target_container_name = ""
+        self.management_target_container_name = ""
+        self._target_node_options: list[dict] = []
+        self._active_create_dialog: CreateAppDialog | None = None
         self._records_by_row: dict[int, ManagedAppRecord] = {}
         self._active_workers: list[SdkOperationThread] = []
 
@@ -116,33 +153,48 @@ class AppsPage(QWidget):
         self.apps_empty_state.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(self.apps_empty_state)
 
+        layout.addWidget(create_sidebar_section_label("Target", "appManagementTargetSectionLabel"))
+        layout.addWidget(self._create_management_target_node_field())
+
         app_actions = QWidget()
         app_actions.setObjectName("appManagementActionBar")
         app_actions.setAccessibleName("App management actions")
         app_actions.setProperty("role", "appActionBar")
-        actions_layout = QHBoxLayout(app_actions)
+        actions_layout = QGridLayout(app_actions)
         actions_layout.setContentsMargins(0, 0, 0, 0)
         actions_layout.setSpacing(8)
+        for column in range(3):
+            actions_layout.setColumnStretch(column, 1)
+
+        self.create_app_button = create_sidebar_action_button(
+            "Create App",
+            "appCreateButton",
+            "primary",
+            "Open app deployment workflow",
+            self.open_create_app_dialog,
+        )
+        self._set_workspace_button_size(self.create_app_button, 42)
+        actions_layout.addWidget(self.create_app_button, 0, 0)
 
         self.refresh_button = create_sidebar_action_button(
-            "Refresh Apps",
+            "Refresh",
             "appRefreshButton",
             "secondary",
             "Refresh launcher-owned app list",
             self.refresh_app_statuses,
         )
         self._set_workspace_button_size(self.refresh_button, 40)
-        actions_layout.addWidget(self.refresh_button)
+        actions_layout.addWidget(self.refresh_button, 0, 1)
 
         self.stop_button = create_sidebar_action_button(
-            "Stop Selected",
+            "Stop",
             "appStopButton",
             "utility",
             "Stop selected launcher-owned app",
             self.stop_selected_app,
         )
         self._set_workspace_button_size(self.stop_button, 40)
-        actions_layout.addWidget(self.stop_button)
+        actions_layout.addWidget(self.stop_button, 0, 2)
 
         self.copy_url_button = create_sidebar_action_button(
             "Copy URL",
@@ -152,31 +204,61 @@ class AppsPage(QWidget):
             self.copy_selected_url,
         )
         self._set_workspace_button_size(self.copy_url_button, 40)
-        actions_layout.addWidget(self.copy_url_button)
+        actions_layout.addWidget(self.copy_url_button, 1, 0)
 
         self.check_sdk_access_button = create_sidebar_action_button(
-            "Check Access",
+            "Check SDK",
             "appCheckSdkAccessButton",
             "secondary",
             "Verify launcher SDK access on the selected node",
             self.check_sdk_access,
         )
         self._set_workspace_button_size(self.check_sdk_access_button, 40)
-        actions_layout.addWidget(self.check_sdk_access_button)
+        actions_layout.addWidget(self.check_sdk_access_button, 1, 1)
 
         self.sdk_settings_button = create_sidebar_action_button(
-            "SDK Settings",
+            "Settings",
             "appSdkSettingsButton",
             "utility",
-            "Open SDK and network settings",
+            "Open SDK and launcher settings",
             self.sdk_settings_requested.emit,
         )
         self._set_workspace_button_size(self.sdk_settings_button, 40)
-        actions_layout.addWidget(self.sdk_settings_button)
+        actions_layout.addWidget(self.sdk_settings_button, 1, 2)
         layout.addWidget(app_actions)
 
-        layout.addWidget(create_sidebar_section_label("Deployment", "appDeploymentSectionLabel"))
+        self.management_message = QLabel("")
+        self.management_message.setObjectName("appManagementMessageLabel")
+        self.management_message.setAccessibleName("App management message")
+        self.management_message.setProperty("role", "appValidationMessage")
+        self.management_message.setWordWrap(True)
+        self.management_message.hide()
+        self.validation_message = self.management_message
+        layout.addWidget(self.management_message)
+        layout.addStretch(1)
 
+    def _create_management_target_node_field(self) -> QWidget:
+        field = QWidget()
+        field.setObjectName("appManagementTargetNodeField")
+        field.setAccessibleName("Management target node picker")
+        field.setProperty("role", "appTargetNodeField")
+        layout = QVBoxLayout(field)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        self.management_node_address_combo = self._create_combo("appManagementNodeAddressCombo", "Target node")
+        self.management_node_address_combo.addItem("Other...", OTHER_NODE_OPTION)
+        self.management_node_address_combo.currentIndexChanged.connect(self._sync_management_target_node_choice)
+        layout.addWidget(self.management_node_address_combo)
+
+        self.management_node_address_input = self._create_line_edit("appManagementNodeAddressInput", "0xai_...")
+        self.management_node_address_input.setAccessibleName("Custom node address")
+        layout.addWidget(self.management_node_address_input)
+        self.management_node_address_input.textChanged.connect(lambda *_args: self._clear_message())
+        self._sync_management_target_node_choice()
+        return field
+
+    def _create_deployment_panel(self) -> QWidget:
         deployment_panel = QWidget()
         deployment_panel.setObjectName("appDeploymentPanel")
         deployment_panel.setAccessibleName("App deployment form")
@@ -246,7 +328,7 @@ class AppsPage(QWidget):
         launch_actions_layout.addWidget(self.validate_button, 1)
 
         self.launch_button = create_sidebar_action_button(
-            "Launch App",
+            "Deploy",
             "appLaunchButton",
             "primary",
             "Launch selected app through the Ratio1 SDK",
@@ -254,12 +336,40 @@ class AppsPage(QWidget):
         )
         self._set_workspace_button_size(self.launch_button, 44)
         launch_actions_layout.addWidget(self.launch_button, 2)
+
+        self.create_cancel_button = create_sidebar_action_button(
+            "Cancel",
+            "appCreateCancelButton",
+            "utility",
+            "Close app deployment workflow",
+            self._reject_active_create_dialog,
+        )
+        self._set_workspace_button_size(self.create_cancel_button, 40)
+        launch_actions_layout.addWidget(self.create_cancel_button, 1)
         deployment_layout.addWidget(launch_actions)
 
-        layout.addWidget(deployment_panel)
-        layout.addStretch(1)
         self._sync_runner_stack()
         self._connect_form_message_reset()
+        return deployment_panel
+
+    def open_create_app_dialog(self) -> int:
+        if self._active_create_dialog is not None and self._active_create_dialog.isVisible():
+            self._active_create_dialog.raise_()
+            self._active_create_dialog.activateWindow()
+            return QDialog.Rejected
+
+        dialog = CreateAppDialog(self._create_deployment_panel(), parent=self)
+        self._active_create_dialog = dialog
+        self._populate_create_dialog_targets()
+        try:
+            return dialog.exec_()
+        finally:
+            if self._active_create_dialog is dialog:
+                self._active_create_dialog = None
+
+    def _reject_active_create_dialog(self) -> None:
+        if self._active_create_dialog is not None:
+            self._active_create_dialog.reject()
 
     def _create_target_node_field(self) -> QWidget:
         field = QWidget()
@@ -287,6 +397,12 @@ class AppsPage(QWidget):
             return str(data.get("address") or "").strip()
         return self.node_address_input.text().strip()
 
+    def _management_target_node_address(self) -> str:
+        data = self.management_node_address_combo.currentData()
+        if isinstance(data, dict):
+            return str(data.get("address") or "").strip()
+        return self.management_node_address_input.text().strip()
+
     def _sync_target_node_choice(self) -> None:
         data = self.node_address_combo.currentData()
         use_manual_address = not isinstance(data, dict)
@@ -295,6 +411,24 @@ class AppsPage(QWidget):
             self.target_container_name = str(data.get("container_name") or "")
         else:
             self.target_container_name = ""
+
+    def _sync_management_target_node_choice(self) -> None:
+        data = self.management_node_address_combo.currentData()
+        use_manual_address = not isinstance(data, dict)
+        self.management_node_address_input.setVisible(use_manual_address)
+        if isinstance(data, dict):
+            self.management_target_container_name = str(data.get("container_name") or "")
+        else:
+            self.management_target_container_name = ""
+
+    def _populate_create_dialog_targets(self) -> None:
+        self._set_combo_target_node_options(
+            self.node_address_combo,
+            self.node_address_input,
+            self._target_node_options,
+            current_address=self._management_target_node_address(),
+        )
+        self._sync_target_node_choice()
 
     def _upsert_target_node_option(
         self,
@@ -308,9 +442,46 @@ class AppsPage(QWidget):
         if not node_address:
             return
 
-        insert_index = max(0, self.node_address_combo.count() - 1)
-        for index in range(self.node_address_combo.count()):
-            data = self.node_address_combo.itemData(index)
+        self._upsert_combo_target_node_option(
+            self.node_address_combo,
+            label=label,
+            node_address=node_address,
+            container_name=container_name,
+            select=select,
+        )
+
+    def _upsert_management_target_node_option(
+        self,
+        *,
+        label: str,
+        node_address: str,
+        container_name: str | None,
+        select: bool = False,
+    ) -> None:
+        node_address = (node_address or "").strip()
+        if not node_address:
+            return
+        self._upsert_combo_target_node_option(
+            self.management_node_address_combo,
+            label=label,
+            node_address=node_address,
+            container_name=container_name,
+            select=select,
+        )
+        self._sync_management_target_node_choice()
+
+    def _upsert_combo_target_node_option(
+        self,
+        combo: QComboBox,
+        *,
+        label: str,
+        node_address: str,
+        container_name: str | None,
+        select: bool = False,
+    ) -> None:
+        insert_index = max(0, combo.count() - 1)
+        for index in range(combo.count()):
+            data = combo.itemData(index)
             same_address = isinstance(data, dict) and data.get("address") == node_address
             same_container = (
                 isinstance(data, dict)
@@ -318,21 +489,64 @@ class AppsPage(QWidget):
                 and data.get("container_name") == container_name
             )
             if same_address or same_container:
-                self.node_address_combo.setItemText(index, f"{label} ({_short_node_address(node_address)})")
+                combo.setItemText(index, f"{label} ({_short_node_address(node_address)})")
                 data["address"] = node_address
                 data["container_name"] = container_name or ""
-                self.node_address_combo.setItemData(index, data)
+                combo.setItemData(index, data)
                 if select:
-                    self.node_address_combo.setCurrentIndex(index)
+                    combo.setCurrentIndex(index)
                 return
 
-        self.node_address_combo.insertItem(
+        combo.insertItem(
             insert_index,
             f"{label} ({_short_node_address(node_address)})",
             {"address": node_address, "container_name": container_name or ""},
         )
         if select:
-            self.node_address_combo.setCurrentIndex(insert_index)
+            combo.setCurrentIndex(insert_index)
+
+    def _set_combo_target_node_options(
+        self,
+        combo: QComboBox,
+        manual_input: QLineEdit,
+        nodes: list[dict],
+        *,
+        current_address: str = "",
+    ) -> None:
+        manual_text = manual_input.text().strip() or current_address
+
+        combo.blockSignals(True)
+        combo.clear()
+        seen_addresses = set()
+        selected_index = -1
+        for node in nodes:
+            node_address = str(node.get("node_address") or node.get("address") or "").strip()
+            if not node_address or node_address in seen_addresses:
+                continue
+            seen_addresses.add(node_address)
+            label = str(
+                node.get("label")
+                or node.get("node_alias")
+                or node.get("container_name")
+                or _short_node_address(node_address)
+            ).strip()
+            container_name = str(node.get("container_name") or "").strip()
+            item_label = f"{label} ({_short_node_address(node_address)})"
+            combo.addItem(
+                item_label,
+                {"address": node_address, "container_name": container_name},
+            )
+            if node_address == current_address:
+                selected_index = combo.count() - 1
+
+        combo.addItem("Other...", OTHER_NODE_OPTION)
+        if selected_index >= 0:
+            combo.setCurrentIndex(selected_index)
+        else:
+            combo.setCurrentIndex(combo.count() - 1)
+            if manual_text:
+                manual_input.setText(manual_text)
+        combo.blockSignals(False)
 
     def _create_advanced_options_toggle(self) -> QToolButton:
         button = QToolButton()
@@ -785,54 +999,82 @@ class AppsPage(QWidget):
     def set_target_node(self, *, node_address: str = "", container_name: str | None = None) -> None:
         if container_name is not None:
             self.target_container_name = container_name
+            self.management_target_container_name = container_name
         if node_address:
-            self._upsert_target_node_option(
-                label=container_name or _short_node_address(node_address),
+            label = container_name or _short_node_address(node_address)
+            self._remember_target_node_option(
+                label=label,
                 node_address=node_address,
-                container_name=container_name if container_name is not None else self.target_container_name,
+                container_name=container_name if container_name is not None else self.management_target_container_name,
+            )
+            self._upsert_management_target_node_option(
+                label=label,
+                node_address=node_address,
+                container_name=container_name if container_name is not None else self.management_target_container_name,
                 select=True,
             )
-            if not self.node_address_input.text().strip():
+            if not self.management_node_address_input.text().strip():
+                self.management_node_address_input.setText(node_address)
+            if hasattr(self, "node_address_combo"):
+                self._upsert_target_node_option(
+                    label=label,
+                    node_address=node_address,
+                    container_name=container_name if container_name is not None else self.target_container_name,
+                    select=True,
+                )
+            if hasattr(self, "node_address_input") and not self.node_address_input.text().strip():
                 self.node_address_input.setText(node_address)
-            self._sync_target_node_choice()
+            if hasattr(self, "node_address_combo"):
+                self._sync_target_node_choice()
 
     def set_target_node_options(self, nodes: list[dict]) -> None:
-        current_address = self._target_node_address()
-        manual_text = self.node_address_input.text().strip() or current_address
-
-        self.node_address_combo.blockSignals(True)
-        self.node_address_combo.clear()
-        seen_addresses = set()
-        selected_index = -1
-        for node in nodes:
-            node_address = str(node.get("node_address") or node.get("address") or "").strip()
-            if not node_address or node_address in seen_addresses:
-                continue
-            seen_addresses.add(node_address)
-            label = str(
-                node.get("label")
-                or node.get("node_alias")
-                or node.get("container_name")
-                or _short_node_address(node_address)
-            ).strip()
-            container_name = str(node.get("container_name") or "").strip()
-            item_label = f"{label} ({_short_node_address(node_address)})"
-            self.node_address_combo.addItem(
-                item_label,
-                {"address": node_address, "container_name": container_name},
+        self._target_node_options = list(nodes or [])
+        self._set_combo_target_node_options(
+            self.management_node_address_combo,
+            self.management_node_address_input,
+            self._target_node_options,
+            current_address=self._management_target_node_address(),
+        )
+        self._sync_management_target_node_choice()
+        if hasattr(self, "node_address_combo"):
+            self._set_combo_target_node_options(
+                self.node_address_combo,
+                self.node_address_input,
+                self._target_node_options,
+                current_address=self._target_node_address(),
             )
-            if node_address == current_address:
-                selected_index = self.node_address_combo.count() - 1
+            self._sync_target_node_choice()
 
-        self.node_address_combo.addItem("Other...", OTHER_NODE_OPTION)
-        if selected_index >= 0:
-            self.node_address_combo.setCurrentIndex(selected_index)
-        else:
-            self.node_address_combo.setCurrentIndex(self.node_address_combo.count() - 1)
-            if manual_text:
-                self.node_address_input.setText(manual_text)
-        self.node_address_combo.blockSignals(False)
+    def _select_dialog_target_node(self, *, node_address: str, container_name: str | None) -> None:
+        if not hasattr(self, "node_address_combo"):
+            return
+        self._upsert_target_node_option(
+            label=container_name or _short_node_address(node_address),
+            node_address=node_address,
+            container_name=container_name if container_name is not None else self.target_container_name,
+            select=True,
+        )
         self._sync_target_node_choice()
+
+    def _remember_target_node_option(self, *, label: str, node_address: str, container_name: str | None) -> None:
+        node_address = (node_address or "").strip()
+        if not node_address:
+            return
+        for option in self._target_node_options:
+            same_address = option.get("node_address") == node_address or option.get("address") == node_address
+            same_container = container_name and option.get("container_name") == container_name
+            if same_address or same_container:
+                option["label"] = label
+                option["node_address"] = node_address
+                option["container_name"] = container_name or ""
+                return
+        self._target_node_options.append(
+            {
+                "label": label,
+                "node_address": node_address,
+                "container_name": container_name or "",
+            }
+        )
 
     def validate_current_form(self):
         spec, issues = self._build_current_spec()
@@ -886,7 +1128,7 @@ class AppsPage(QWidget):
             self._show_message("SDK access check unavailable", error=True)
             self._log_event("SDK Apps access check unavailable: preflight service is not configured", color="red")
             return
-        target_container_name = self.target_container_name
+        target_container_name = self.management_target_container_name
         if not target_container_name:
             self._show_message("Target container is required", error=True)
             self._log_event("SDK Apps access check blocked: target container is required", color="yellow")
@@ -923,7 +1165,7 @@ class AppsPage(QWidget):
             self._show_message("Refreshed", error=False)
             self._log_event("SDK Apps refresh used local registry because deployment client is not configured", color="blue")
             return
-        node_address = self._target_node_address()
+        node_address = self._management_target_node_address()
         if not node_address:
             self.refresh_apps()
             self._show_message("Target node is required", error=True)
@@ -1263,6 +1505,8 @@ class AppsPage(QWidget):
             f"type={result.app_type} app={result.app_name} status={result.status} url={'yes' if result.app_url else 'no'}",
             color="green",
         )
+        if self._active_create_dialog is not None:
+            self._active_create_dialog.accept()
 
     def _handle_refresh_success(self, statuses: list[SdkAppStatus]) -> None:
         selected = self._selected_record()
@@ -1345,14 +1589,18 @@ class AppsPage(QWidget):
 
     def _set_busy(self, busy: bool, message: str = "") -> None:
         for button in (
-            self.launch_button,
-            self.refresh_button,
-            self.stop_button,
-            self.copy_url_button,
-            self.check_sdk_access_button,
-            self.validate_button,
+            getattr(self, "create_app_button", None),
+            getattr(self, "launch_button", None),
+            getattr(self, "refresh_button", None),
+            getattr(self, "stop_button", None),
+            getattr(self, "copy_url_button", None),
+            getattr(self, "check_sdk_access_button", None),
+            getattr(self, "sdk_settings_button", None),
+            getattr(self, "validate_button", None),
+            getattr(self, "create_cancel_button", None),
         ):
-            button.setEnabled(not busy)
+            if button is not None:
+                button.setEnabled(not busy)
         if message:
             self._show_message(message, error=False)
 
@@ -1417,7 +1665,8 @@ class AppsPage(QWidget):
         self.app_pull_policy_combo.currentIndexChanged.connect(lambda *_args: self._clear_message())
 
     def _clear_message(self) -> None:
-        if self.validation_message.text() in {
+        message_label = self._message_label()
+        if message_label.text() in {
             "Launching...",
             "Refreshing...",
             "Stopping...",
@@ -1427,11 +1676,21 @@ class AppsPage(QWidget):
         self._show_message("", error=False)
 
     def _show_message(self, text: str, *, error: bool) -> None:
-        self.validation_message.setText(text)
-        self.validation_message.setVisible(bool(text))
-        self.validation_message.setProperty("state", "error" if error else "ok")
-        self.validation_message.style().unpolish(self.validation_message)
-        self.validation_message.style().polish(self.validation_message)
+        message_label = self._message_label()
+        message_label.setText(text)
+        message_label.setVisible(bool(text))
+        message_label.setProperty("state", "error" if error else "ok")
+        message_label.style().unpolish(message_label)
+        message_label.style().polish(message_label)
+
+    def _message_label(self) -> QLabel:
+        if (
+            self._active_create_dialog is not None
+            and self._active_create_dialog.isVisible()
+            and hasattr(self, "validation_message")
+        ):
+            return self.validation_message
+        return self.management_message
 
     def _log_event(self, message: str, *, color: str = "blue", debug: bool = False) -> None:
         if self.event_logger is None:
@@ -1448,7 +1707,10 @@ class AppsPage(QWidget):
         ):
             if value is None:
                 continue
-            secret = value.toPlainText() if hasattr(value, "toPlainText") else value.text()
+            try:
+                secret = value.toPlainText() if hasattr(value, "toPlainText") else value.text()
+            except RuntimeError:
+                continue
             if secret:
                 safe_text = safe_text.replace(secret, REDACTED_SECRET)
         return safe_text

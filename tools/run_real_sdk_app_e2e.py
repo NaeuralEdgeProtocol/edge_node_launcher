@@ -98,6 +98,28 @@ def screenshot(page, screenshot_dir, label):
     return save_widget_screenshot(page, screenshot_dir, f"{label}.png")
 
 
+def open_create_dialog(app, page, log, args, opened_create_dialogs, label):
+    before = len(opened_create_dialogs)
+    record_step(log, args.output, {"step": click_visible_button(app, page.create_app_button, label)})
+    if len(opened_create_dialogs) <= before:
+        raise AssertionError("Create App did not open the deploy dialog")
+    dialog = opened_create_dialogs[-1]
+    page._active_create_dialog = dialog
+    if not dialog.isVisible():
+        dialog.show()
+    app.processEvents()
+    screenshot_label = re.sub(r"[^a-z0-9_]+", "_", label.lower()).strip("_")
+    record_step(
+        log,
+        args.output,
+        {
+            "step": f"real {label} dialog opened",
+            "screenshot": screenshot(dialog, args.screenshot_dir, f"real_{screenshot_label}"),
+        },
+    )
+    return dialog
+
+
 def active_worker_snapshot(page) -> dict[str, object]:
     workers = []
     for worker in list(getattr(page, "_active_workers", [])):
@@ -195,17 +217,11 @@ def collect_sdk_log_tails(
 
 def page_diagnostics(page, screenshot_dir, label, *, sdk_log_dir=None, sdk_log_since_epoch=0.0) -> dict[str, object]:
     secrets = active_secrets(page)
-    validation_message = ""
-    validation_visible = False
-    if hasattr(page, "validation_message"):
-        try:
-            validation_message = page.validation_message.text()
-            validation_visible = page.validation_message.isVisible()
-        except RuntimeError:
-            validation_message = "<unavailable>"
+    validation_message = page_message_text(page)
     evidence = {
         "validation_message": redact_values(validation_message, secrets),
-        "validation_visible": validation_visible,
+        "validation_visible": page_message_visible(page),
+        "message": redact_values(validation_message, secrets),
         "table": app_table_snapshot(page),
         "active_workers": active_worker_snapshot(page),
         "screenshot": "",
@@ -226,13 +242,44 @@ def wait_until_page_state(app, page, predicate, timeout, label):
     try:
         wait_until(app, predicate, timeout, label)
     except TimeoutError as exc:
-        validation_message = ""
-        if hasattr(page, "validation_message"):
-            validation_message = redact_values(page.validation_message.text(), active_secrets(page))
+        validation_message = redact_values(page_message_text(page), active_secrets(page))
         workers = active_worker_snapshot(page)
         raise TimeoutError(
             f"{exc}; validation_message={validation_message!r}; active_workers={workers}"
         ) from exc
+
+
+def page_message_text(page) -> str:
+    snapshots = []
+    for attr_name in ("validation_message", "management_message"):
+        label = getattr(page, attr_name, None)
+        if label is None:
+            continue
+        try:
+            visible = bool(label.isVisible()) if hasattr(label, "isVisible") else True
+            snapshots.append((visible, label.text()))
+        except (AttributeError, RuntimeError):
+            snapshots.append((False, "<unavailable>"))
+    for visible, text in snapshots:
+        if visible and text:
+            return text
+    for _visible, text in snapshots:
+        if text:
+            return text
+    return ""
+
+
+def page_message_visible(page) -> bool:
+    for attr_name in ("validation_message", "management_message"):
+        label = getattr(page, attr_name, None)
+        if label is None:
+            continue
+        try:
+            if hasattr(label, "isVisible") and label.isVisible():
+                return True
+        except RuntimeError:
+            continue
+    return False
 
 
 def wait_for_active_workers(app, page, timeout_seconds: float) -> dict[str, object]:
@@ -262,7 +309,7 @@ def run_real_e2e(args):
     os.chdir(REPO_ROOT)
     sys.path.insert(0, str(REPO_ROOT))
 
-    from PyQt5.QtWidgets import QApplication
+    from PyQt5.QtWidgets import QApplication, QDialog
 
     from services.app_launch_preflight import AppLaunchPreflightService
     from services.app_registry import AppRegistry
@@ -271,7 +318,7 @@ def run_real_e2e(args):
     from services.sdk_deployment_service import Ratio1SdkDeploymentClient
     from services.sdk_identity_service import SdkIdentityService
     from utils.docker_commands import DockerCommandHandler
-    from widgets.app_widgets.apps_page import AppsPage
+    from widgets.app_widgets.apps_page import AppsPage, CreateAppDialog
 
     node_address = os.environ[REAL_NODE_ADDRESS_ENV]
     container_name = os.environ[REAL_NODE_CONTAINER_ENV]
@@ -300,6 +347,16 @@ def run_real_e2e(args):
     write_json_log(log, args.output)
 
     app = QApplication.instance() or QApplication(sys.argv)
+    opened_create_dialogs = []
+    original_create_dialog_exec = CreateAppDialog.exec_
+
+    def nonblocking_create_dialog_exec(dialog):
+        opened_create_dialogs.append(dialog)
+        dialog.show()
+        app.processEvents()
+        return QDialog.Rejected
+
+    CreateAppDialog.exec_ = nonblocking_create_dialog_exec
     page = AppsPage(
         app_registry=app_registry,
         deployment_client=deployment_client,
@@ -320,9 +377,9 @@ def run_real_e2e(args):
             },
         )
         if args.app_kind in ("car", "both"):
-            _run_real_car(app, page, log, args)
+            _run_real_car(app, page, log, args, opened_create_dialogs)
         if args.app_kind in ("war", "both"):
-            _run_real_war(app, page, log, args)
+            _run_real_war(app, page, log, args, opened_create_dialogs)
         log["result"] = "passed"
         return log
     except Exception as exc:
@@ -345,6 +402,7 @@ def run_real_e2e(args):
         )
         raise
     finally:
+        CreateAppDialog.exec_ = original_create_dialog_exec
         log["worker_cleanup"] = wait_for_active_workers(app, page, args.worker_cleanup_timeout)
         page.close()
         app.processEvents()
@@ -353,10 +411,10 @@ def run_real_e2e(args):
         print(json.dumps(log, indent=2))
 
 
-def _run_real_car(app, page, log, args):
+def _run_real_car(app, page, log, args, opened_create_dialogs):
+    open_create_dialog(app, page, log, args, opened_create_dialogs, "open real CAR deploy app")
     app_name = args.car_app_name or f"launcher_e2e_car_{int(time.time())}"
     set_line_edit_value(app, page.app_name_input, app_name)
-    set_line_edit_value(app, page.node_address_input, os.environ[REAL_NODE_ADDRESS_ENV])
     set_line_edit_value(app, page.car_image_input, args.car_image or os.environ.get(REAL_CAR_IMAGE_ENV, "nginx:alpine"))
     set_line_edit_value(app, page.car_port_input, str(args.car_port))
     set_line_edit_value(app, page.car_registry_input, args.registry_server)
@@ -372,12 +430,12 @@ def _run_real_car(app, page, log, args):
     _click_validate_launch_refresh_copy_stop(app, page, log, args, "CAR")
 
 
-def _run_real_war(app, page, log, args):
+def _run_real_war(app, page, log, args, opened_create_dialogs):
+    open_create_dialog(app, page, log, args, opened_create_dialogs, "open real WAR deploy app")
     page.runner_type_combo.setCurrentIndex(1)
     app.processEvents()
     app_name = args.war_app_name or f"launcher_e2e_war_{int(time.time())}"
     set_line_edit_value(app, page.app_name_input, app_name)
-    set_line_edit_value(app, page.node_address_input, os.environ[REAL_NODE_ADDRESS_ENV])
     set_line_edit_value(app, page.worker_repo_input, args.war_repo or os.environ[REAL_WAR_REPO_ENV])
     set_line_edit_value(app, page.worker_branch_input, args.war_branch)
     set_line_edit_value(app, page.worker_image_input, args.war_image)
@@ -400,7 +458,7 @@ def _click_validate_launch_refresh_copy_stop(app, page, log, args, app_type):
     wait_until_page_state(
         app,
         page,
-        lambda: page.validation_message.text() == "Ready",
+        lambda: page_message_text(page) == "Ready",
         args.timeout,
         f"real {app_type} validation",
     )
@@ -408,7 +466,7 @@ def _click_validate_launch_refresh_copy_stop(app, page, log, args, app_type):
     wait_until_page_state(
         app,
         page,
-        lambda: page.validation_message.text() == "Launched",
+        lambda: page_message_text(page) == "Launched",
         args.deploy_timeout + 30,
         f"real {app_type} launch",
     )
@@ -418,7 +476,7 @@ def _click_validate_launch_refresh_copy_stop(app, page, log, args, app_type):
     wait_until_page_state(
         app,
         page,
-        lambda: page.validation_message.text() in {"Status updated", "No launcher-owned status changes"},
+        lambda: page_message_text(page) in {"Status updated", "No launcher-owned status changes"},
         args.timeout,
         f"real {app_type} refresh",
     )
@@ -427,7 +485,7 @@ def _click_validate_launch_refresh_copy_stop(app, page, log, args, app_type):
     wait_until_page_state(
         app,
         page,
-        lambda: page.validation_message.text() == "Stopped",
+        lambda: page_message_text(page) == "Stopped",
         args.timeout,
         f"real {app_type} stop",
     )

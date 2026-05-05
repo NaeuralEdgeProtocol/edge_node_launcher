@@ -304,6 +304,23 @@ def _build_launcher(monkeypatch, qtbot, running=False, config_setup=None):
     return launcher, fake_config, fake_handler
 
 
+def _open_launcher_create_app_dialog(launcher, qtbot, monkeypatch):
+    opened = []
+
+    def capture_exec(dialog):
+        opened.append(dialog)
+        dialog.show()
+        return QDialog.Rejected
+
+    monkeypatch.setattr(QDialog, "exec_", capture_exec)
+    qtbot.mouseClick(launcher.apps_page.findChild(QPushButton, "appCreateButton"), Qt.LeftButton)
+    assert opened
+    dialog = opened[-1]
+    launcher.apps_page._active_create_dialog = dialog
+    qtbot.waitUntil(dialog.isVisible)
+    return dialog
+
+
 def test_main_window_navigation_buttons_use_mocked_side_effects(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
     opened_urls = []
@@ -3207,7 +3224,7 @@ def test_navigation_rail_switches_contextual_control_pages(qtbot, monkeypatch):
 
     pages = {
         "nodes": ("navNodesButton", "nodesPage", launcher.toggleButton),
-        "apps": ("navAppsButton", "appsSidebarPage", launcher.findChild(QPushButton, "appLaunchButton")),
+        "apps": ("navAppsButton", "appsSidebarPage", launcher.findChild(QPushButton, "appCreateButton")),
         "logs": ("navLogsButton", "logsPage", launcher.findChild(QLabel, "logsPagePlaceholderLabel")),
         "docker": ("navDockerButton", "dockerPage", launcher.docker_download_button),
         "settings": ("navSettingsButton", "settingsPage", launcher.themeToggleButton),
@@ -3299,6 +3316,7 @@ def test_apps_workspace_details_follow_updated_selection(qtbot, monkeypatch, tmp
 def test_apps_workspace_logs_sdk_events_to_activity_log(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
     launcher.sidebar_panel.show_page("apps")
+    _open_launcher_create_app_dialog(launcher, qtbot, monkeypatch)
     launcher.apps_page.app_name_input.setText("car_runner")
     launcher.apps_page.node_address_combo.setCurrentIndex(launcher.apps_page.node_address_combo.count() - 1)
     launcher.apps_page.node_address_input.setText(APP_TEST_NODE)
@@ -3312,7 +3330,7 @@ def test_apps_workspace_logs_sdk_events_to_activity_log(qtbot, monkeypatch):
 
 def test_apps_workspace_target_picker_lists_configured_nodes(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot)
-    combo = launcher.apps_page.findChild(QComboBox, "appNodeAddressCombo")
+    combo = launcher.apps_page.findChild(QComboBox, "appManagementNodeAddressCombo")
 
     assert combo.count() == 2
     assert combo.itemText(0).startswith("alpha")
@@ -3327,8 +3345,8 @@ def test_apps_sdk_settings_action_switches_to_network_context(qtbot, monkeypatch
 
     qtbot.mouseClick(launcher.apps_page.sdk_settings_button, Qt.LeftButton)
 
-    assert launcher.sidebar_panel.current_page_name() == "network"
-    assert launcher.findChild(QToolButton, "navNetworkButton").isChecked()
+    assert launcher.sidebar_panel.current_page_name() == "settings"
+    assert launcher.findChild(QToolButton, "navSettingsButton").isChecked()
     assert launcher.main_workspace_stack.currentWidget() is launcher.graphView
 
 

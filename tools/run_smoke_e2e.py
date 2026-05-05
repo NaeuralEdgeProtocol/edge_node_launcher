@@ -452,6 +452,21 @@ def capture_combo_popup_visual_evidence(app, combo, screenshot_dir, label):
     return evidence
 
 
+def dialog_line_edit_text(line_edit):
+    text = line_edit.text()
+    identity = " ".join(
+        (
+            line_edit.objectName(),
+            line_edit.accessibleName(),
+            line_edit.placeholderText(),
+        )
+    ).lower()
+    secret_terms = ("password", "token", "secret", "private key", "private_key", "auth")
+    if text and any(term in identity for term in secret_terms):
+        return "***REDACTED***"
+    return text
+
+
 def dialog_visual_snapshot(dialog):
     from PyQt5.QtWidgets import QLabel, QLineEdit, QProgressBar, QPushButton
 
@@ -477,7 +492,7 @@ def dialog_visual_snapshot(dialog):
                 "object_name": line_edit.objectName(),
                 "accessible_name": line_edit.accessibleName(),
                 "role": line_edit.property("role"),
-                "text": line_edit.text(),
+                "text": dialog_line_edit_text(line_edit),
                 "placeholder": line_edit.placeholderText(),
                 "visible": line_edit.isVisible(),
                 "enabled": line_edit.isEnabled(),
@@ -732,13 +747,55 @@ def run_mocked_sdk_apps_scenario(
     fake_preflight,
     app_registry,
 ):
+    from PyQt5.QtWidgets import QDialog
+    from widgets.app_widgets.apps_page import CreateAppDialog
+
     apps_page = launcher.apps_page
+    opened_create_dialogs = []
+    original_create_dialog_exec = CreateAppDialog.exec_
+
+    def nonblocking_create_dialog_exec(dialog):
+        opened_create_dialogs.append(dialog)
+        dialog.show()
+        app.processEvents()
+        return QDialog.Rejected
+
+    CreateAppDialog.exec_ = nonblocking_create_dialog_exec
+
+    def capture_create_dialog(dialog, label):
+        safe_label = label.lower().replace(" ", "_")
+        return capture_dialog_visual_evidence(dialog, screenshot_dir, safe_label)
+
+    def open_create_dialog(label):
+        before = len(opened_create_dialogs)
+        record_step(
+            log,
+            output_path,
+            {"step": click_visible_button(app, apps_page.create_app_button, label)},
+        )
+        if len(opened_create_dialogs) <= before:
+            raise AssertionError("Create App did not open the deploy dialog")
+        dialog = opened_create_dialogs[-1]
+        apps_page._active_create_dialog = dialog
+        if not dialog.isVisible():
+            dialog.show()
+        app.processEvents()
+        record_step(
+            log,
+            output_path,
+            {
+                "step": f"captured {label} visual evidence",
+                "visual": capture_create_dialog(dialog, label),
+            },
+        )
+        return dialog
+
     if getattr(launcher, "toast", None) is not None:
         launcher.toast.hide()
     apps_page.deployment_client = fake_sdk_client
     apps_page.set_launch_preflight_service(fake_preflight)
     apps_page.set_target_node(node_address=SMOKE_VALID_NODE_ADDRESS, container_name=SMOKE_CONTAINER)
-    set_line_edit_value(app, apps_page.node_address_input, SMOKE_VALID_NODE_ADDRESS)
+    set_line_edit_value(app, apps_page.management_node_address_input, SMOKE_VALID_NODE_ADDRESS)
 
     show_launcher_page(app, launcher, "apps")
     scroll_apps_workspace_to(launcher, "top")
@@ -750,8 +807,8 @@ def run_mocked_sdk_apps_scenario(
         output_path,
         {"step": click_visible_button(app, apps_page.sdk_settings_button, "open SDK settings from apps")},
     )
-    if getattr(launcher, "sidebar_panel", None) is None or launcher.sidebar_panel.current_page_name() != "network":
-        raise AssertionError("SDK settings button did not switch to the Network page")
+    if getattr(launcher, "sidebar_panel", None) is None or launcher.sidebar_panel.current_page_name() != "settings":
+        raise AssertionError("SDK settings button did not switch to the Settings page")
     record_step(
         log,
         output_path,
@@ -773,7 +830,7 @@ def run_mocked_sdk_apps_scenario(
     )
     if app.clipboard().text() != SMOKE_SDK_ADDRESS:
         raise AssertionError("SDK identity address copy used an unexpected value")
-    sdk_settings_visual = capture_visual_evidence(launcher, screenshot_dir, "network_sdk_identity")
+    sdk_settings_visual = capture_visual_evidence(launcher, screenshot_dir, "settings_sdk_identity")
     record_step(
         log,
         output_path,
@@ -787,35 +844,35 @@ def run_mocked_sdk_apps_scenario(
     app.processEvents()
     record_step(log, output_path, {"step": "returned to apps page after SDK settings shortcut"})
 
-    target_index = apps_page.node_address_combo.currentIndex()
+    management_target_index = apps_page.management_node_address_combo.currentIndex()
     record_step(
         log,
         output_path,
         {
-            "step": "captured app target-node picker visual evidence",
+            "step": "captured app management target-node picker visual evidence",
             "visual": capture_combo_popup_visual_evidence(
                 app,
-                apps_page.node_address_combo,
+                apps_page.management_node_address_combo,
                 screenshot_dir,
-                "app_target_node_picker",
+                "app_management_target_node_picker",
             ),
         },
     )
-    apps_page.node_address_combo.setCurrentIndex(apps_page.node_address_combo.count() - 1)
+    apps_page.management_node_address_combo.setCurrentIndex(apps_page.management_node_address_combo.count() - 1)
     app.processEvents()
-    other_visual = capture_visual_evidence(launcher, screenshot_dir, "apps_target_node_other")
+    other_visual = capture_visual_evidence(launcher, screenshot_dir, "apps_management_target_node_other")
     record_step(
         log,
         output_path,
         {
-            "step": "captured app target-node manual address visual evidence",
+            "step": "captured app management target-node manual address visual evidence",
             "visual": other_visual,
-            "manual_input_visible": apps_page.node_address_input.isVisible(),
+            "manual_input_visible": apps_page.management_node_address_input.isVisible(),
         },
     )
-    if not apps_page.node_address_input.isVisible():
-        raise AssertionError("manual target node address input did not appear for Other")
-    apps_page.node_address_combo.setCurrentIndex(target_index)
+    if not apps_page.management_node_address_input.isVisible():
+        raise AssertionError("manual management target node address input did not appear for Other")
+    apps_page.management_node_address_combo.setCurrentIndex(management_target_index)
     app.processEvents()
 
     record_step(
@@ -839,6 +896,38 @@ def run_mocked_sdk_apps_scenario(
             "preflight_calls": list(fake_preflight.calls),
         },
     )
+
+    container_dialog = open_create_dialog("open create container app dialog")
+    target_index = apps_page.node_address_combo.currentIndex()
+    record_step(
+        log,
+        output_path,
+        {
+            "step": "captured create-app dialog target-node picker visual evidence",
+            "visual": capture_combo_popup_visual_evidence(
+                app,
+                apps_page.node_address_combo,
+                screenshot_dir,
+                "app_dialog_target_node_picker",
+            ),
+        },
+    )
+    apps_page.node_address_combo.setCurrentIndex(apps_page.node_address_combo.count() - 1)
+    app.processEvents()
+    dialog_other_visual = capture_create_dialog(container_dialog, "app dialog target node other")
+    record_step(
+        log,
+        output_path,
+        {
+            "step": "captured create-app dialog target-node manual address visual evidence",
+            "visual": dialog_other_visual,
+            "manual_input_visible": apps_page.node_address_input.isVisible(),
+        },
+    )
+    if not apps_page.node_address_input.isVisible():
+        raise AssertionError("manual create-app target node address input did not appear for Other")
+    apps_page.node_address_combo.setCurrentIndex(target_index)
+    app.processEvents()
 
     set_line_edit_value(app, apps_page.app_name_input, "smoke_car")
     set_line_edit_value(app, apps_page.car_image_input, "nginx:alpine")
@@ -887,7 +976,7 @@ def run_mocked_sdk_apps_scenario(
     app.processEvents()
     if getattr(launcher, "toast", None) is not None:
         launcher.toast.hide()
-    container_secret_visual = capture_visual_evidence(launcher, screenshot_dir, "apps_container_secret_fields")
+    container_secret_visual = capture_create_dialog(container_dialog, "apps container secret fields")
     container_secret_snapshot = secret_line_edit_snapshot(
         apps_page.car_registry_password_input,
         SMOKE_CONTAINER_APP_SECRET,
@@ -992,29 +1081,10 @@ def run_mocked_sdk_apps_scenario(
         "container app stop",
     )
 
-    apps_page.app_volumes_table.selectRow(0)
-    app.processEvents()
-    record_step(
-        log,
-        output_path,
-        {"step": click_visible_button(app, apps_page.remove_volume_button, "remove container app volume mount")},
-    )
-    if apps_page.app_volumes_table.rowCount() != 0:
-        raise AssertionError("container app volume mount was not removed")
-    apps_page.app_file_volumes_table.selectRow(0)
-    app.processEvents()
-    record_step(
-        log,
-        output_path,
-        {"step": click_visible_button(app, apps_page.remove_file_volume_button, "remove container app config file")},
-    )
-    if apps_page.app_file_volumes_table.rowCount() != 0:
-        raise AssertionError("container app config file was not removed")
-
+    worker_dialog = open_create_dialog("open create worker app dialog")
     apps_page.runner_type_combo.setCurrentIndex(1)
     app.processEvents()
     set_line_edit_value(app, apps_page.app_name_input, "smoke_war")
-    set_line_edit_value(app, apps_page.node_address_input, SMOKE_VALID_NODE_ADDRESS)
     set_line_edit_value(app, apps_page.worker_repo_input, "https://github.com/ratio1/smoke-app")
     set_line_edit_value(app, apps_page.worker_branch_input, "main")
     set_line_edit_value(app, apps_page.worker_image_input, "node:22")
@@ -1022,6 +1092,12 @@ def run_mocked_sdk_apps_scenario(
     set_line_edit_value(app, apps_page.worker_github_user_input, "smoke-user")
     set_line_edit_value(app, apps_page.worker_github_token_input, SMOKE_WORKER_APP_SECRET)
     set_plain_text_value(app, apps_page.worker_commands_input, "npm install\nnpm run build\nnpm run start")
+    if not apps_page.advanced_options_toggle.isChecked():
+        record_step(
+            log,
+            output_path,
+            {"step": click_visible_button(app, apps_page.advanced_options_toggle, "show advanced worker app options")},
+        )
     record_step(
         log,
         output_path,
@@ -1057,7 +1133,7 @@ def run_mocked_sdk_apps_scenario(
     app.processEvents()
     if getattr(launcher, "toast", None) is not None:
         launcher.toast.hide()
-    worker_secret_visual = capture_visual_evidence(launcher, screenshot_dir, "apps_worker_secret_fields")
+    worker_secret_visual = capture_create_dialog(worker_dialog, "apps worker secret fields")
     worker_secret_snapshot = secret_line_edit_snapshot(
         apps_page.worker_github_token_input,
         SMOKE_WORKER_APP_SECRET,
@@ -1137,6 +1213,7 @@ def run_mocked_sdk_apps_scenario(
             "registry_path": str(app_registry.registry_file),
         },
     )
+    CreateAppDialog.exec_ = original_create_dialog_exec
 
 
 def run_scenarios(args):
