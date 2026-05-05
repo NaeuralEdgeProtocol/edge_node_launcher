@@ -92,6 +92,7 @@ from services.node_telemetry_service import NodeTelemetryMetadata, NodeTelemetry
 from services.node_status_service import (
   NODE_INFO_FAILURE_ACTION_DEFER_STARTUP,
   NODE_INFO_FAILURE_ACTION_THRESHOLD_REACHED,
+  NodeRuntimeStateDecision,
   NodeStatusService,
 )
 from widgets.app_widgets.lifecycle_dialog_presenter import LifecycleDialogPresenter
@@ -818,6 +819,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
     self.node_status_title = node_panel.node_status_title
     self.edgeImageBadge = node_panel.edgeImageBadge
+    self.node_lifecycle_state = node_panel.node_lifecycle_state
     self.loading_indicator = node_panel.loading_indicator
     self.addressDisplay = node_panel.addressDisplay
     self.copyAddrButton = node_panel.copyAddrButton
@@ -1710,6 +1712,11 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       
       # Check if we need to restart the container after consecutive failures
       if decision.action == NODE_INFO_FAILURE_ACTION_THRESHOLD_REACHED:
+        self._refresh_node_lifecycle_state(
+          container_running=True,
+          container_name=container_name,
+          failure_count=decision.failure_count,
+        )
         if self._should_restart_after_node_info_failure(container_name):
           self.add_log(f"Node info failed {NODE_INFO_FAILURE_THRESHOLD} times for {container_name}, restarting container", color="red")
           self._restart_container_after_failures(container_name)
@@ -1768,6 +1775,39 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       return
     status_service.node_info_failure_count = value
 
+  def _set_node_lifecycle_state(self, decision: NodeRuntimeStateDecision) -> None:
+    label = getattr(self, "node_lifecycle_state", None)
+    if label is None:
+      return
+
+    label.setText(f"Status: {decision.state}")
+    label.setToolTip(decision.detail)
+    label.setProperty("nodeState", decision.state)
+    style = label.style()
+    if style is not None:
+      style.unpolish(label)
+      style.polish(label)
+
+  def _refresh_node_lifecycle_state(
+    self,
+    *,
+    container_running: bool,
+    container_name: Optional[str] = None,
+    is_launching: bool = False,
+    needs_attention: bool = False,
+    failure_count: Optional[int] = None,
+  ) -> None:
+    container = container_name or self._selected_container_name() or ""
+    self._set_node_lifecycle_state(
+      self.node_status_service.runtime_state(
+        container_running=container_running,
+        container_name=container,
+        is_launching=is_launching,
+        needs_attention=needs_attention,
+        failure_count=failure_count,
+      )
+    )
+
   def _active_lifecycle_operation(self) -> Optional[dict]:
     return self.__lifecycle_state.active_operation_dict()
 
@@ -1784,6 +1824,11 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     if not container_name:
       return
     self.node_status_service.mark_startup_grace(container_name)
+    self._refresh_node_lifecycle_state(
+      container_running=True,
+      container_name=container_name,
+      is_launching=True,
+    )
     self.add_log(
       f"Startup grace period started for {container_name} after {reason}; auto-restart is paused while the node initializes.",
       debug=True,
@@ -1804,6 +1849,11 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     return self.node_status_service.should_defer_node_info_failure(container_name, error)
 
   def _show_node_starting_state(self) -> None:
+    self._refresh_node_lifecycle_state(
+      container_running=True,
+      container_name=self._selected_container_name(),
+      is_launching=True,
+    )
     self.addressDisplay.setText('Address: Starting up...')
     self.ethAddressDisplay.setText('ETH Address: Starting up...')
     self.nameDisplay.setText('Name: Loading...')
@@ -1936,6 +1986,11 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       # Reset failure counter before restarting
       self.node_info_failure_count = 0
       self._begin_lifecycle_operation("auto_restart", container_name)
+      self._refresh_node_lifecycle_state(
+        container_running=True,
+        container_name=container_name,
+        needs_attention=True,
+      )
       
       # Show notification to user
       self.toast.show_notification(
@@ -2064,6 +2119,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         stdout, stderr, return_code = result
         if return_code == 0:
           self.add_log(f"Container {container_name} launched successfully during restart", debug=True)
+          self._mark_container_startup_grace(container_name, reason="auto-restart")
           on_success()
         else:
           on_error(f"Failed to launch container: {stderr}")
@@ -2090,6 +2146,11 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     """Update UI when container is not running - show cached data or appropriate messages."""
     # Check if we're in a loading state (container starting up)
     is_loading = hasattr(self, 'loading_indicator') and self.loading_indicator.isVisible()
+    self._refresh_node_lifecycle_state(
+      container_running=False,
+      container_name=container_name,
+      is_launching=is_loading,
+    )
     
     # Try to get cached data from config
     config_container = self.config_manager.get_container(container_name)
@@ -2116,6 +2177,12 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
   def _update_ui_with_fresh_data(self, node_info: NodeInfo, container_name: str):
     """Update UI with fresh node info data."""
+    self._refresh_node_lifecycle_state(
+      container_running=True,
+      container_name=container_name,
+      failure_count=0,
+    )
+
     # Get current config to check for changes
     config_container = self.config_manager.get_container(container_name)
     
@@ -2149,6 +2216,12 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
 
   def _handle_node_info_error(self, error: str, container_name: str):
     """Handle errors when fetching node info by falling back to cached data or showing error messages."""
+    self._refresh_node_lifecycle_state(
+      container_running=True,
+      container_name=container_name,
+      failure_count=self.node_info_failure_count,
+    )
+
     # Try to fall back to cached data first
     config_container = self.config_manager.get_container(container_name)
     
@@ -2287,6 +2360,16 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         node_epoch_avail = 0
         ver = "N/A"
         color = 'red'
+      self._refresh_node_lifecycle_state(
+        container_running=False,
+        container_name=container_name,
+        is_launching=is_loading,
+      )
+    else:
+      self._refresh_node_lifecycle_state(
+        container_running=True,
+        container_name=container_name,
+      )
       
     prc = round(node_epoch_avail * 100 if node_epoch_avail > 0 else node_epoch_avail, 2) if node_epoch_avail is not None else 0
     metadata = (uptime, node_epoch, prc, ver)

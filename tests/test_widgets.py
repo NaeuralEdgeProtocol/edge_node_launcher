@@ -303,6 +303,10 @@ def test_sidebar_status_card_panels_expose_stable_controls(qtbot):
     assert node_panel.edgeImageBadge.property("role") == "edgeImageBadge"
     assert node_panel.edgeImageBadge.accessibleName() == "Edge Node Docker image"
     assert not node_panel.edgeImageBadge.isVisible()
+    assert node_panel.node_lifecycle_state.objectName() == "nodeLifecycleStatus"
+    assert node_panel.node_lifecycle_state.accessibleName() == "Node lifecycle status"
+    assert node_panel.node_lifecycle_state.property("role") == "nodeLifecycleState"
+    assert node_panel.node_lifecycle_state.text() == "Status: Stopped"
     assert node_panel.addressDisplay.objectName() == "nodeAddressDisplay"
     assert node_panel.addressDisplay.property("statusField") == "address"
     assert node_panel.addressDisplay.font().family() == "Courier New"
@@ -320,6 +324,7 @@ def test_sidebar_status_card_panels_expose_stable_controls(qtbot):
 
     for label in (
         node_panel.nameDisplay,
+        node_panel.node_lifecycle_state,
         node_panel.node_uptime,
         node_panel.node_epoch,
         node_panel.node_epoch_avail,

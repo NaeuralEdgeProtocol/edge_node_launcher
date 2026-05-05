@@ -874,6 +874,17 @@ COMMON_STYLESHEET_TEMPLATE = """
     padding: 2px 6px;
     margin: 0px 2px 4px 2px;
   }}
+  QGroupBox[role="statusPanel"] QLabel[role="nodeLifecycleState"] {{
+    color: {section_label_text};
+    background-color: {graph_bg};
+    border: 1px solid {graph_border};
+    border-radius: 6px;
+    font-family: "Segoe UI";
+    font-size: 9pt;
+    font-weight: 600;
+    padding: 2px 6px;
+    margin: 0px 2px 4px 2px;
+  }}
   QGroupBox[role="statusPanel"] QLabel[statusField="address"] {{
     font-family: "Courier New";
   }}

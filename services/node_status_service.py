@@ -3,6 +3,12 @@ from time import time
 from typing import Callable, Dict
 
 
+NODE_RUNTIME_STATE_STARTING = "Starting"
+NODE_RUNTIME_STATE_RUNNING = "Running"
+NODE_RUNTIME_STATE_DEGRADED = "Degraded"
+NODE_RUNTIME_STATE_STOPPED = "Stopped"
+NODE_RUNTIME_STATE_NEEDS_ATTENTION = "Needs attention"
+
 NODE_INFO_FAILURE_ACTION_DEFER_STARTUP = "defer_startup"
 NODE_INFO_FAILURE_ACTION_RECORD_FAILURE = "record_failure"
 NODE_INFO_FAILURE_ACTION_THRESHOLD_REACHED = "threshold_reached"
@@ -33,6 +39,12 @@ class NodeInfoFailureDecision:
     @property
     def threshold_reached(self) -> bool:
         return self.action == NODE_INFO_FAILURE_ACTION_THRESHOLD_REACHED
+
+
+@dataclass(frozen=True)
+class NodeRuntimeStateDecision:
+    state: str
+    detail: str = ""
 
 
 class NodeStatusService:
@@ -118,4 +130,49 @@ class NodeStatusService:
             threshold=self.failure_threshold,
             startup_grace_remaining_seconds=remaining,
             error_is_startup_pending=error_is_startup_pending,
+        )
+
+    def runtime_state(
+        self,
+        *,
+        container_running: bool,
+        container_name: str = "",
+        is_launching: bool = False,
+        needs_attention: bool = False,
+        failure_count: int | None = None,
+    ) -> NodeRuntimeStateDecision:
+        if needs_attention:
+            return NodeRuntimeStateDecision(
+                NODE_RUNTIME_STATE_NEEDS_ATTENTION,
+                "Manual review is needed before the launcher changes this node again.",
+            )
+
+        remaining = self.startup_grace_remaining_seconds(container_name)
+        if is_launching or remaining > 0:
+            detail = "Node is starting; health checks and auto-restart are paused."
+            if remaining > 0:
+                detail = f"Node is starting; auto-restart is paused for {remaining} more seconds."
+            return NodeRuntimeStateDecision(NODE_RUNTIME_STATE_STARTING, detail)
+
+        if not container_running:
+            return NodeRuntimeStateDecision(
+                NODE_RUNTIME_STATE_STOPPED,
+                "Docker reports this container is stopped.",
+            )
+
+        failures = self.node_info_failure_count if failure_count is None else max(0, int(failure_count))
+        if failures >= self.failure_threshold:
+            return NodeRuntimeStateDecision(
+                NODE_RUNTIME_STATE_NEEDS_ATTENTION,
+                f"Node health checks failed {failures}/{self.failure_threshold} times.",
+            )
+        if failures > 0:
+            return NodeRuntimeStateDecision(
+                NODE_RUNTIME_STATE_DEGRADED,
+                f"Docker is running, but node health checks failed {failures}/{self.failure_threshold} times.",
+            )
+
+        return NodeRuntimeStateDecision(
+            NODE_RUNTIME_STATE_RUNNING,
+            "Docker is running and node info is available.",
         )

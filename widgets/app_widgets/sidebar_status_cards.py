@@ -95,6 +95,14 @@ class NodeStatusPanel(QGroupBox):
         self.edgeImageBadge.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.edgeImageBadge.hide()
 
+        self.node_lifecycle_state = ElidedLabel("Status: Stopped")
+        self.node_lifecycle_state.setObjectName("nodeLifecycleStatus")
+        self.node_lifecycle_state.setAccessibleName("Node lifecycle status")
+        self.node_lifecycle_state.setProperty("statusField", "metadata")
+        self.node_lifecycle_state.setProperty("role", "nodeLifecycleState")
+        self.node_lifecycle_state.setFont(QFont("Segoe UI", 9, QFont.DemiBold))
+        _configure_sidebar_label(self.node_lifecycle_state)
+
         self.loading_indicator = LoadingIndicator(size=30)
         self.loading_indicator.hide()
 
@@ -185,6 +193,7 @@ class NodeStatusPanel(QGroupBox):
         layout.setSpacing(3)
         layout.addWidget(self.node_status_title)
         layout.addWidget(self.edgeImageBadge)
+        layout.addWidget(self.node_lifecycle_state)
 
         loading_layout = QHBoxLayout()
         loading_layout.setContentsMargins(0, 0, 0, 0)

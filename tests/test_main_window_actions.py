@@ -651,6 +651,7 @@ def test_status_card_runtime_labels_use_consistent_copy(qtbot, monkeypatch):
     assert launcher.node_epoch.text() == "Epoch: 42"
     assert launcher.node_epoch_avail.text() == "Epoch availability: 25.0%"
     assert launcher.node_version.text() == "Version: 1.2.3"
+    assert launcher.node_lifecycle_state.text() == "Status: Running"
 
 
 def test_status_card_initial_metadata_uses_placeholders(qtbot, monkeypatch):
@@ -660,6 +661,7 @@ def test_status_card_initial_metadata_uses_placeholders(qtbot, monkeypatch):
     assert launcher.node_epoch.text() == "Epoch: -"
     assert launcher.node_epoch_avail.text() == "Epoch availability: -"
     assert launcher.node_version.text() == "Version: -"
+    assert launcher.node_lifecycle_state.text() == "Status: Stopped"
 
 
 def test_status_card_refreshes_when_epoch_changes_without_uptime_change(qtbot, monkeypatch):
@@ -693,6 +695,7 @@ def test_status_card_stopped_labels_use_consistent_copy(qtbot, monkeypatch):
     assert launcher.node_epoch.text() == "Epoch: N/A"
     assert launcher.node_epoch_avail.text() == "Epoch availability: 0%"
     assert launcher.node_version.text() == "Version: N/A"
+    assert launcher.node_lifecycle_state.text() == "Status: Stopped"
 
 
 def test_main_window_refresh_button_uses_limited_refresh_when_container_stopped(qtbot, monkeypatch):
@@ -1977,10 +1980,37 @@ def test_startup_pending_node_info_does_not_auto_restart(qtbot, monkeypatch):
     assert launcher.addressDisplay.text() == "Address: Starting up..."
     assert launcher.ethAddressDisplay.text() == "ETH Address: Starting up..."
     assert launcher.nameDisplay.text() == "Name: Loading..."
+    assert launcher.node_lifecycle_state.text() == "Status: Starting"
     log_text = "\n".join(launcher.log_buffer)
     if launcher.logView is not None:
         log_text += launcher.logView.toPlainText()
     assert "auto-restart is paused" in log_text
+
+
+def test_node_info_failure_marks_runtime_state_degraded(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    fake_handler.get_node_info = lambda on_success, on_error: on_error("unexpected argument")
+
+    REAL_REFRESH_NODE_INFO(launcher)
+
+    assert launcher.node_lifecycle_state.text() == "Status: Degraded"
+    assert "1/5" in launcher.node_lifecycle_state.toolTip()
+    assert launcher.node_info_failure_count == 1
+
+
+def test_node_info_threshold_marks_runtime_state_needs_attention_when_restart_skips(qtbot, monkeypatch):
+    launcher, _fake_config, fake_handler = _build_launcher(monkeypatch, qtbot, running=True)
+    fake_handler.get_node_info = lambda on_success, on_error: on_error("unexpected argument")
+    launcher.node_info_failure_count = frm_main.NODE_INFO_FAILURE_THRESHOLD - 1
+    launcher._should_restart_after_node_info_failure = lambda _container_name: False
+
+    REAL_REFRESH_NODE_INFO(launcher)
+
+    assert launcher.node_lifecycle_state.text() == "Status: Needs attention"
+    assert f"{frm_main.NODE_INFO_FAILURE_THRESHOLD}/{frm_main.NODE_INFO_FAILURE_THRESHOLD}" in (
+        launcher.node_lifecycle_state.toolTip()
+    )
+    assert launcher.node_info_failure_count == 0
 
 
 def test_auto_restart_can_resume_after_startup_grace_expires(qtbot, monkeypatch):
