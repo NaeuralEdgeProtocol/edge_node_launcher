@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import (
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -166,6 +167,21 @@ class AppsPage(QWidget):
         self._add_grid_field(core_grid, 1, 0, "Target node", "appNodeAddressLabel", self.node_address_input, 2)
         deployment_layout.addLayout(core_grid)
 
+        self.runner_stack = QStackedWidget()
+        self.runner_stack.setObjectName("appRunnerStack")
+        self.runner_stack.setAccessibleName("App runner form fields")
+        self.runner_stack.addWidget(self._create_container_fields())
+        self.runner_stack.addWidget(self._create_worker_fields())
+        deployment_layout.addWidget(self.runner_stack)
+        self.runner_type_combo.currentIndexChanged.connect(self._sync_runner_stack)
+
+        self.advanced_options_toggle = self._create_advanced_options_toggle()
+        deployment_layout.addWidget(self.advanced_options_toggle)
+
+        self.advanced_options_panel = self._create_advanced_options_panel()
+        deployment_layout.addWidget(self.advanced_options_panel)
+        self._sync_advanced_options_visibility(False)
+
         self.validation_message = QLabel("")
         self.validation_message.setObjectName("appValidationMessageLabel")
         self.validation_message.setAccessibleName("App validation message")
@@ -203,25 +219,50 @@ class AppsPage(QWidget):
         launch_actions_layout.addWidget(self.launch_button, 2)
         deployment_layout.addWidget(launch_actions)
 
-        self.runner_stack = QStackedWidget()
-        self.runner_stack.setObjectName("appRunnerStack")
-        self.runner_stack.setAccessibleName("App runner form fields")
-        self.runner_stack.addWidget(self._create_container_fields())
-        self.runner_stack.addWidget(self._create_worker_fields())
-        deployment_layout.addWidget(self.runner_stack)
-        self.runner_type_combo.currentIndexChanged.connect(self._sync_runner_stack)
-
-        deployment_layout.addWidget(create_sidebar_section_label("Runtime", "appRuntimeSectionLabel"))
-        deployment_layout.addWidget(self._create_runtime_fields())
-
-        self.env_input = self._create_plain_text("appEnvInput", "KEY=value")
-        self.env_input.setMaximumHeight(86)
-        deployment_layout.addWidget(self._label("Environment", "appEnvLabel"))
-        deployment_layout.addWidget(self.env_input)
         layout.addWidget(deployment_panel)
         layout.addStretch(1)
         self._sync_runner_stack()
         self._connect_form_message_reset()
+
+    def _create_advanced_options_toggle(self) -> QToolButton:
+        button = QToolButton()
+        button.setObjectName("appAdvancedOptionsToggle")
+        button.setAccessibleName("Show advanced app options")
+        button.setToolTip("Show CPU, memory, volumes, environment, and deployment policies")
+        button.setText("Advanced options")
+        button.setCheckable(True)
+        button.setChecked(False)
+        button.setArrowType(Qt.RightArrow)
+        button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        button.setProperty("role", "appDisclosureButton")
+        button.setMinimumHeight(34)
+        button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        button.toggled.connect(self._sync_advanced_options_visibility)
+        return button
+
+    def _create_advanced_options_panel(self) -> QWidget:
+        panel = QWidget()
+        panel.setObjectName("appAdvancedOptionsPanel")
+        panel.setAccessibleName("Advanced app options")
+        panel.setProperty("role", "appAdvancedOptionsPanel")
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        layout.addWidget(create_sidebar_section_label("Runtime", "appRuntimeSectionLabel"))
+        layout.addWidget(self._create_runtime_fields())
+        self.env_input = self._create_plain_text("appEnvInput", "KEY=value")
+        self.env_input.setMaximumHeight(86)
+        layout.addWidget(self._label("Environment", "appEnvLabel"))
+        layout.addWidget(self.env_input)
+        return panel
+
+    def _sync_advanced_options_visibility(self, checked: bool) -> None:
+        if hasattr(self, "advanced_options_panel"):
+            self.advanced_options_panel.setVisible(checked)
+        self.advanced_options_toggle.setArrowType(Qt.DownArrow if checked else Qt.RightArrow)
+        self.advanced_options_toggle.setAccessibleName(
+            "Hide advanced app options" if checked else "Show advanced app options"
+        )
 
     def _create_container_fields(self) -> QWidget:
         page = QWidget()
@@ -229,6 +270,7 @@ class AppsPage(QWidget):
         page.setAccessibleName("Container app fields")
         layout = QGridLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setAlignment(Qt.AlignTop)
         layout.setHorizontalSpacing(10)
         layout.setVerticalSpacing(5)
         layout.setColumnStretch(0, 1)
@@ -257,6 +299,7 @@ class AppsPage(QWidget):
             "carRegistryPasswordLabel",
             self.car_registry_password_input,
         )
+        layout.setRowStretch(6, 1)
 
         return page
 
@@ -266,6 +309,7 @@ class AppsPage(QWidget):
         page.setAccessibleName("Worker app fields")
         layout = QGridLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setAlignment(Qt.AlignTop)
         layout.setHorizontalSpacing(10)
         layout.setVerticalSpacing(5)
         layout.setColumnStretch(0, 1)
@@ -323,6 +367,7 @@ class AppsPage(QWidget):
         )
         self._add_grid_field(layout, 5, 1, "VCS poll (s)", "workerVcsPollLabel", self.worker_vcs_poll_input)
         self._add_grid_field(layout, 6, 0, "Commands", "workerCommandsLabel", self.worker_commands_input, 2)
+        layout.setRowStretch(14, 1)
 
         return page
 
@@ -333,6 +378,7 @@ class AppsPage(QWidget):
         panel.setProperty("role", "appRuntimePanel")
         layout = QGridLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setAlignment(Qt.AlignTop)
         layout.setHorizontalSpacing(10)
         layout.setVerticalSpacing(5)
         layout.setColumnStretch(0, 1)
@@ -371,6 +417,7 @@ class AppsPage(QWidget):
             self.app_pull_policy_combo,
         )
         self._add_grid_field(layout, 2, 0, "Volumes", "appVolumesLabel", self.app_volumes_input, 2)
+        layout.setRowStretch(6, 1)
         return panel
 
     def set_launch_preflight_service(self, launch_preflight_service) -> None:

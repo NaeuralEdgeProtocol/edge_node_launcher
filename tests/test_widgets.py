@@ -165,6 +165,21 @@ def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
     assert page.findChild(QLineEdit, "carImageInput").accessibleName() == "nginx:alpine"
     assert page.findChild(QLineEdit, "workerRepoInput").accessibleName() == "https://github.com/org/repo"
     assert page.findChild(QPlainTextEdit, "workerCommandsInput").property("role") == "appTextInput"
+    advanced_toggle = page.findChild(QToolButton, "appAdvancedOptionsToggle")
+    advanced_panel = page.findChild(QWidget, "appAdvancedOptionsPanel")
+    assert advanced_toggle.property("role") == "appDisclosureButton"
+    assert advanced_toggle.text() == "Advanced options"
+    assert advanced_toggle.accessibleName() == "Show advanced app options"
+    assert not advanced_toggle.isChecked()
+    assert advanced_panel.property("role") == "appAdvancedOptionsPanel"
+    assert advanced_panel.isHidden()
+    qtbot.mouseClick(advanced_toggle, Qt.LeftButton)
+    assert advanced_toggle.isChecked()
+    assert advanced_toggle.accessibleName() == "Hide advanced app options"
+    assert not advanced_panel.isHidden()
+    qtbot.mouseClick(advanced_toggle, Qt.LeftButton)
+    assert not advanced_toggle.isChecked()
+    assert advanced_panel.isHidden()
     assert page.findChild(QLabel, "appRuntimeSectionLabel").text() == "Runtime"
     assert page.findChild(QWidget, "appRuntimePanel").property("role") == "appRuntimePanel"
     assert page.findChild(QLineEdit, "appCpuInput").text() == "1"

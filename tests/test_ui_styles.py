@@ -69,6 +69,7 @@ def test_apps_page_controls_use_semantic_styles():
         assert 'QWidget[role="appsWorkspace"]' in stylesheet
         assert 'QWidget[role="appActionBar"]' in stylesheet
         assert 'QWidget[role="appDeploymentPanel"]' in stylesheet
+        assert 'QWidget[role="appAdvancedOptionsPanel"]' in stylesheet
         assert 'QWidget[role="appsDetailPanel"]' in stylesheet
         assert 'QTextBrowser[role="appsDetailText"]' in stylesheet
         assert "QScrollArea#appsWorkspaceScrollArea" in stylesheet
@@ -76,6 +77,7 @@ def test_apps_page_controls_use_semantic_styles():
         assert 'QLineEdit[role="appTextInput"]' in stylesheet
         assert 'QPlainTextEdit[role="appTextInput"]' in stylesheet
         assert 'QComboBox[role="appCombo"]' in stylesheet
+        assert 'QToolButton[role="appDisclosureButton"]' in stylesheet
         assert 'QLabel[role="appFormLabel"]' in stylesheet
         assert 'QLabel[role="appValidationMessage"]' in stylesheet
         assert "QTableWidget#appsTable" in stylesheet

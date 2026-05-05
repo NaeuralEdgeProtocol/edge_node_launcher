@@ -533,6 +533,22 @@ COMMON_STYLESHEET_TEMPLATE = """
     height: 0px;
     margin-right: 8px;
   }}
+  QToolButton[role="appDisclosureButton"] {{
+    background-color: {secondary_action_bg};
+    color: {secondary_action_text};
+    border: 1px solid {secondary_action_border};
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-family: "Segoe UI";
+    font-size: 9pt;
+    font-weight: 600;
+    text-align: left;
+  }}
+  QToolButton[role="appDisclosureButton"]:hover,
+  QToolButton[role="appDisclosureButton"]:checked {{
+    background-color: {secondary_action_hover};
+    border: 1px solid {combo_hover_border};
+  }}
   QLabel[role="appFormLabel"] {{
     color: {section_label_text};
     background-color: transparent;
@@ -556,6 +572,9 @@ COMMON_STYLESHEET_TEMPLATE = """
     background-color: transparent;
   }}
   QWidget[role="appDeploymentPanel"] {{
+    background-color: transparent;
+  }}
+  QWidget[role="appAdvancedOptionsPanel"] {{
     background-color: transparent;
   }}
   QWidget[role="appsWorkspace"] {{

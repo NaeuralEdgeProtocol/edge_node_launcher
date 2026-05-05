@@ -709,6 +709,12 @@ def run_mocked_sdk_apps_scenario(
     set_line_edit_value(app, apps_page.car_registry_password_input, SMOKE_CONTAINER_APP_SECRET)
     set_plain_text_value(app, apps_page.env_input, "SMOKE_MODE=mock\nPUBLIC_VALUE=visible")
 
+    if not apps_page.advanced_options_toggle.isChecked():
+        record_step(
+            log,
+            output_path,
+            {"step": click_visible_button(app, apps_page.advanced_options_toggle, "show advanced app options")},
+        )
     scroll_apps_workspace_to(launcher, "bottom")
     app.processEvents()
     if getattr(launcher, "toast", None) is not None:
