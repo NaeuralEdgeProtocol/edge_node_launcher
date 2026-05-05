@@ -2090,7 +2090,12 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
       
       # Pull the latest image
       self.add_log(f"Pulling latest Docker image for restart of {container_name}", color="blue")
-      self.docker_handler.pull_image(on_pull_success, on_pull_error, on_pull_output)
+      self.docker_handler.pull_image(
+        on_pull_success,
+        on_pull_error,
+        on_pull_output,
+        container_name=container_name,
+      )
       
     except Exception as e:
       on_error(str(e))
@@ -3363,7 +3368,12 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     )
 
     self.add_log("Pulling latest Docker image before container launch...", color="blue")
-    self.docker_handler.pull_image(on_pull_success, on_pull_error, on_pull_output)
+    self.docker_handler.pull_image(
+      on_pull_success,
+      on_pull_error,
+      on_pull_output,
+      container_name=container_name,
+    )
 
   def _finalize_launch_skipped_for_active_pull(self, container_name: str) -> None:
     """Close launch UI after a stale launch continuation sees an active pull."""

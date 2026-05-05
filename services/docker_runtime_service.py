@@ -50,8 +50,11 @@ class DockerRuntimeService:
     def get_container_stats(self, callback, error_callback):
         return self._command_handler.get_container_stats(callback, error_callback)
 
-    def pull_image(self, callback, error_callback, output_callback=None):
-        return self._command_handler.pull_image(callback, error_callback, output_callback)
+    def pull_image(self, callback, error_callback, output_callback=None, container_name=None):
+        method = self._command_handler.pull_image
+        if container_name is None or "container_name" not in inspect.signature(method).parameters:
+            return method(callback, error_callback, output_callback)
+        return method(callback, error_callback, output_callback, container_name=container_name)
 
     def launch_container_threaded(self, volume_name=None, callback=None, error_callback=None):
         return self._command_handler.launch_container_threaded(volume_name, callback, error_callback)

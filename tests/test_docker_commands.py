@@ -14,6 +14,27 @@ def make_handler(monkeypatch, container_name="r1node"):
     return docker_commands.DockerCommandHandler(container_name)
 
 
+class FakeSignal:
+    def __init__(self):
+        self.callbacks = []
+
+    def connect(self, callback):
+        self.callbacks.append(callback)
+
+
+class FakeStreamingThread:
+    def __init__(self, command):
+        self.command = command
+        self.output_received = FakeSignal()
+        self.finished = FakeSignal()
+        self.error_message = None
+        self.result_data = ("", "", 0)
+        self.started = False
+
+    def start(self):
+        self.started = True
+
+
 def test_launch_command_uses_expected_container_volume_and_image(monkeypatch):
     handler = make_handler(monkeypatch)
     monkeypatch.setattr(handler, "check_nvidia_gpu_available", lambda: False)
@@ -63,6 +84,75 @@ def test_launch_command_does_not_attach_gpu_to_secondary_node(monkeypatch):
 
     assert "--gpus=all" not in command
     assert command[-1] == docker_commands.DOCKER_IMAGE
+
+
+def test_required_image_uses_gpu_image_for_primary_when_available(monkeypatch):
+    handler = make_handler(monkeypatch)
+    monkeypatch.setattr(handler, "check_nvidia_gpu_available", lambda: True)
+
+    assert handler.get_required_image("r1node") == GPU_PRODUCTION_EDGE_NODE_IMAGE
+
+
+def test_required_image_uses_cpu_image_for_secondary_when_gpu_available(monkeypatch):
+    handler = make_handler(monkeypatch)
+    monkeypatch.setattr(handler, "check_nvidia_gpu_available", lambda: True)
+
+    assert handler.get_required_image("r1node2") == docker_commands.DOCKER_IMAGE
+
+
+def test_ensure_image_exists_checks_runtime_plan_image(monkeypatch):
+    handler = make_handler(monkeypatch)
+    calls = []
+    monkeypatch.setattr(handler, "check_nvidia_gpu_available", lambda: True)
+
+    def fake_execute(command, timeout=None):
+        calls.append((command, timeout))
+        return "image-id", "", 0
+
+    monkeypatch.setattr(handler, "execute_command", fake_execute)
+
+    assert handler._ensure_image_exists("r1node") is True
+    assert calls == [
+        (
+            ["docker", "images", "-q", GPU_PRODUCTION_EDGE_NODE_IMAGE],
+            docker_commands.DOCKER_STATUS_TIMEOUT,
+        )
+    ]
+
+
+def test_pull_image_uses_runtime_plan_image(monkeypatch):
+    created_threads = []
+    handler = make_handler(monkeypatch)
+    monkeypatch.setattr(handler, "check_nvidia_gpu_available", lambda: True)
+
+    def fake_thread_factory(command):
+        thread = FakeStreamingThread(command)
+        created_threads.append(thread)
+        return thread
+
+    monkeypatch.setattr(docker_commands, "DockerStreamingCommandThread", fake_thread_factory)
+
+    handler.pull_image(lambda result: None, lambda error: None, container_name="r1node")
+
+    assert created_threads[0].command == ["docker", "pull", GPU_PRODUCTION_EDGE_NODE_IMAGE]
+    assert created_threads[0].started is True
+
+
+def test_pull_image_can_target_secondary_cpu_image(monkeypatch):
+    created_threads = []
+    handler = make_handler(monkeypatch)
+    monkeypatch.setattr(handler, "check_nvidia_gpu_available", lambda: True)
+
+    def fake_thread_factory(command):
+        thread = FakeStreamingThread(command)
+        created_threads.append(thread)
+        return thread
+
+    monkeypatch.setattr(docker_commands, "DockerStreamingCommandThread", fake_thread_factory)
+
+    handler.pull_image(lambda result: None, lambda error: None, container_name="r1node2")
+
+    assert created_threads[0].command == ["docker", "pull", docker_commands.DOCKER_IMAGE]
 
 
 def test_launch_command_can_target_captured_container_name(monkeypatch):

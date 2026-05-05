@@ -23,6 +23,10 @@ class FakeDockerCommands:
         if callback:
             callback(("", "", 0))
 
+    def pull_image(self, callback, error_callback, output_callback=None, container_name=None):
+        self.calls.append(("pull_image", container_name))
+        callback(("", "", 0))
+
     def custom_method(self):
         self.calls.append(("custom_method",))
         return "custom"
@@ -63,3 +67,30 @@ def test_docker_runtime_service_keeps_transition_access_to_unwrapped_methods():
 
     assert service.custom_method() == "custom"
     assert commands.calls == [("custom_method",)]
+
+
+def test_docker_runtime_service_forwards_pull_target_when_supported():
+    commands = FakeDockerCommands()
+    service = DockerRuntimeService(commands)
+    results = []
+
+    service.pull_image(results.append, None, container_name="r1node2")
+
+    assert commands.calls == [("pull_image", "r1node2")]
+    assert results == [("", "", 0)]
+
+
+def test_docker_runtime_service_supports_legacy_pull_handlers():
+    class LegacyPullCommands(FakeDockerCommands):
+        def pull_image(self, callback, error_callback, output_callback=None):
+            self.calls.append(("legacy_pull_image",))
+            callback(("", "", 0))
+
+    commands = LegacyPullCommands()
+    service = DockerRuntimeService(commands)
+    results = []
+
+    service.pull_image(results.append, None, container_name="r1node2")
+
+    assert commands.calls == [("legacy_pull_image",)]
+    assert results == [("", "", 0)]
