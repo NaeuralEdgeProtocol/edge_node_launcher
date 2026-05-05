@@ -22,6 +22,7 @@ from PyQt5.QtWidgets import (
 from services.app_deployment_models import (
     APP_TYPE_CONTAINER,
     APP_TYPE_WORKER,
+    AppResourceSpec,
     ContainerAppSpec,
     DeploymentResult,
     ManagedAppRecord,
@@ -210,6 +211,9 @@ class AppsPage(QWidget):
         deployment_layout.addWidget(self.runner_stack)
         self.runner_type_combo.currentIndexChanged.connect(self._sync_runner_stack)
 
+        deployment_layout.addWidget(create_sidebar_section_label("Runtime", "appRuntimeSectionLabel"))
+        deployment_layout.addWidget(self._create_runtime_fields())
+
         self.env_input = self._create_plain_text("appEnvInput", "KEY=value")
         self.env_input.setMaximumHeight(86)
         deployment_layout.addWidget(self._label("Environment", "appEnvLabel"))
@@ -296,9 +300,78 @@ class AppsPage(QWidget):
         self._add_grid_field(layout, 2, 0, "Port", "workerPortLabel", self.worker_port_input)
         self._add_grid_field(layout, 2, 1, "GitHub user", "workerGithubUserLabel", self.worker_github_user_input)
         self._add_grid_field(layout, 3, 0, "GitHub token", "workerGithubTokenLabel", self.worker_github_token_input, 2)
-        self._add_grid_field(layout, 4, 0, "Commands", "workerCommandsLabel", self.worker_commands_input, 2)
+        self.worker_registry_input = self._create_line_edit("workerRegistryInput", "docker.io")
+        self.worker_registry_input.setText("docker.io")
+        self.worker_registry_user_input = self._create_line_edit("workerRegistryUserInput", "Registry user")
+        self.worker_registry_password_input = self._create_line_edit(
+            "workerRegistryPasswordInput",
+            "Registry password",
+        )
+        self.worker_registry_password_input.setEchoMode(QLineEdit.Password)
+        self.worker_vcs_poll_input = self._create_line_edit("workerVcsPollInput", "60")
+        self.worker_vcs_poll_input.setText("60")
+
+        self._add_grid_field(layout, 4, 0, "Registry", "workerRegistryLabel", self.worker_registry_input)
+        self._add_grid_field(layout, 4, 1, "Registry user", "workerRegistryUserLabel", self.worker_registry_user_input)
+        self._add_grid_field(
+            layout,
+            5,
+            0,
+            "Registry password",
+            "workerRegistryPasswordLabel",
+            self.worker_registry_password_input,
+        )
+        self._add_grid_field(layout, 5, 1, "VCS poll (s)", "workerVcsPollLabel", self.worker_vcs_poll_input)
+        self._add_grid_field(layout, 6, 0, "Commands", "workerCommandsLabel", self.worker_commands_input, 2)
 
         return page
+
+    def _create_runtime_fields(self) -> QWidget:
+        panel = QWidget()
+        panel.setObjectName("appRuntimePanel")
+        panel.setAccessibleName("App runtime settings")
+        panel.setProperty("role", "appRuntimePanel")
+        layout = QGridLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setHorizontalSpacing(10)
+        layout.setVerticalSpacing(5)
+        layout.setColumnStretch(0, 1)
+        layout.setColumnStretch(1, 1)
+
+        self.app_cpu_input = self._create_line_edit("appCpuInput", "1")
+        self.app_cpu_input.setText("1")
+        self.app_memory_input = self._create_line_edit("appMemoryInput", "512m")
+        self.app_memory_input.setText("512m")
+        self.app_restart_policy_combo = self._create_combo("appRestartPolicyCombo", "Restart policy")
+        self.app_restart_policy_combo.addItems(["always", "on-failure", "never"])
+        self.app_pull_policy_combo = self._create_combo("appImagePullPolicyCombo", "Image pull policy")
+        self.app_pull_policy_combo.addItems(["always", "if-not-present", "never"])
+        self.app_volumes_input = self._create_plain_text(
+            "appVolumesInput",
+            "volume_name:/container/path",
+        )
+        self.app_volumes_input.setMaximumHeight(64)
+
+        self._add_grid_field(layout, 0, 0, "CPU", "appCpuLabel", self.app_cpu_input)
+        self._add_grid_field(layout, 0, 1, "Memory", "appMemoryLabel", self.app_memory_input)
+        self._add_grid_field(
+            layout,
+            1,
+            0,
+            "Restart",
+            "appRestartPolicyLabel",
+            self.app_restart_policy_combo,
+        )
+        self._add_grid_field(
+            layout,
+            1,
+            1,
+            "Pull policy",
+            "appImagePullPolicyLabel",
+            self.app_pull_policy_combo,
+        )
+        self._add_grid_field(layout, 2, 0, "Volumes", "appVolumesLabel", self.app_volumes_input, 2)
+        return panel
 
     def set_launch_preflight_service(self, launch_preflight_service) -> None:
         self.launch_preflight_service = launch_preflight_service
@@ -466,6 +539,9 @@ class AppsPage(QWidget):
 
     def _build_current_spec(self):
         env, env_issues = self._parse_env()
+        volumes, volume_issues = self._parse_volumes()
+        resources, resource_issues = self._parse_resources()
+        common_issues = [*env_issues, *volume_issues, *resource_issues]
         try:
             if self.runner_type_combo.currentData() == APP_TYPE_CONTAINER:
                 spec = ContainerAppSpec(
@@ -477,8 +553,12 @@ class AppsPage(QWidget):
                     registry_username=self.car_registry_user_input.text().strip(),
                     registry_password=self.car_registry_password_input.text(),
                     env=env,
+                    volumes=volumes,
+                    resources=resources,
+                    restart_policy=self.app_restart_policy_combo.currentText(),
+                    image_pull_policy=self.app_pull_policy_combo.currentText(),
                 )
-                return spec, [*env_issues, *validate_container_spec(spec)]
+                return spec, [*common_issues, *validate_container_spec(spec)]
 
             spec = WorkerAppSpec(
                 app_name=self.app_name_input.text().strip(),
@@ -489,14 +569,22 @@ class AppsPage(QWidget):
                 port=_to_int(self.worker_port_input.text()),
                 github_username=self.worker_github_user_input.text().strip(),
                 github_token=self.worker_github_token_input.text(),
+                registry_server=self.worker_registry_input.text().strip() or "docker.io",
+                registry_username=self.worker_registry_user_input.text().strip(),
+                registry_password=self.worker_registry_password_input.text(),
                 commands=[
                     line.strip()
                     for line in self.worker_commands_input.toPlainText().splitlines()
                     if line.strip()
                 ],
                 env=env,
+                volumes=volumes,
+                resources=resources,
+                restart_policy=self.app_restart_policy_combo.currentText(),
+                image_pull_policy=self.app_pull_policy_combo.currentText(),
+                vcs_poll_interval=_to_int(self.worker_vcs_poll_input.text()),
             )
-            return spec, [*env_issues, *validate_worker_spec(spec)]
+            return spec, [*common_issues, *validate_worker_spec(spec)]
         except Exception as exc:
             return None, [ValidationIssue("form", str(exc))]
 
@@ -513,6 +601,38 @@ class AppsPage(QWidget):
             key, value = normalized.split("=", 1)
             env[key.strip()] = value.strip()
         return env, issues
+
+    def _parse_volumes(self) -> tuple[dict[str, str], list[ValidationIssue]]:
+        volumes = {}
+        issues = []
+        for line in self.app_volumes_input.toPlainText().splitlines():
+            normalized = line.strip()
+            if not normalized:
+                continue
+            if ":" not in normalized:
+                issues.append(ValidationIssue("volumes", "Volume rows must use source:/container/path."))
+                continue
+            source, target = normalized.rsplit(":", 1)
+            source = source.strip()
+            target = target.strip()
+            if not source or not target:
+                issues.append(ValidationIssue("volumes", "Volume source and mount path are required."))
+                continue
+            volumes[source] = target
+        return volumes, issues
+
+    def _parse_resources(self) -> tuple[AppResourceSpec, list[ValidationIssue]]:
+        try:
+            cpu = float(self.app_cpu_input.text().strip())
+        except ValueError:
+            return AppResourceSpec(), [ValidationIssue("resources.cpu", "CPU must be numeric.")]
+        return (
+            AppResourceSpec(
+                cpu=cpu,
+                memory=self.app_memory_input.text().strip() or "512m",
+            ),
+            [],
+        )
 
     def _persist_result_if_needed(self, result: DeploymentResult, spec) -> None:
         if self.app_registry.get(result.app_id) is not None:
@@ -646,10 +766,19 @@ class AppsPage(QWidget):
             self.worker_port_input,
             self.worker_github_user_input,
             self.worker_github_token_input,
+            self.worker_registry_input,
+            self.worker_registry_user_input,
+            self.worker_registry_password_input,
+            self.worker_vcs_poll_input,
+            self.app_cpu_input,
+            self.app_memory_input,
         ):
             widget.textChanged.connect(lambda *_args: self._clear_message())
         self.env_input.textChanged.connect(self._clear_message)
         self.worker_commands_input.textChanged.connect(self._clear_message)
+        self.app_volumes_input.textChanged.connect(self._clear_message)
+        self.app_restart_policy_combo.currentIndexChanged.connect(lambda *_args: self._clear_message())
+        self.app_pull_policy_combo.currentIndexChanged.connect(lambda *_args: self._clear_message())
 
     def _clear_message(self) -> None:
         if self.validation_message.text() in {"Launching...", "Refreshing...", "Stopping..."}:
@@ -673,6 +802,7 @@ class AppsPage(QWidget):
         for value in (
             getattr(self, "car_registry_password_input", None),
             getattr(self, "worker_github_token_input", None),
+            getattr(self, "worker_registry_password_input", None),
         ):
             if value is None:
                 continue

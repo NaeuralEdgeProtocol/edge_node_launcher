@@ -114,6 +114,27 @@ def validate_commands(commands: list[str], field: str = "commands") -> list[Vali
     return issues
 
 
+def validate_volumes(volumes: dict[str, str], field: str = "volumes") -> list[ValidationIssue]:
+    issues = []
+    for source, mount_path in (volumes or {}).items():
+        if not str(source or "").strip() or not str(mount_path or "").strip():
+            issues.append(ValidationIssue(field, "Volume source and mount path are required."))
+            continue
+        if not str(mount_path).strip().startswith("/"):
+            issues.append(ValidationIssue(field, "Volume mount path must start with /."))
+    return issues
+
+
+def validate_poll_interval(value: int, field: str) -> list[ValidationIssue]:
+    try:
+        interval = int(value)
+    except (TypeError, ValueError):
+        return [ValidationIssue(field, "Poll interval must be a number of seconds.")]
+    if interval < 5 or interval > 86400:
+        return [ValidationIssue(field, "Poll interval must be between 5 seconds and 1 day.")]
+    return []
+
+
 def validate_github_repo_url(value: str, field: str = "repo_url") -> list[ValidationIssue]:
     normalized = (value or "").strip()
     if len(normalized) < 1:
@@ -140,6 +161,7 @@ def validate_container_spec(spec: ContainerAppSpec) -> list[ValidationIssue]:
         *validate_memory(spec.resources.memory),
         *validate_env_mapping(spec.env),
         *validate_env_mapping(spec.dynamic_env, "dynamic_env"),
+        *validate_volumes(spec.volumes),
     ]
 
 
@@ -156,4 +178,6 @@ def validate_worker_spec(spec: WorkerAppSpec) -> list[ValidationIssue]:
         *validate_env_mapping(spec.env),
         *validate_env_mapping(spec.dynamic_env, "dynamic_env"),
         *validate_commands(spec.commands),
+        *validate_volumes(spec.volumes),
+        *validate_poll_interval(spec.vcs_poll_interval, "vcs_poll_interval"),
     ]

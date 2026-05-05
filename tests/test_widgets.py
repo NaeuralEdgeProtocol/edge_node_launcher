@@ -165,6 +165,15 @@ def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
     assert page.findChild(QLineEdit, "carImageInput").accessibleName() == "nginx:alpine"
     assert page.findChild(QLineEdit, "workerRepoInput").accessibleName() == "https://github.com/org/repo"
     assert page.findChild(QPlainTextEdit, "workerCommandsInput").property("role") == "appTextInput"
+    assert page.findChild(QLabel, "appRuntimeSectionLabel").text() == "Runtime"
+    assert page.findChild(QWidget, "appRuntimePanel").property("role") == "appRuntimePanel"
+    assert page.findChild(QLineEdit, "appCpuInput").text() == "1"
+    assert page.findChild(QLineEdit, "appMemoryInput").text() == "512m"
+    assert page.findChild(QPlainTextEdit, "appVolumesInput").property("role") == "appTextInput"
+    assert page.findChild(QComboBox, "appRestartPolicyCombo").currentText() == "always"
+    assert page.findChild(QComboBox, "appImagePullPolicyCombo").currentText() == "always"
+    assert page.findChild(QLineEdit, "workerRegistryInput").text() == "docker.io"
+    assert page.findChild(QLineEdit, "workerVcsPollInput").text() == "60"
     assert page.findChild(QPushButton, "appValidateButton").property("actionRole") == "secondary"
     assert page.findChild(QPushButton, "appLaunchButton").property("actionRole") == "primary"
     assert page.findChild(QPushButton, "appRefreshButton").property("actionRole") == "secondary"
@@ -185,6 +194,11 @@ def test_apps_page_validates_and_launches_container_with_fake_sdk(qtbot, tmp_pat
     page.car_image_input.setText("nginx:alpine")
     page.car_port_input.setText("8080")
     page.env_input.setPlainText("PUBLIC_VALUE=1")
+    page.app_cpu_input.setText("2")
+    page.app_memory_input.setText("1g")
+    page.app_volumes_input.setPlainText("r1_app_cache:/app/cache")
+    page.app_restart_policy_combo.setCurrentText("on-failure")
+    page.app_pull_policy_combo.setCurrentText("if-not-present")
 
     qtbot.mouseClick(page.findChild(QPushButton, "appValidateButton"), Qt.LeftButton)
     assert page.validation_message.text() == "Ready"
@@ -193,6 +207,11 @@ def test_apps_page_validates_and_launches_container_with_fake_sdk(qtbot, tmp_pat
     qtbot.waitUntil(lambda: len(fake_client.container_specs) == 1, timeout=1000)
 
     assert fake_client.container_specs[0].image == "nginx:alpine"
+    assert fake_client.container_specs[0].resources.cpu == 2
+    assert fake_client.container_specs[0].resources.memory == "1g"
+    assert fake_client.container_specs[0].volumes == {"r1_app_cache": "/app/cache"}
+    assert fake_client.container_specs[0].restart_policy == "on-failure"
+    assert fake_client.container_specs[0].image_pull_policy == "if-not-present"
     assert page.apps_table.rowCount() == 1
     assert page.apps_table.item(0, 0).text() == "car_runner"
     assert page.apps_table.item(0, 2).text() == "deployed"
@@ -220,6 +239,10 @@ def test_apps_page_worker_mode_validates_payload(qtbot, tmp_path):
     page.node_address_input.setText(APP_TEST_NODE)
     page.worker_repo_input.setText("https://github.com/Ratio1/example-app")
     page.worker_port_input.setText("4173")
+    page.worker_registry_user_input.setText("registry-user")
+    page.worker_registry_password_input.setText("registry-secret")
+    page.worker_vcs_poll_input.setText("120")
+    page.app_volumes_input.setPlainText("worker_cache:/workspace/cache")
 
     assert page.runner_stack.currentIndex() == 1
 
@@ -228,7 +251,32 @@ def test_apps_page_worker_mode_validates_payload(qtbot, tmp_path):
 
     assert fake_client.worker_specs[0].repo_url == "https://github.com/Ratio1/example-app"
     assert fake_client.worker_specs[0].commands == ["npm install", "npm run build", "npm run start"]
+    assert fake_client.worker_specs[0].registry_server == "docker.io"
+    assert fake_client.worker_specs[0].registry_username == "registry-user"
+    assert fake_client.worker_specs[0].registry_password == "registry-secret"
+    assert fake_client.worker_specs[0].vcs_poll_interval == 120
+    assert fake_client.worker_specs[0].volumes == {"worker_cache": "/workspace/cache"}
     assert page.apps_table.item(0, 1).text() == "WAR"
+
+
+def test_apps_page_rejects_invalid_volume_rows(qtbot, tmp_path):
+    fake_client = FakeAppDeploymentClient()
+    page = AppsPage(
+        app_registry=AppRegistry(tmp_path / "apps.json"),
+        deployment_client=fake_client,
+    )
+    qtbot.addWidget(page)
+
+    page.app_name_input.setText("car_runner")
+    page.node_address_input.setText(APP_TEST_NODE)
+    page.car_image_input.setText("nginx:alpine")
+    page.car_port_input.setText("8080")
+    page.app_volumes_input.setPlainText("broken-volume-row")
+
+    qtbot.mouseClick(page.findChild(QPushButton, "appLaunchButton"), Qt.LeftButton)
+
+    assert page.validation_message.text() == "volumes: Volume rows must use source:/container/path."
+    assert fake_client.container_specs == []
 
 
 def test_apps_page_refreshes_registry_records_and_reports_missing_selection(qtbot, tmp_path):

@@ -34,6 +34,7 @@ def test_container_spec_validation_reports_field_level_issues():
         port=70000,
         registry_server="docker",
         env={"BAD KEY": "x"},
+        volumes={"cache": "relative/path"},
         resources=AppResourceSpec(cpu=0, memory="512"),
     )
 
@@ -48,6 +49,7 @@ def test_container_spec_validation_reports_field_level_issues():
         "resources.cpu",
         "resources.memory",
         "env",
+        "volumes",
     }
 
 
@@ -68,12 +70,14 @@ def test_worker_spec_validation_rejects_invalid_repo_and_duplicate_commands():
         node_address=NODE_ADDRESS,
         repo_url="https://gitlab.com/Ratio1/example-app",
         commands=["npm install", "npm install"],
+        vcs_poll_interval=1,
     )
 
     issues = validate_worker_spec(spec)
 
     assert ValidationIssue("repo_url", "Use a GitHub URL such as https://github.com/org/repo.") in issues
     assert any(issue.field == "commands" and "Duplicate command" in issue.message for issue in issues)
+    assert ValidationIssue("vcs_poll_interval", "Poll interval must be between 5 seconds and 1 day.") in issues
 
 
 def test_github_repo_validation_requires_owner_and_repo():
