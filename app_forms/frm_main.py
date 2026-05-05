@@ -3158,19 +3158,13 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         )
         if reply != QMessageBox.Yes:
             return
-    # If there's insufficient RAM, show error and return
+    # If recommended RAM capacity is reached, continue to the dialog with
+    # explicit overcommit warning copy instead of silently blocking creation.
     elif not ram_check['can_add_node']:
-        QMessageBox.warning(
-            self,
-            INSUFFICIENT_RAM_TITLE,
-            INSUFFICIENT_RAM_MESSAGE.format(
-                total_gb=ram_check['total_ram_gb'],
-                max_nodes=ram_check['max_nodes_supported'],
-                current_nodes=ram_check['current_node_count'],
-                min_ram_gb=MIN_NODE_RAM_GB
-            )
+        self.add_log(
+            "Recommended node capacity reached. Showing overcommit warning before creating another node.",
+            color="yellow",
         )
-        return
 
     # Generate the container name that would be used
     container_name = generate_container_name(self.container_name_prefix)

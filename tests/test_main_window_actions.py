@@ -2783,6 +2783,56 @@ def test_add_node_dialog_capacity_copy_is_readable(qtbot, monkeypatch):
     assert "Ã" not in observed["copy"]
 
 
+def test_add_node_dialog_allows_overcommit_after_clear_warning(qtbot, monkeypatch):
+    launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
+    observed = {}
+    created_nodes = []
+
+    monkeypatch.setattr(
+        launcher,
+        "check_ram_for_new_node",
+        lambda existing_node_count: {
+            "can_add_node": False,
+            "total_ram_gb": 32.0,
+            "max_nodes_supported": 2,
+            "current_node_count": existing_node_count,
+            "min_required_gb": frm_main.MIN_NODE_RAM_GB,
+            "available_for_next_node_gb": 0.0,
+            "near_boundary_warning": False,
+        },
+    )
+    monkeypatch.setattr(
+        frm_main.QMessageBox,
+        "warning",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("overcommit should use AddNodeDialog, not a blocking warning")
+        ),
+    )
+
+    def record_create(container_name, volume_name, display_name, dialog):
+        created_nodes.append((container_name, volume_name, display_name))
+        dialog.accept()
+
+    monkeypatch.setattr(launcher, "_create_node_with_name", record_create)
+
+    def inspect_and_create(dialog):
+        labels = [label.text() for label in dialog.findChildren(QLabel)]
+        observed["copy"] = "\n".join(labels)
+        create_button = dialog.findChild(QPushButton, "createNodeConfirmButton")
+        observed["button_text"] = create_button.text()
+        create_button.click()
+        return QDialog.Accepted
+
+    monkeypatch.setattr(QDialog, "exec_", inspect_and_create)
+
+    qtbot.mouseClick(launcher.add_node_button, Qt.LeftButton)
+
+    assert "Resource Warning:" in observed["copy"]
+    assert "- Existing node volumes and data will remain untouched" in observed["copy"]
+    assert observed["button_text"] == "Create Anyway"
+    assert len(created_nodes) == 1
+
+
 def test_add_node_dialog_double_click_creates_once(qtbot, monkeypatch):
     launcher, _fake_config, _fake_handler = _build_launcher(monkeypatch, qtbot, running=False)
     created_nodes = []

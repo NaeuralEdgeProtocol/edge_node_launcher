@@ -33,6 +33,7 @@ class AddNodeDialog(QDialog):
         self._container_name = container_name
         self._volume_name = volume_name
         self._create_node = create_node
+        self._is_overcommit = not bool((ram_check or {}).get("can_add_node", True))
 
         self.setWindowTitle("Add New Node")
         self.setObjectName("addNodeDialog")
@@ -55,10 +56,14 @@ class AddNodeDialog(QDialog):
         button_layout = QHBoxLayout(self.button_row)
         button_layout.setContentsMargins(0, 0, 0, 0)
         button_layout.setSpacing(12)
-        self.create_button = QPushButton("Create Node")
+        self.create_button = QPushButton("Create Anyway" if self._is_overcommit else "Create Node")
         self.create_button.setObjectName("createNodeConfirmButton")
         self.create_button.setAccessibleName("Create node")
-        self.create_button.setToolTip("Create and launch another local node")
+        self.create_button.setToolTip(
+            "Create and launch with resource overcommit"
+            if self._is_overcommit
+            else "Create and launch another local node"
+        )
         self.create_button.setProperty("actionRole", "primary")
         self._prepare_button(self.create_button)
         self.cancel_button = QPushButton("Cancel")
@@ -92,15 +97,26 @@ class AddNodeDialog(QDialog):
         if "error" in ram_check:
             return "This action will create a new Edge Node. \n\nDo you want to proceed?"
 
-        return (
+        capacity_copy = (
             "This action will create a new Edge Node.\n\n"
             "System Capacity:\n"
             f"- Total RAM: {ram_check['total_ram_gb']:.1f} GB\n"
             f"- RAM per node: {ram_check['min_required_gb']} GB\n"
             f"- Max nodes supported: {ram_check['max_nodes_supported']}\n"
-            f"- Current nodes: {existing_node_count}\n\n"
-            "Do you want to proceed?"
+            f"- Current nodes: {existing_node_count}\n"
         )
+
+        if not ram_check.get("can_add_node", True):
+            return (
+                capacity_copy
+                + "\nResource Warning:\n"
+                "- Recommended capacity is already reached\n"
+                "- Creating another node may overcommit CPU/RAM\n"
+                "- Existing node volumes and data will remain untouched\n\n"
+                "Create anyway?"
+            )
+
+        return capacity_copy + "\nDo you want to proceed?"
 
     def _handle_create_clicked(self):
         if not self.create_button.isEnabled():

@@ -344,6 +344,43 @@ def test_add_node_dialog_capacity_copy_and_create_guard(qtbot):
     assert create_button.text() == "Creating..."
 
 
+def test_add_node_dialog_overcommit_copy_is_explicit_and_createable(qtbot):
+    created = []
+    dialog = AddNodeDialog(
+        ram_check={
+            "can_add_node": False,
+            "total_ram_gb": 32.0,
+            "max_nodes_supported": 2,
+            "current_node_count": 2,
+            "min_required_gb": 16,
+            "available_for_next_node_gb": 0.0,
+            "near_boundary_warning": False,
+        },
+        existing_node_count=2,
+        container_name="r1node3",
+        volume_name="r1vol3",
+        create_node=lambda container, volume, display, owner: created.append(
+            (container, volume, display, owner)
+        ),
+    )
+    qtbot.addWidget(dialog)
+
+    label_copy = "\n".join(label.text() for label in dialog.findChildren(QLabel))
+    create_button = dialog.findChild(QPushButton, "createNodeConfirmButton")
+
+    assert "Resource Warning:" in label_copy
+    assert "- Recommended capacity is already reached" in label_copy
+    assert "- Creating another node may overcommit CPU/RAM" in label_copy
+    assert "- Existing node volumes and data will remain untouched" in label_copy
+    assert "Create anyway?" in label_copy
+    assert create_button.text() == "Create Anyway"
+    assert create_button.toolTip() == "Create and launch with resource overcommit"
+
+    qtbot.mouseClick(create_button, Qt.LeftButton)
+
+    assert created == [("r1node3", "r1vol3", None, dialog)]
+
+
 def test_insufficient_ram_copy_uses_ascii_bullets():
     copy = INSUFFICIENT_RAM_MESSAGE.format(
         total_gb=32.0,
