@@ -31,6 +31,9 @@ def test_sidebar_section_labels_use_ui_typography():
     for stylesheet in (DARK_STYLESHEET, LIGHT_STYLESHEET):
         assert 'QLabel[role="sidebarSection"]' in stylesheet
         assert 'QLabel[role="sidebarMutedText"]' in stylesheet
+        assert 'QFrame[role="sdkIdentityPanel"]' in stylesheet
+        assert 'QLabel[role="sdkIdentityStatus"]' in stylesheet
+        assert 'QLabel[role="sdkIdentityField"]' in stylesheet
         assert 'font-family: "Segoe UI";' in stylesheet
         assert "font-size: 9pt;" in stylesheet
 

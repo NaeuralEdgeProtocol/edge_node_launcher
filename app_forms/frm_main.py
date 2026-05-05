@@ -911,6 +911,7 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
         theme_toggle_handler=self.toggle_theme,
         force_debug_handler=self.toggle_force_debug,
         page_changed_handler=self._on_navigation_page_changed,
+        event_logger=self._log_app_event,
         parent=self,
     )
     self._bind_sidebar_panel_aliases(menu_widget)
@@ -929,6 +930,8 @@ class EdgeNodeLauncher(QWidget, _DockerUtilsMixin, _UpdaterMixin, _SystemResourc
     self.docker_download_button = panel.docker_download_button
     self.dapp_button = panel.dapp_button
     self.explorer_button = panel.explorer_button
+    self.refresh_sdk_identity_button = panel.refresh_sdk_identity_button
+    self.copy_sdk_identity_address_button = panel.copy_sdk_identity_address_button
     self.refreshButton = panel.refreshButton
     self.themeToggleButton = panel.themeToggleButton
     self.force_debug_checkbox = panel.force_debug_checkbox

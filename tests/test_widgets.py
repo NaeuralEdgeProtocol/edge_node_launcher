@@ -31,6 +31,7 @@ from services.app_deployment_models import SdkAppStatus
 from services.app_registry import AppRegistry
 from services.app_secret_redaction import REDACTED_SECRET
 from services.sdk_error_messages import SDK_CREDENTIALS_MESSAGE
+from services.sdk_identity_service import SdkIdentity
 from widgets.DockerPullDialog import DOCKER_PULL_DIALOG_STYLE_COLORS, DockerPullDialog
 from widgets.LoadingDialog import LoadingDialog
 from widgets.CenteredComboBox import CenteredComboBox
@@ -63,6 +64,24 @@ from widgets.app_widgets.sidebar_status_cards import NodeStatusPanel, ResourceSt
 
 
 APP_TEST_NODE = "0xai_A9OqTV_iFqmwj1SV7AKbdyr66NLkhSQHPpzp40c7jaLn"
+
+
+class FakeSdkIdentityService:
+    def __init__(self, *, identity=None, error=None):
+        self.identity = identity or SdkIdentity(
+            sdk_address="0xai_launcher",
+            eth_address="0xeth",
+            evm_network="devnet",
+            local_cache_base_folder="C:/tmp/ratio1",
+        )
+        self.error = error
+        self.calls = 0
+
+    def load_identity(self):
+        self.calls += 1
+        if self.error is not None:
+            raise RuntimeError(self.error)
+        return self.identity
 
 
 class FakeAppDeploymentClient:
@@ -895,7 +914,7 @@ def test_sidebar_control_factories_expose_stable_metadata(qtbot):
     assert calls == ["clicked"]
 
 
-def test_sidebar_panel_exposes_stable_launcher_controls(qtbot):
+def _build_sidebar_panel_for_test(qtbot, *, sdk_identity_service=None, event_logger=None):
     calls = []
 
     def record(name):
@@ -916,8 +935,15 @@ def test_sidebar_panel_exposes_stable_launcher_controls(qtbot):
         copy_eth_handler=record("copy_eth"),
         theme_toggle_handler=record("theme"),
         force_debug_handler=record("debug"),
+        sdk_identity_service=sdk_identity_service,
+        event_logger=event_logger,
     )
     qtbot.addWidget(panel)
+    return panel, calls
+
+
+def test_sidebar_panel_exposes_stable_launcher_controls(qtbot):
+    panel, calls = _build_sidebar_panel_for_test(qtbot)
 
     assert panel.objectName() == "sidebarPanel"
     assert panel.property("role") == "navigationSidebar"
@@ -939,6 +965,9 @@ def test_sidebar_panel_exposes_stable_launcher_controls(qtbot):
     assert panel.docker_download_button.objectName() == "downloadDockerButton"
     assert panel.dapp_button.objectName() == "openDappButton"
     assert panel.explorer_button.objectName() == "openExplorerButton"
+    assert panel.refresh_sdk_identity_button.objectName() == "refreshSdkIdentityButton"
+    assert panel.copy_sdk_identity_address_button.objectName() == "copySdkIdentityAddressButton"
+    assert not panel.copy_sdk_identity_address_button.isEnabled()
     assert panel.refreshButton.objectName() == "refreshNodeInfoButton"
     assert panel.node_status_panel.objectName() == "infoBox"
     assert panel.resource_status_panel.objectName() == "resourcesBox"
@@ -978,6 +1007,73 @@ def test_sidebar_panel_exposes_stable_launcher_controls(qtbot):
         "theme",
         "debug",
     ]
+
+
+def test_sidebar_panel_refreshes_and_copies_sdk_identity(qtbot):
+    service = FakeSdkIdentityService()
+    events = []
+    panel, _calls = _build_sidebar_panel_for_test(
+        qtbot,
+        sdk_identity_service=service,
+        event_logger=lambda message, **kwargs: events.append((message, kwargs)),
+    )
+    panel.show_page("network")
+
+    QApplication.clipboard().clear()
+    qtbot.mouseClick(panel.refresh_sdk_identity_button, Qt.LeftButton)
+
+    qtbot.waitUntil(lambda: panel.sdk_identity_address_label.text() == "0xai_launcher", timeout=2000)
+    assert service.calls == 1
+    assert panel.sdk_identity_status_label.text() == "Ready: edge-node-launcher"
+    assert panel.sdk_identity_network_label.text() == "devnet"
+    assert panel.sdk_identity_cache_label.text() == "C:/tmp/ratio1/sdk"
+    assert panel.copy_sdk_identity_address_button.isEnabled()
+
+    qtbot.mouseClick(panel.copy_sdk_identity_address_button, Qt.LeftButton)
+
+    assert QApplication.clipboard().text() == "0xai_launcher"
+    assert [event[0] for event in events] == [
+        "SDK identity refresh started",
+        "SDK identity refresh complete: address=yes",
+        "SDK identity address copied",
+    ]
+
+
+def test_sidebar_panel_compacts_long_sdk_identity_fields(qtbot):
+    long_address = "0xai_" + ("a" * 52)
+    long_cache = "C:/Users/test/.ratio1/edge_node_launcher/sdk/very-long-cache-path"
+    service = FakeSdkIdentityService(
+        identity=SdkIdentity(
+            sdk_address=long_address,
+            evm_network="devnet",
+            local_cache_base_folder=long_cache,
+        )
+    )
+    panel, _calls = _build_sidebar_panel_for_test(qtbot, sdk_identity_service=service)
+
+    qtbot.mouseClick(panel.refresh_sdk_identity_button, Qt.LeftButton)
+
+    qtbot.waitUntil(lambda: panel.sdk_identity_address_label.toolTip() == long_address, timeout=2000)
+    assert panel.sdk_identity_address_label.text() != long_address
+    assert panel.sdk_identity_address_label.text().startswith("0xai_")
+    assert panel.sdk_identity_address_label.text().endswith("aaaaa")
+    assert panel.sdk_identity_cache_label.text() != f"{long_cache}/sdk"
+    assert panel.sdk_identity_cache_label.toolTip() == f"{long_cache}/sdk"
+
+
+def test_sidebar_panel_classifies_sdk_identity_refresh_errors(qtbot):
+    service = FakeSdkIdentityService(
+        error="Error: No user specified for ratio1 Edge Protocol network connection."
+    )
+    panel, _calls = _build_sidebar_panel_for_test(qtbot, sdk_identity_service=service)
+    panel.show_page("network")
+
+    qtbot.mouseClick(panel.refresh_sdk_identity_button, Qt.LeftButton)
+
+    qtbot.waitUntil(lambda: panel.sdk_identity_status_label.text() == SDK_CREDENTIALS_MESSAGE, timeout=2000)
+    assert panel.sdk_identity_address_label.text() == "-"
+    assert not panel.copy_sdk_identity_address_button.isEnabled()
+    assert panel.refresh_sdk_identity_button.isEnabled()
 
 
 def test_centered_combo_light_popup_uses_supported_qt_stylesheet(qtbot):

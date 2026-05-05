@@ -69,6 +69,8 @@ ACTION_IDS = [
     "appSdkSettingsButton",
     "appAddVolumeButton",
     "appRemoveVolumeButton",
+    "refreshSdkIdentityButton",
+    "copySdkIdentityAddressButton",
 ]
 
 CONTROL_PATTERN = re.compile(

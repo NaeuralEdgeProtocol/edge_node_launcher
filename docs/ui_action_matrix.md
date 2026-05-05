@@ -1,6 +1,6 @@
 # UI Action Matrix
 
-Last checked: 2026-05-04
+Last checked: 2026-05-05
 
 This file lists launcher controls that trigger behavior and need stable object names for
 tests, UI automation, accessibility review, and refactor safety. Static tests enforce that
@@ -29,6 +29,8 @@ object name near construction.
 | Apps | `appSdkSettingsButton` | button | Opens the Network page for SDK/network configuration. | Static inventory, widget signal, main-window navigation click |
 | Apps | `appAddVolumeButton` | button | Adds a source-to-mount-path row to the app volume editor. | Static inventory, widget click, smoke E2E |
 | Apps | `appRemoveVolumeButton` | button | Removes the selected app volume mount row. | Static inventory, widget click, smoke E2E |
+| SDK settings | `refreshSdkIdentityButton` | button | Loads the launcher's Ratio1 SDK identity on a background worker. | Static inventory, widget click, smoke E2E |
+| SDK settings | `copySdkIdentityAddressButton` | button | Copies the loaded launcher SDK address. | Static inventory, widget click, smoke E2E |
 | Bottom actions | `renameNodeButton` | button | Opens rename-node dialog. | Static inventory, mocked main-window guard/save, destructive Docker rename E2E |
 | Bottom actions | `themeToggleButton` | button | Switches light or dark theme. | Static inventory, mocked main-window click |
 | Bottom actions | `forceDebugCheckbox` | checkbox | Enables or disables debug logging. | Static inventory, mocked main-window click |

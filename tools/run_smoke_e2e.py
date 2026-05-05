@@ -28,6 +28,7 @@ SMOKE_VOLUME = "r1volsmoke"
 SMOKE_SECONDARY_CONTAINER = "r1nodesmoke2"
 SMOKE_SECONDARY_VOLUME = "r1volsmoke2"
 SMOKE_VALID_NODE_ADDRESS = "0xai_smokeprimary123"
+SMOKE_SDK_ADDRESS = "0xai_smokelauncher123"
 SMOKE_CONTAINER_APP_SECRET = "smoke-registry-secret"
 SMOKE_WORKER_APP_SECRET = "smoke-github-token"
 
@@ -164,6 +165,22 @@ class FakeAppLaunchPreflight:
             raise ValueError("Target container is required for SDK allow-list setup.")
         self.calls.append(container_name)
         return SimpleNamespace(container_name=container_name)
+
+
+class FakeSdkIdentityService:
+    def __init__(self):
+        self.calls = 0
+
+    def load_identity(self):
+        from services.sdk_identity_service import SdkIdentity
+
+        self.calls += 1
+        return SdkIdentity(
+            sdk_address=SMOKE_SDK_ADDRESS,
+            eth_address="0xsmokeethlauncher",
+            evm_network="devnet",
+            local_cache_base_folder="C:/tmp/r1-launcher-smoke",
+        )
 
 
 def write_log(log, output_path):
@@ -708,6 +725,36 @@ def run_mocked_sdk_apps_scenario(
     )
     if getattr(launcher, "sidebar_panel", None) is None or launcher.sidebar_panel.current_page_name() != "network":
         raise AssertionError("SDK settings button did not switch to the Network page")
+    record_step(
+        log,
+        output_path,
+        {"step": click_visible_button(app, launcher.refresh_sdk_identity_button, "refresh SDK identity")},
+    )
+    wait_until(
+        app,
+        lambda: launcher.sidebar_panel.sdk_identity_address_label.text() == SMOKE_SDK_ADDRESS,
+        timeout,
+        "mocked SDK identity refresh",
+    )
+    record_step(
+        log,
+        output_path,
+        {
+            "step": click_visible_button(app, launcher.copy_sdk_identity_address_button, "copy SDK identity address"),
+            "clipboard": app.clipboard().text(),
+        },
+    )
+    if app.clipboard().text() != SMOKE_SDK_ADDRESS:
+        raise AssertionError("SDK identity address copy used an unexpected value")
+    sdk_settings_visual = capture_visual_evidence(launcher, screenshot_dir, "network_sdk_identity")
+    record_step(
+        log,
+        output_path,
+        {
+            "step": "captured SDK settings visual evidence",
+            "visual": sdk_settings_visual,
+        },
+    )
     show_launcher_page(app, launcher, "apps")
     scroll_apps_workspace_to(launcher, "top")
     app.processEvents()
@@ -1006,6 +1053,7 @@ def run_scenarios(args):
     frm_main.EdgeNodeLauncher.container_exists_in_docker = lambda self, name: False
     sidebar_panel.AppRegistry = lambda: app_registry
     sidebar_panel.Ratio1SdkDeploymentClient = lambda app_registry=None: fake_sdk_client
+    sidebar_panel.SdkIdentityService = lambda: FakeSdkIdentityService()
 
     app = QApplication.instance() or QApplication(sys.argv)
     launcher = frm_main.EdgeNodeLauncher()

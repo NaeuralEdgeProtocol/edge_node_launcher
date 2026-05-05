@@ -793,6 +793,33 @@ COMMON_STYLESHEET_TEMPLATE = """
     font-weight: 500;
     padding: 4px 6px;
   }}
+  QFrame[role="sdkIdentityPanel"] {{
+    background-color: {info_box_bg};
+    border: 1px solid {info_box_border};
+    border-radius: 8px;
+    margin: 2px 6px 4px 6px;
+  }}
+  QLabel[role="sdkIdentityStatus"] {{
+    color: {text_color};
+    background-color: transparent;
+    font-family: "Segoe UI";
+    font-size: 9pt;
+    font-weight: 600;
+  }}
+  QLabel[role="sdkIdentityFieldName"] {{
+    color: {section_label_text};
+    background-color: transparent;
+    font-family: "Segoe UI";
+    font-size: 8pt;
+    font-weight: 600;
+  }}
+  QLabel[role="sdkIdentityField"] {{
+    color: {text_color};
+    background-color: transparent;
+    font-family: "Segoe UI";
+    font-size: 8pt;
+    font-weight: 500;
+  }}
   QScrollArea#sidebarScrollArea {{
     background-color: transparent;
     border: none;

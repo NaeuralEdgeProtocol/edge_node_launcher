@@ -1,9 +1,11 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QCheckBox,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -16,7 +18,10 @@ from PyQt5.QtWidgets import (
 )
 
 from services.app_registry import AppRegistry
+from services.sdk_error_messages import classify_sdk_error
 from services.sdk_deployment_service import Ratio1SdkDeploymentClient
+from services.sdk_identity_service import SdkIdentityService
+from services.sdk_operation_worker import SdkOperationThread
 from utils.const import (
     ADD_NODE_TOOLTIP,
     DAPP_BUTTON_TEXT,
@@ -82,6 +87,8 @@ class SidebarPanel(QWidget):
         theme_toggle_handler,
         force_debug_handler,
         page_changed_handler=None,
+        sdk_identity_service=None,
+        event_logger=None,
         parent=None,
     ):
         super().__init__(parent)
@@ -100,6 +107,10 @@ class SidebarPanel(QWidget):
         self._theme_toggle_handler = theme_toggle_handler
         self._force_debug_handler = force_debug_handler
         self._page_changed_handler = page_changed_handler
+        self._sdk_identity_service = sdk_identity_service or SdkIdentityService()
+        self._event_logger = event_logger
+        self._sdk_identity_worker = None
+        self._sdk_identity_address = ""
         self._pages = {}
         self._nav_buttons = {}
 
@@ -366,6 +377,10 @@ class SidebarPanel(QWidget):
         layout.setAlignment(Qt.AlignTop)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(5)
+
+        layout.addWidget(create_sidebar_section_label("SDK", "sdkSettingsSectionLabel"))
+        layout.addWidget(self._create_sdk_identity_panel())
+
         layout.addWidget(create_sidebar_section_label("Network", "networkActionsSectionLabel"))
 
         self.dapp_button = create_sidebar_action_button(
@@ -388,6 +403,170 @@ class SidebarPanel(QWidget):
         layout.addStretch(1)
         return page
 
+    def _create_sdk_identity_panel(self) -> QFrame:
+        panel = QFrame()
+        panel.setObjectName("sdkIdentityPanel")
+        panel.setAccessibleName("SDK identity settings")
+        panel.setProperty("role", "sdkIdentityPanel")
+        panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+
+        self.sdk_identity_status_label = QLabel("Not loaded")
+        self.sdk_identity_status_label.setObjectName("sdkIdentityStatusLabel")
+        self.sdk_identity_status_label.setAccessibleName("SDK identity status")
+        self.sdk_identity_status_label.setProperty("role", "sdkIdentityStatus")
+        self.sdk_identity_status_label.setWordWrap(True)
+        layout.addWidget(self.sdk_identity_status_label)
+
+        fields = QGridLayout()
+        fields.setObjectName("sdkIdentityFieldsLayout")
+        fields.setContentsMargins(0, 0, 0, 0)
+        fields.setHorizontalSpacing(7)
+        fields.setVerticalSpacing(3)
+        fields.setColumnStretch(1, 1)
+
+        self.sdk_identity_address_label = self._create_sdk_identity_field_label("Address", "sdkIdentityAddressLabel")
+        self.sdk_identity_network_label = self._create_sdk_identity_field_label("Network", "sdkIdentityNetworkLabel")
+        self.sdk_identity_cache_label = self._create_sdk_identity_field_label("Cache", "sdkIdentityCacheLabel")
+        self._add_sdk_identity_field(fields, 0, "Address", self.sdk_identity_address_label)
+        self._add_sdk_identity_field(fields, 1, "Network", self.sdk_identity_network_label)
+        self._add_sdk_identity_field(fields, 2, "Cache", self.sdk_identity_cache_label)
+        layout.addLayout(fields)
+
+        actions = QHBoxLayout()
+        actions.setObjectName("sdkIdentityActionsLayout")
+        actions.setContentsMargins(0, 0, 0, 0)
+        actions.setSpacing(6)
+        self.refresh_sdk_identity_button = create_sidebar_action_button(
+            "Refresh SDK",
+            "refreshSdkIdentityButton",
+            "secondary",
+            "Load the launcher's Ratio1 SDK identity",
+            self.refresh_sdk_identity,
+        )
+        self.copy_sdk_identity_address_button = create_sidebar_action_button(
+            "Copy Address",
+            "copySdkIdentityAddressButton",
+            "utility",
+            "Copy the launcher SDK address",
+            self.copy_sdk_identity_address,
+        )
+        self.copy_sdk_identity_address_button.setEnabled(False)
+        actions.addWidget(self.refresh_sdk_identity_button)
+        actions.addWidget(self.copy_sdk_identity_address_button)
+        layout.addLayout(actions)
+
+        self._set_sdk_identity_placeholder()
+        return panel
+
+    def _create_sdk_identity_field_label(self, text: str, object_name: str) -> QLabel:
+        label = QLabel(text)
+        label.setObjectName(object_name)
+        label.setAccessibleName(text)
+        label.setProperty("role", "sdkIdentityField")
+        label.setWordWrap(True)
+        label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        return label
+
+    def _add_sdk_identity_field(self, layout: QGridLayout, row: int, name: str, value: QLabel) -> None:
+        field_label = QLabel(name)
+        field_label.setObjectName(f"sdkIdentity{name}FieldLabel")
+        field_label.setAccessibleName(f"SDK identity {name.lower()} label")
+        field_label.setProperty("role", "sdkIdentityFieldName")
+        layout.addWidget(field_label, row, 0, Qt.AlignTop)
+        layout.addWidget(value, row, 1)
+
+    def _set_sdk_identity_placeholder(self) -> None:
+        self._sdk_identity_address = ""
+        self.sdk_identity_address_label.setText("-")
+        self.sdk_identity_network_label.setText("-")
+        self.sdk_identity_cache_label.setText("-")
+        self.copy_sdk_identity_address_button.setEnabled(False)
+
+    def refresh_sdk_identity(self) -> None:
+        worker = self._sdk_identity_worker
+        if worker is not None and worker.isRunning():
+            return
+
+        self._set_sdk_identity_loading(True)
+        self._log_event("SDK identity refresh started", color="blue")
+        worker = SdkOperationThread(
+            "sdk_identity_refresh",
+            self._sdk_identity_service.load_identity,
+            parent=self,
+        )
+        self._sdk_identity_worker = worker
+        worker.operation_finished.connect(
+            lambda _name, result, item=worker: self._finish_sdk_identity_refresh(item, result)
+        )
+        worker.operation_failed.connect(
+            lambda _name, error, item=worker: self._fail_sdk_identity_refresh(item, error)
+        )
+        worker.finished.connect(lambda item=worker: self._cleanup_sdk_identity_worker(item))
+        worker.start()
+
+    def _set_sdk_identity_loading(self, is_loading: bool) -> None:
+        self.refresh_sdk_identity_button.setEnabled(not is_loading)
+        self.copy_sdk_identity_address_button.setEnabled(False if is_loading else bool(self._sdk_identity_address))
+        if is_loading:
+            self.sdk_identity_status_label.setText("Loading SDK identity...")
+
+    def _finish_sdk_identity_refresh(self, worker: SdkOperationThread, identity) -> None:
+        self._sdk_identity_address = str(getattr(identity, "sdk_address", "") or "")
+        self.sdk_identity_status_label.setText(f"Ready: {getattr(identity, 'alias', 'edge-node-launcher')}")
+        self.sdk_identity_address_label.setText(_compact_middle(self._sdk_identity_address) or "-")
+        self.sdk_identity_address_label.setToolTip(self._sdk_identity_address)
+        network = str(getattr(identity, "evm_network", "") or "-")
+        self.sdk_identity_network_label.setText(network)
+        self.sdk_identity_network_label.setToolTip(network)
+        cache_base = str(getattr(identity, "local_cache_base_folder", "") or "-")
+        cache_app = str(getattr(identity, "local_cache_app_folder", "") or "")
+        cache_path = f"{cache_base}/{cache_app}" if cache_app and cache_base != "-" else cache_base
+        self.sdk_identity_cache_label.setText(_compact_middle(cache_path))
+        self.sdk_identity_cache_label.setToolTip(cache_path)
+        self.copy_sdk_identity_address_button.setEnabled(bool(self._sdk_identity_address))
+        self.refresh_sdk_identity_button.setEnabled(True)
+        self._log_event(
+            f"SDK identity refresh complete: address={'yes' if self._sdk_identity_address else 'no'}",
+            color="green",
+        )
+
+    def _fail_sdk_identity_refresh(self, worker: SdkOperationThread, error: str) -> None:
+        self._set_sdk_identity_placeholder()
+        error_message = classify_sdk_error(error)
+        self.sdk_identity_status_label.setText(error_message.user_message)
+        self.refresh_sdk_identity_button.setEnabled(True)
+        self._log_event(
+            f"SDK identity refresh failed: {error_message.user_message}",
+            color="red",
+        )
+        if error_message.classified:
+            self._log_event(
+                f"SDK identity diagnostic ({error_message.category}): {error_message.diagnostic}",
+                color="red",
+                debug=True,
+            )
+
+    def _cleanup_sdk_identity_worker(self, worker: SdkOperationThread) -> None:
+        if self._sdk_identity_worker is worker:
+            self._sdk_identity_worker = None
+        worker.deleteLater()
+
+    def copy_sdk_identity_address(self) -> None:
+        if not self._sdk_identity_address:
+            return
+        QApplication.clipboard().setText(self._sdk_identity_address)
+        self._log_event("SDK identity address copied", color="blue", debug=True)
+
+    def _log_event(self, message: str, *, color: str = "blue", debug: bool = False) -> None:
+        if self._event_logger is None:
+            return
+        self._event_logger(message, color=color, debug=debug)
+
+
     def _create_placeholder_page(self, title: str, object_name: str, label_name: str) -> QWidget:
         page = self._create_page(object_name)
         layout = QVBoxLayout(page)
@@ -406,3 +585,12 @@ class SidebarPanel(QWidget):
         layout.addWidget(placeholder)
         layout.addStretch(1)
         return page
+
+
+def _compact_middle(value: str, max_length: int = 34) -> str:
+    text = str(value or "")
+    if len(text) <= max_length:
+        return text
+    prefix_length = max(8, max_length // 2 - 2)
+    suffix_length = max_length - prefix_length - 3
+    return f"{text[:prefix_length]}...{text[-suffix_length:]}"
