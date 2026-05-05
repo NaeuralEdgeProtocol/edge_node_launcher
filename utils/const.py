@@ -590,6 +590,9 @@ COMMON_STYLESHEET_TEMPLATE = """
   QWidget[role="appVolumeEditor"] {{
     background-color: transparent;
   }}
+  QWidget[role="appFileVolumeEditor"] {{
+    background-color: transparent;
+  }}
   QWidget[role="appsWorkspace"] {{
     background-color: transparent;
   }}
@@ -635,7 +638,8 @@ COMMON_STYLESHEET_TEMPLATE = """
     background: transparent;
   }}
   QTableWidget#appsTable,
-  QTableWidget#appVolumesTable {{
+  QTableWidget#appVolumesTable,
+  QTableWidget#appFileVolumesTable {{
     background-color: {info_box_bg};
     color: {info_box_text};
     border: 1px solid {info_box_border};
@@ -647,12 +651,14 @@ COMMON_STYLESHEET_TEMPLATE = """
     selection-color: {secondary_action_text};
   }}
   QTableWidget#appsTable QScrollBar:horizontal,
-  QTableWidget#appVolumesTable QScrollBar:horizontal {{
+  QTableWidget#appVolumesTable QScrollBar:horizontal,
+  QTableWidget#appFileVolumesTable QScrollBar:horizontal {{
     height: 0px;
     background: transparent;
   }}
   QTableWidget#appsTable QHeaderView::section,
-  QTableWidget#appVolumesTable QHeaderView::section {{
+  QTableWidget#appVolumesTable QHeaderView::section,
+  QTableWidget#appFileVolumesTable QHeaderView::section {{
     background-color: {secondary_action_bg};
     color: {secondary_action_text};
     border: none;

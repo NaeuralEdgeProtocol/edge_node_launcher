@@ -46,6 +46,8 @@ def test_container_app_spec_maps_to_direct_sdk_kwargs_and_redacted_metadata():
     assert kwargs["file_volumes"]["settings"]["mounting_point"] == "/app/settings.ini"
     assert metadata["registry_password"] == REDACTED_SECRET
     assert metadata["env"] == {"PUBLIC": "1"}
+    assert metadata["file_volumes"]["settings"]["content"] == REDACTED_SECRET
+    assert metadata["file_volumes"]["settings"]["mounting_point"] == "/app/settings.ini"
 
 
 def test_worker_app_spec_maps_github_repo_and_secret_fields():

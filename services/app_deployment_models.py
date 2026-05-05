@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from services.app_secret_redaction import redact_secrets
+from services.app_secret_redaction import REDACTED_SECRET, redact_secrets
 
 
 APP_REGISTRY_SCHEMA_VERSION = 1
@@ -130,6 +130,7 @@ class ContainerAppSpec:
                 "registry_password": self.registry_password,
                 "env": self.env,
                 "volumes": self.volumes,
+                "file_volumes": _file_volumes_to_metadata(self.file_volumes),
                 "resources": self.resources.to_sdk_dict(),
                 "tunnel_engine": self.tunnel_engine,
                 "cloudflare_token": self.cloudflare_token,
@@ -237,6 +238,7 @@ class WorkerAppSpec:
                 "registry_password": self.registry_password,
                 "env": self.env,
                 "volumes": self.volumes,
+                "file_volumes": _file_volumes_to_metadata(self.file_volumes),
                 "resources": self.resources.to_sdk_dict(),
                 "tunnel_engine": self.tunnel_engine,
                 "cloudflare_token": self.cloudflare_token,
@@ -347,3 +349,13 @@ def parse_github_repo_owner_name(repo_url: str) -> tuple[str, str]:
 
 def _file_volumes_to_sdk(file_volumes: dict[str, FileVolumeSpec]) -> dict[str, dict[str, str]]:
     return {name: spec.to_sdk_dict() for name, spec in file_volumes.items()}
+
+
+def _file_volumes_to_metadata(file_volumes: dict[str, FileVolumeSpec]) -> dict[str, dict[str, str]]:
+    return {
+        name: {
+            "mounting_point": spec.mounting_point,
+            "content": REDACTED_SECRET if spec.content else "",
+        }
+        for name, spec in (file_volumes or {}).items()
+    }

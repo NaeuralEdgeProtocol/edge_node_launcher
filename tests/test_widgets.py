@@ -210,12 +210,21 @@ def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
     assert page.findChild(QLineEdit, "appMemoryInput").text() == "512m"
     volume_editor = page.findChild(QWidget, "appVolumeEditor")
     volume_table = page.findChild(QTableWidget, "appVolumesTable")
+    file_volume_editor = page.findChild(QWidget, "appFileVolumeEditor")
+    file_volume_table = page.findChild(QTableWidget, "appFileVolumesTable")
     assert volume_editor.property("role") == "appVolumeEditor"
     assert page.findChild(QLineEdit, "appVolumeSourceInput").placeholderText() == "volume_name"
     assert page.findChild(QLineEdit, "appVolumeMountInput").placeholderText() == "/container/path"
     assert volume_table.accessibleName() == "Configured volume mounts"
     assert volume_table.horizontalHeaderItem(0).text() == "Source"
     assert volume_table.horizontalHeaderItem(1).text() == "Mount path"
+    assert file_volume_editor.property("role") == "appFileVolumeEditor"
+    assert page.findChild(QLineEdit, "appFileVolumeNameInput").placeholderText() == "settings"
+    assert page.findChild(QLineEdit, "appFileVolumeMountInput").placeholderText() == "/app/settings.ini"
+    assert page.findChild(QPlainTextEdit, "appFileVolumeContentInput").placeholderText() == "file content"
+    assert file_volume_table.accessibleName() == "Configured config file volumes"
+    assert file_volume_table.horizontalHeaderItem(0).text() == "Name"
+    assert file_volume_table.horizontalHeaderItem(1).text() == "Mount path"
     assert page.findChild(QComboBox, "appRestartPolicyCombo").currentText() == "always"
     assert page.findChild(QComboBox, "appImagePullPolicyCombo").currentText() == "always"
     assert page.findChild(QLineEdit, "workerRegistryInput").text() == "docker.io"
@@ -228,6 +237,8 @@ def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
     assert page.findChild(QPushButton, "appSdkSettingsButton").property("actionRole") == "utility"
     assert page.findChild(QPushButton, "appAddVolumeButton").property("actionRole") == "secondary"
     assert page.findChild(QPushButton, "appRemoveVolumeButton").property("actionRole") == "utility"
+    assert page.findChild(QPushButton, "appAddFileVolumeButton").property("actionRole") == "secondary"
+    assert page.findChild(QPushButton, "appRemoveFileVolumeButton").property("actionRole") == "utility"
 
     requested = []
     page.sdk_settings_requested.connect(lambda: requested.append(True))
@@ -245,11 +256,24 @@ def test_apps_page_exposes_stable_fields_and_actions(qtbot, tmp_path):
     qtbot.mouseClick(page.findChild(QPushButton, "appRemoveVolumeButton"), Qt.LeftButton)
     assert volume_table.rowCount() == 0
 
+    page.app_file_volume_name_input.setText("settings")
+    page.app_file_volume_mount_input.setText("/app/settings.ini")
+    page.app_file_volume_content_input.setPlainText("enabled=true")
+    qtbot.mouseClick(page.findChild(QPushButton, "appAddFileVolumeButton"), Qt.LeftButton)
+    assert file_volume_table.rowCount() == 1
+    assert file_volume_table.item(0, 0).text() == "settings"
+    assert file_volume_table.item(0, 1).text() == "/app/settings.ini"
+    assert file_volume_table.item(0, 0).data(Qt.UserRole) == "enabled=true"
+    file_volume_table.selectRow(0)
+    qtbot.mouseClick(page.findChild(QPushButton, "appRemoveFileVolumeButton"), Qt.LeftButton)
+    assert file_volume_table.rowCount() == 0
+
 
 def test_apps_page_validates_and_launches_container_with_fake_sdk(qtbot, tmp_path):
     fake_client = FakeAppDeploymentClient()
+    registry = AppRegistry(tmp_path / "apps.json")
     page = AppsPage(
-        app_registry=AppRegistry(tmp_path / "apps.json"),
+        app_registry=registry,
         deployment_client=fake_client,
     )
     qtbot.addWidget(page)
@@ -265,6 +289,10 @@ def test_apps_page_validates_and_launches_container_with_fake_sdk(qtbot, tmp_pat
     page.app_volume_source_input.setText("r1_app_cache")
     page.app_volume_mount_input.setText("/app/cache")
     qtbot.mouseClick(page.findChild(QPushButton, "appAddVolumeButton"), Qt.LeftButton)
+    page.app_file_volume_name_input.setText("settings")
+    page.app_file_volume_mount_input.setText("/app/settings.ini")
+    page.app_file_volume_content_input.setPlainText("FEATURE=true")
+    qtbot.mouseClick(page.findChild(QPushButton, "appAddFileVolumeButton"), Qt.LeftButton)
     page.app_restart_policy_combo.setCurrentText("on-failure")
     page.app_pull_policy_combo.setCurrentText("if-not-present")
 
@@ -278,6 +306,8 @@ def test_apps_page_validates_and_launches_container_with_fake_sdk(qtbot, tmp_pat
     assert fake_client.container_specs[0].resources.cpu == 2
     assert fake_client.container_specs[0].resources.memory == "1g"
     assert fake_client.container_specs[0].volumes == {"r1_app_cache": "/app/cache"}
+    assert fake_client.container_specs[0].file_volumes["settings"].content == "FEATURE=true"
+    assert fake_client.container_specs[0].file_volumes["settings"].mounting_point == "/app/settings.ini"
     assert fake_client.container_specs[0].restart_policy == "on-failure"
     assert fake_client.container_specs[0].image_pull_policy == "if-not-present"
     assert page.apps_table.rowCount() == 1
@@ -285,6 +315,8 @@ def test_apps_page_validates_and_launches_container_with_fake_sdk(qtbot, tmp_pat
     assert page.apps_empty_state.isHidden()
     assert page.apps_table.item(0, 0).text() == "car_runner"
     assert page.apps_table.item(0, 2).text() == "deployed"
+    assert registry.registry_file.read_text(encoding="utf-8").find("FEATURE=true") == -1
+    assert REDACTED_SECRET in registry.registry_file.read_text(encoding="utf-8")
 
     page.apps_table.selectRow(0)
     qtbot.mouseClick(page.findChild(QPushButton, "appCopyUrlButton"), Qt.LeftButton)
@@ -314,6 +346,9 @@ def test_apps_page_worker_mode_validates_payload(qtbot, tmp_path):
     page.worker_vcs_poll_input.setText("120")
     page.app_volume_source_input.setText("worker_cache")
     page.app_volume_mount_input.setText("/workspace/cache")
+    page.app_file_volume_name_input.setText("worker_env")
+    page.app_file_volume_mount_input.setText("/workspace/.env")
+    page.app_file_volume_content_input.setPlainText("PUBLIC_VALUE=1")
 
     assert page.runner_stack.currentIndex() == 1
 
@@ -327,6 +362,7 @@ def test_apps_page_worker_mode_validates_payload(qtbot, tmp_path):
     assert fake_client.worker_specs[0].registry_password == "registry-secret"
     assert fake_client.worker_specs[0].vcs_poll_interval == 120
     assert fake_client.worker_specs[0].volumes == {"worker_cache": "/workspace/cache"}
+    assert fake_client.worker_specs[0].file_volumes["worker_env"].mounting_point == "/workspace/.env"
     assert page.apps_table.item(0, 1).text() == "WAR"
 
 
@@ -348,6 +384,28 @@ def test_apps_page_rejects_invalid_volume_rows(qtbot, tmp_path):
     qtbot.mouseClick(page.findChild(QPushButton, "appLaunchButton"), Qt.LeftButton)
 
     assert page.validation_message.text() == "volumes: Volume mount path must start with /."
+    assert fake_client.container_specs == []
+
+
+def test_apps_page_rejects_invalid_file_volume_rows(qtbot, tmp_path):
+    fake_client = FakeAppDeploymentClient()
+    page = AppsPage(
+        app_registry=AppRegistry(tmp_path / "apps.json"),
+        deployment_client=fake_client,
+    )
+    qtbot.addWidget(page)
+
+    page.app_name_input.setText("car_runner")
+    page.node_address_input.setText(APP_TEST_NODE)
+    page.car_image_input.setText("nginx:alpine")
+    page.car_port_input.setText("8080")
+    page.app_file_volume_name_input.setText("settings")
+    page.app_file_volume_mount_input.setText("relative/settings.ini")
+    page.app_file_volume_content_input.setPlainText("enabled=true")
+
+    qtbot.mouseClick(page.findChild(QPushButton, "appLaunchButton"), Qt.LeftButton)
+
+    assert page.validation_message.text() == "file_volumes: File volume mount path must start with /."
     assert fake_client.container_specs == []
 
 

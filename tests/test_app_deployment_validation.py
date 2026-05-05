@@ -1,4 +1,4 @@
-from services.app_deployment_models import AppResourceSpec, ContainerAppSpec, WorkerAppSpec
+from services.app_deployment_models import AppResourceSpec, ContainerAppSpec, FileVolumeSpec, WorkerAppSpec
 from services.app_deployment_validation import (
     ValidationIssue,
     validate_container_spec,
@@ -35,6 +35,7 @@ def test_container_spec_validation_reports_field_level_issues():
         registry_server="docker",
         env={"BAD KEY": "x"},
         volumes={"cache": "relative/path"},
+        file_volumes={"bad name": FileVolumeSpec(content="", mounting_point="relative/file")},
         resources=AppResourceSpec(cpu=0, memory="512"),
     )
 
@@ -50,6 +51,7 @@ def test_container_spec_validation_reports_field_level_issues():
         "resources.memory",
         "env",
         "volumes",
+        "file_volumes",
     }
 
 

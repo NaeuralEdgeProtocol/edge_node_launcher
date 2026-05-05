@@ -12,6 +12,7 @@ ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 NODE_ADDRESS_RE = re.compile(r"^0xai_[A-Za-z0-9_-]{8,48}$")
 REGISTRY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]*(?::[0-9]{1,5})?$")
 MEMORY_RE = re.compile(r"^\d+(\.\d+)?\s*(m|mb|mi|mib|g|gb|gi|gib)$", re.IGNORECASE)
+FILE_VOLUME_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 
 
 @dataclass(frozen=True)
@@ -125,6 +126,26 @@ def validate_volumes(volumes: dict[str, str], field: str = "volumes") -> list[Va
     return issues
 
 
+def validate_file_volumes(file_volumes: dict, field: str = "file_volumes") -> list[ValidationIssue]:
+    issues = []
+    for name, spec in (file_volumes or {}).items():
+        normalized_name = str(name or "").strip()
+        if not normalized_name:
+            issues.append(ValidationIssue(field, "File volume name is required."))
+        elif not FILE_VOLUME_NAME_RE.match(normalized_name):
+            issues.append(ValidationIssue(field, f"Invalid file volume name: {normalized_name}."))
+
+        mounting_point = str(getattr(spec, "mounting_point", "") or "").strip()
+        content = str(getattr(spec, "content", "") or "")
+        if not mounting_point:
+            issues.append(ValidationIssue(field, "File volume mount path is required."))
+        elif not mounting_point.startswith("/"):
+            issues.append(ValidationIssue(field, "File volume mount path must start with /."))
+        if not content:
+            issues.append(ValidationIssue(field, "File volume content is required."))
+    return issues
+
+
 def validate_poll_interval(value: int, field: str) -> list[ValidationIssue]:
     try:
         interval = int(value)
@@ -162,6 +183,7 @@ def validate_container_spec(spec: ContainerAppSpec) -> list[ValidationIssue]:
         *validate_env_mapping(spec.env),
         *validate_env_mapping(spec.dynamic_env, "dynamic_env"),
         *validate_volumes(spec.volumes),
+        *validate_file_volumes(spec.file_volumes),
     ]
 
 
@@ -179,5 +201,6 @@ def validate_worker_spec(spec: WorkerAppSpec) -> list[ValidationIssue]:
         *validate_env_mapping(spec.dynamic_env, "dynamic_env"),
         *validate_commands(spec.commands),
         *validate_volumes(spec.volumes),
+        *validate_file_volumes(spec.file_volumes),
         *validate_poll_interval(spec.vcs_poll_interval, "vcs_poll_interval"),
     ]

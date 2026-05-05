@@ -26,6 +26,7 @@ from services.app_deployment_models import (
     AppResourceSpec,
     ContainerAppSpec,
     DeploymentResult,
+    FileVolumeSpec,
     ManagedAppRecord,
     SdkAppStatus,
     WorkerAppSpec,
@@ -33,6 +34,7 @@ from services.app_deployment_models import (
 from services.app_deployment_validation import (
     ValidationIssue,
     validate_container_spec,
+    validate_file_volumes,
     validate_worker_spec,
 )
 from services.app_registry import AppRegistry
@@ -434,7 +436,9 @@ class AppsPage(QWidget):
         )
         layout.addWidget(self._label("Volumes", "appVolumesLabel"), 4, 0, 1, 2)
         layout.addWidget(self._create_volume_editor(), 5, 0, 1, 2)
-        layout.setRowStretch(6, 1)
+        layout.addWidget(self._label("Config files", "appFileVolumesLabel"), 6, 0, 1, 2)
+        layout.addWidget(self._create_file_volume_editor(), 7, 0, 1, 2)
+        layout.setRowStretch(8, 1)
         return panel
 
     def _create_volume_editor(self) -> QWidget:
@@ -501,6 +505,77 @@ class AppsPage(QWidget):
         layout.addWidget(self.app_volumes_table, 2, 0, 1, 2)
         return panel
 
+    def _create_file_volume_editor(self) -> QWidget:
+        panel = QWidget()
+        panel.setObjectName("appFileVolumeEditor")
+        panel.setAccessibleName("Config file volume editor")
+        panel.setProperty("role", "appFileVolumeEditor")
+        layout = QGridLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setHorizontalSpacing(8)
+        layout.setVerticalSpacing(5)
+        layout.setColumnStretch(0, 2)
+        layout.setColumnStretch(1, 3)
+
+        self.app_file_volume_name_input = self._create_line_edit("appFileVolumeNameInput", "settings")
+        self.app_file_volume_mount_input = self._create_line_edit("appFileVolumeMountInput", "/app/settings.ini")
+        layout.addWidget(self.app_file_volume_name_input, 0, 0)
+        layout.addWidget(self.app_file_volume_mount_input, 0, 1)
+
+        self.app_file_volume_content_input = self._create_plain_text(
+            "appFileVolumeContentInput",
+            "file content",
+        )
+        self.app_file_volume_content_input.setMaximumHeight(72)
+        layout.addWidget(self.app_file_volume_content_input, 1, 0, 1, 2)
+
+        file_actions = QWidget()
+        file_actions.setObjectName("appFileVolumeActionBar")
+        file_actions.setAccessibleName("Config file volume actions")
+        file_actions.setProperty("role", "appActionBar")
+        file_action_layout = QHBoxLayout(file_actions)
+        file_action_layout.setContentsMargins(0, 0, 0, 0)
+        file_action_layout.setSpacing(8)
+
+        self.add_file_volume_button = create_sidebar_action_button(
+            "Add File",
+            "appAddFileVolumeButton",
+            "secondary",
+            "Add the config file volume row",
+            self.add_file_volume,
+        )
+        self._set_workspace_button_size(self.add_file_volume_button, 34)
+        file_action_layout.addWidget(self.add_file_volume_button)
+
+        self.remove_file_volume_button = create_sidebar_action_button(
+            "Remove File",
+            "appRemoveFileVolumeButton",
+            "utility",
+            "Remove the selected config file volume",
+            self.remove_selected_file_volume,
+        )
+        self._set_workspace_button_size(self.remove_file_volume_button, 34)
+        file_action_layout.addWidget(self.remove_file_volume_button)
+        layout.addWidget(file_actions, 2, 0, 1, 2)
+
+        self.app_file_volumes_table = QTableWidget(0, 2)
+        self.app_file_volumes_table.setObjectName("appFileVolumesTable")
+        self.app_file_volumes_table.setAccessibleName("Configured config file volumes")
+        self.app_file_volumes_table.setHorizontalHeaderLabels(["Name", "Mount path"])
+        self.app_file_volumes_table.verticalHeader().hide()
+        self.app_file_volumes_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.app_file_volumes_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.app_file_volumes_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.app_file_volumes_table.setAlternatingRowColors(False)
+        self.app_file_volumes_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.app_file_volumes_table.setMinimumHeight(76)
+        self.app_file_volumes_table.setMaximumHeight(96)
+        header = self.app_file_volumes_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        layout.addWidget(self.app_file_volumes_table, 3, 0, 1, 2)
+        return panel
+
     def add_volume_mount(self) -> bool:
         source = self.app_volume_source_input.text().strip()
         mount_path = self.app_volume_mount_input.text().strip()
@@ -527,6 +602,42 @@ class AppsPage(QWidget):
             return False
         for model_index in sorted(selected, key=lambda item: item.row(), reverse=True):
             self.app_volumes_table.removeRow(model_index.row())
+        self._clear_message()
+        return True
+
+    def add_file_volume(self) -> bool:
+        name = self.app_file_volume_name_input.text().strip()
+        mount_path = self.app_file_volume_mount_input.text().strip()
+        content = self.app_file_volume_content_input.toPlainText()
+        issue = self._validate_file_volume_values(name, mount_path, content)
+        if issue is not None:
+            self._show_message(_format_issue(issue), error=True)
+            self._log_event(f"SDK Apps file volume rejected: {_format_issue(issue)}", color="yellow")
+            return False
+        if self._find_file_volume_row(name) is not None:
+            issue = ValidationIssue("file_volumes", f"Duplicate file volume name: {name}.")
+            self._show_message(_format_issue(issue), error=True)
+            self._log_event(f"SDK Apps file volume rejected: {_format_issue(issue)}", color="yellow")
+            return False
+        if self._find_file_volume_mount_row(mount_path) is not None:
+            issue = ValidationIssue("file_volumes", f"Duplicate file volume mount path: {mount_path}.")
+            self._show_message(_format_issue(issue), error=True)
+            self._log_event(f"SDK Apps file volume rejected: {_format_issue(issue)}", color="yellow")
+            return False
+        self._append_file_volume_row(name, mount_path, content)
+        self.app_file_volume_name_input.clear()
+        self.app_file_volume_mount_input.clear()
+        self.app_file_volume_content_input.clear()
+        self._clear_message()
+        return True
+
+    def remove_selected_file_volume(self) -> bool:
+        selected = self.app_file_volumes_table.selectionModel().selectedRows()
+        if not selected:
+            self._show_message("file_volumes: Select a config file to remove.", error=True)
+            return False
+        for model_index in sorted(selected, key=lambda item: item.row(), reverse=True):
+            self.app_file_volumes_table.removeRow(model_index.row())
         self._clear_message()
         return True
 
@@ -702,8 +813,9 @@ class AppsPage(QWidget):
     def _build_current_spec(self):
         env, env_issues = self._parse_env()
         volumes, volume_issues = self._parse_volumes()
+        file_volumes, file_volume_issues = self._parse_file_volumes()
         resources, resource_issues = self._parse_resources()
-        common_issues = [*env_issues, *volume_issues, *resource_issues]
+        common_issues = [*env_issues, *volume_issues, *file_volume_issues, *resource_issues]
         try:
             if self.runner_type_combo.currentData() == APP_TYPE_CONTAINER:
                 spec = ContainerAppSpec(
@@ -716,6 +828,7 @@ class AppsPage(QWidget):
                     registry_password=self.car_registry_password_input.text(),
                     env=env,
                     volumes=volumes,
+                    file_volumes=file_volumes,
                     resources=resources,
                     restart_policy=self.app_restart_policy_combo.currentText(),
                     image_pull_policy=self.app_pull_policy_combo.currentText(),
@@ -741,6 +854,7 @@ class AppsPage(QWidget):
                 ],
                 env=env,
                 volumes=volumes,
+                file_volumes=file_volumes,
                 resources=resources,
                 restart_policy=self.app_restart_policy_combo.currentText(),
                 image_pull_policy=self.app_pull_policy_combo.currentText(),
@@ -789,6 +903,42 @@ class AppsPage(QWidget):
                 volumes[pending_source] = pending_target
         return volumes, issues
 
+    def _parse_file_volumes(self) -> tuple[dict[str, FileVolumeSpec], list[ValidationIssue]]:
+        file_volumes = {}
+        issues = []
+        mount_paths = set()
+        for name, mount_path, content in self._file_volume_rows():
+            issue = self._validate_file_volume_values(name, mount_path, content)
+            if issue is not None:
+                issues.append(issue)
+                continue
+            if name in file_volumes:
+                issues.append(ValidationIssue("file_volumes", f"Duplicate file volume name: {name}."))
+                continue
+            if mount_path in mount_paths:
+                issues.append(ValidationIssue("file_volumes", f"Duplicate file volume mount path: {mount_path}."))
+                continue
+            file_volumes[name] = FileVolumeSpec(content=content, mounting_point=mount_path)
+            mount_paths.add(mount_path)
+
+        pending_name = self.app_file_volume_name_input.text().strip()
+        pending_mount = self.app_file_volume_mount_input.text().strip()
+        pending_content = self.app_file_volume_content_input.toPlainText()
+        if pending_name or pending_mount or pending_content.strip():
+            issue = self._validate_file_volume_values(pending_name, pending_mount, pending_content)
+            if issue is not None:
+                issues.append(issue)
+            elif pending_name in file_volumes:
+                issues.append(ValidationIssue("file_volumes", f"Duplicate file volume name: {pending_name}."))
+            elif pending_mount in mount_paths:
+                issues.append(ValidationIssue("file_volumes", f"Duplicate file volume mount path: {pending_mount}."))
+            else:
+                file_volumes[pending_name] = FileVolumeSpec(
+                    content=pending_content,
+                    mounting_point=pending_mount,
+                )
+        return file_volumes, issues
+
     def _volume_rows(self) -> list[tuple[str, str]]:
         rows = []
         for row in range(self.app_volumes_table.rowCount()):
@@ -802,11 +952,44 @@ class AppsPage(QWidget):
             )
         return rows
 
+    def _file_volume_rows(self) -> list[tuple[str, str, str]]:
+        rows = []
+        for row in range(self.app_file_volumes_table.rowCount()):
+            name_item = self.app_file_volumes_table.item(row, 0)
+            mount_item = self.app_file_volumes_table.item(row, 1)
+            rows.append(
+                (
+                    name_item.text().strip() if name_item is not None else "",
+                    mount_item.text().strip() if mount_item is not None else "",
+                    str(name_item.data(Qt.UserRole) if name_item is not None else ""),
+                )
+            )
+        return rows
+
     def _validate_volume_values(self, source: str, mount_path: str) -> ValidationIssue | None:
         if not source or not mount_path:
             return ValidationIssue("volumes", "Volume source and mount path are required.")
         if not mount_path.startswith("/"):
             return ValidationIssue("volumes", "Volume mount path must start with /.")
+        return None
+
+    def _validate_file_volume_values(
+        self,
+        name: str,
+        mount_path: str,
+        content: str,
+    ) -> ValidationIssue | None:
+        if not name or not mount_path:
+            return ValidationIssue("file_volumes", "File volume name and mount path are required.")
+        if not mount_path.startswith("/"):
+            return ValidationIssue("file_volumes", "File volume mount path must start with /.")
+        if not content.strip():
+            return ValidationIssue("file_volumes", "File volume content is required.")
+        issues = validate_file_volumes(
+            {name: FileVolumeSpec(content=content, mounting_point=mount_path)}
+        )
+        if issues:
+            return issues[0]
         return None
 
     def _find_volume_row(self, source: str) -> int | None:
@@ -815,11 +998,34 @@ class AppsPage(QWidget):
                 return row
         return None
 
+    def _find_file_volume_row(self, name: str) -> int | None:
+        for row, (row_name, _mount_path, _content) in enumerate(self._file_volume_rows()):
+            if row_name == name:
+                return row
+        return None
+
+    def _find_file_volume_mount_row(self, mount_path: str) -> int | None:
+        for row, (_row_name, row_mount_path, _content) in enumerate(self._file_volume_rows()):
+            if row_mount_path == mount_path:
+                return row
+        return None
+
     def _append_volume_row(self, source: str, mount_path: str) -> None:
         row = self.app_volumes_table.rowCount()
         self.app_volumes_table.insertRow(row)
         self.app_volumes_table.setItem(row, 0, QTableWidgetItem(source))
         self.app_volumes_table.setItem(row, 1, QTableWidgetItem(mount_path))
+
+    def _append_file_volume_row(self, name: str, mount_path: str, content: str) -> None:
+        row = self.app_file_volumes_table.rowCount()
+        self.app_file_volumes_table.insertRow(row)
+        name_item = QTableWidgetItem(name)
+        name_item.setData(Qt.UserRole, content)
+        name_item.setToolTip("Content is kept in memory until launch and is not shown in the table.")
+        mount_item = QTableWidgetItem(mount_path)
+        mount_item.setToolTip(mount_path)
+        self.app_file_volumes_table.setItem(row, 0, name_item)
+        self.app_file_volumes_table.setItem(row, 1, mount_item)
 
     def _parse_resources(self) -> tuple[AppResourceSpec, list[ValidationIssue]]:
         try:
@@ -974,9 +1180,12 @@ class AppsPage(QWidget):
             self.app_memory_input,
             self.app_volume_source_input,
             self.app_volume_mount_input,
+            self.app_file_volume_name_input,
+            self.app_file_volume_mount_input,
         ):
             widget.textChanged.connect(lambda *_args: self._clear_message())
         self.env_input.textChanged.connect(self._clear_message)
+        self.app_file_volume_content_input.textChanged.connect(self._clear_message)
         self.worker_commands_input.textChanged.connect(self._clear_message)
         self.app_restart_policy_combo.currentIndexChanged.connect(lambda *_args: self._clear_message())
         self.app_pull_policy_combo.currentIndexChanged.connect(lambda *_args: self._clear_message())
@@ -1004,10 +1213,11 @@ class AppsPage(QWidget):
             getattr(self, "car_registry_password_input", None),
             getattr(self, "worker_github_token_input", None),
             getattr(self, "worker_registry_password_input", None),
+            getattr(self, "app_file_volume_content_input", None),
         ):
             if value is None:
                 continue
-            secret = value.text()
+            secret = value.toPlainText() if hasattr(value, "toPlainText") else value.text()
             if secret:
                 safe_text = safe_text.replace(secret, REDACTED_SECRET)
         return safe_text

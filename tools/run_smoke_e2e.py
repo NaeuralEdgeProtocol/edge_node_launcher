@@ -89,6 +89,7 @@ class FakeSdkDeploymentClient:
                 "operation": "launch_container",
                 "app_name": spec.app_name,
                 "pipeline_name": spec.pipeline_name,
+                "file_volume_count": len(spec.file_volumes),
                 "has_registry_password": bool(spec.registry_password),
             }
         )
@@ -100,6 +101,7 @@ class FakeSdkDeploymentClient:
                 "operation": "launch_worker",
                 "app_name": spec.app_name,
                 "pipeline_name": spec.pipeline_name,
+                "file_volume_count": len(spec.file_volumes),
                 "has_github_token": bool(spec.github_token),
             }
         )
@@ -783,6 +785,16 @@ def run_mocked_sdk_apps_scenario(
     )
     if apps_page.app_volumes_table.rowCount() != 1:
         raise AssertionError("container app volume mount was not added")
+    set_line_edit_value(app, apps_page.app_file_volume_name_input, "settings")
+    set_line_edit_value(app, apps_page.app_file_volume_mount_input, "/app/settings.ini")
+    set_plain_text_value(app, apps_page.app_file_volume_content_input, "FEATURE_FLAG=true")
+    record_step(
+        log,
+        output_path,
+        {"step": click_visible_button(app, apps_page.add_file_volume_button, "add container app config file")},
+    )
+    if apps_page.app_file_volumes_table.rowCount() != 1:
+        raise AssertionError("container app config file was not added")
     scroll_apps_workspace_to(launcher, "bottom")
     app.processEvents()
     if getattr(launcher, "toast", None) is not None:
@@ -828,6 +840,8 @@ def run_mocked_sdk_apps_scenario(
         "container app launch",
     )
     registry_payload = app_registry.registry_file.read_text(encoding="utf-8")
+    if "FEATURE_FLAG=true" in registry_payload:
+        raise AssertionError("container app config file content was written to the app registry")
     if SMOKE_CONTAINER_APP_SECRET in registry_payload:
         raise AssertionError("container app secret was written to the app registry")
     record_step(
@@ -884,6 +898,15 @@ def run_mocked_sdk_apps_scenario(
     )
     if apps_page.app_volumes_table.rowCount() != 0:
         raise AssertionError("container app volume mount was not removed")
+    apps_page.app_file_volumes_table.selectRow(0)
+    app.processEvents()
+    record_step(
+        log,
+        output_path,
+        {"step": click_visible_button(app, apps_page.remove_file_volume_button, "remove container app config file")},
+    )
+    if apps_page.app_file_volumes_table.rowCount() != 0:
+        raise AssertionError("container app config file was not removed")
 
     apps_page.runner_type_combo.setCurrentIndex(1)
     app.processEvents()
@@ -906,6 +929,16 @@ def run_mocked_sdk_apps_scenario(
     )
     if apps_page.app_volumes_table.rowCount() != 1:
         raise AssertionError("worker app volume mount was not added")
+    set_line_edit_value(app, apps_page.app_file_volume_name_input, "worker_env")
+    set_line_edit_value(app, apps_page.app_file_volume_mount_input, "/workspace/.env")
+    set_plain_text_value(app, apps_page.app_file_volume_content_input, "PUBLIC_VALUE=worker")
+    record_step(
+        log,
+        output_path,
+        {"step": click_visible_button(app, apps_page.add_file_volume_button, "add worker app config file")},
+    )
+    if apps_page.app_file_volumes_table.rowCount() != 1:
+        raise AssertionError("worker app config file was not added")
 
     scroll_apps_workspace_to(launcher, "bottom")
     app.processEvents()
@@ -945,6 +978,8 @@ def run_mocked_sdk_apps_scenario(
         "worker app launch",
     )
     registry_payload = app_registry.registry_file.read_text(encoding="utf-8")
+    if "PUBLIC_VALUE=worker" in registry_payload:
+        raise AssertionError("worker app config file content was written to the app registry")
     if SMOKE_WORKER_APP_SECRET in registry_payload:
         raise AssertionError("worker app secret was written to the app registry")
     apps_page.apps_table.selectRow(1)
